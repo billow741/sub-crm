@@ -121,7 +121,9 @@ export default function StudentDetail() {
   const handleAddClass = async (e) => {
     e.preventDefault();
     const hoursToConsume = classForm.hours || 1;
-    const totalRemaining = student ? (student.total_hours ?? student.package_summary?.total_hours ?? 0) - (student.used_hours ?? student.package_summary?.used_hours ?? 0) : 0;
+    const totalRemaining = student ? (student.remaining_hours !== undefined && student.remaining_hours !== null
+      ? student.remaining_hours
+      : Math.round(((student.total_hours ?? student.package_summary?.total_hours ?? 0) - (student.used_hours ?? student.package_summary?.used_hours ?? 0)) * 100) / 100) : 0;
     if (totalRemaining < hoursToConsume) {
       alert(`课时不足！当前剩余 ${totalRemaining} 节，需要 ${hoursToConsume} 节。请先购买课时。`);
       return;
@@ -162,7 +164,9 @@ export default function StudentDetail() {
     loadStudent();
   };
 
-  const totalRemaining = student ? (student.total_hours ?? student.package_summary?.total_hours ?? 0) - (student.used_hours ?? student.package_summary?.used_hours ?? 0) : 0;
+  const totalRemaining = student ? (student.remaining_hours !== undefined && student.remaining_hours !== null
+    ? student.remaining_hours
+    : Math.round(((student.total_hours ?? student.package_summary?.total_hours ?? 0) - (student.used_hours ?? student.package_summary?.used_hours ?? 0)) * 100) / 100) : 0;
   const totalSpent = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
   // 获取第一个活跃的课时包（用于调整）

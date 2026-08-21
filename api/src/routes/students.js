@@ -8,6 +8,9 @@ import { success, paginated, error, calculatePagination } from '../utils/respons
 
 const students = new Hono();
 
+// 四舍五入到两位小数，消除浮点误差
+const r2 = (n) => Math.round((n || 0) * 100) / 100;
+
 // 获取学生列表
 students.get('/list', validateQuery(studentQuerySchema), async (c) => {
   const DB = c.env.DB;
@@ -77,8 +80,9 @@ students.get('/list', validateQuery(studentQuerySchema), async (c) => {
     parent_name: student.parent_name,
     notes: student.notes,
     status: student.status,
-    total_hours: student.total_hours || 0,
-    used_hours: student.used_hours || 0,
+    total_hours: r2(student.total_hours),
+    used_hours: r2(student.used_hours),
+    remaining_hours: r2((student.total_hours || 0) - (student.used_hours || 0)),
     organization_id: student.organization_id,
     created_at: student.created_at,
     updated_at: student.updated_at,
@@ -145,8 +149,9 @@ students.get('/:id', validateParams(idParamSchema), async (c) => {
     parent_name: student.parent_name,
     notes: student.notes,
     status: student.status,
-    total_hours: student.total_hours || 0,
-    used_hours: student.used_hours || 0,
+    total_hours: r2(student.total_hours),
+    used_hours: r2(student.used_hours),
+    remaining_hours: r2((student.total_hours || 0) - (student.used_hours || 0)),
     class_stats: {
       total: classStats?.total || 0,
       this_month: classStats?.this_month || 0
@@ -325,8 +330,9 @@ students.get('/', async (c) => {
     parent_name: student.parent_name,
     notes: student.notes,
     status: student.status,
-    total_hours: student.total_hours || 0,
-    used_hours: student.used_hours || 0,
+    total_hours: r2(student.total_hours),
+    used_hours: r2(student.used_hours),
+    remaining_hours: r2((student.total_hours || 0) - (student.used_hours || 0)),
     organization_id: student.organization_id,
     created_at: student.created_at,
     updated_at: student.updated_at,
@@ -368,9 +374,9 @@ students.patch('/:id/add-hours', validateParams(idParamSchema), async (c) => {
   return c.json(success({
     id,
     added_hours: hours,
-    total_hours: newTotal,
-    used_hours: student.used_hours || 0,
-    remaining_hours: newTotal - (student.used_hours || 0)
+    total_hours: r2(newTotal),
+    used_hours: r2(student.used_hours),
+    remaining_hours: r2(newTotal - (student.used_hours || 0))
   }));
 });
 
@@ -404,10 +410,10 @@ students.patch('/:id/adjust-hours', validateParams(idParamSchema), async (c) => 
   return c.json(success({
     id: student.id,
     name: student.name,
-    previous_total: student.total_hours || 0,
-    adjustment: adjustment,
-    new_total: newTotal,
-    remaining_hours: newTotal - (student.used_hours || 0),
+    previous_total: r2(student.total_hours || 0),
+    adjustment: r2(adjustment),
+    new_total: r2(newTotal),
+    remaining_hours: r2(newTotal - (student.used_hours || 0)),
     reason: reason || '手动调整'
   }));
 });

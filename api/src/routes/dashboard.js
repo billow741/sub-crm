@@ -46,7 +46,7 @@ dashboard.get('/stats', async (c) => {
   // 预警：课时不足的学生（剩余<=5）
   const lowBalanceStudents = await DB.prepare(`
     SELECT s.id, s.name, s.phone,
-           (s.total_hours - s.used_hours) as remaining_hours
+           ROUND((s.total_hours - s.used_hours), 2) as remaining_hours
     FROM students s
     WHERE (s.total_hours - s.used_hours) <= 3
       AND (s.total_hours - s.used_hours) > 0
