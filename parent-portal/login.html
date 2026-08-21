@@ -595,7 +595,10 @@ function switchMode(mode) {
       list.innerHTML = '';
 
       students.forEach(function(student) {
-        var remaining = (student.total_hours || 0) - (student.used_hours || 0);
+        // 优先使用后端返回的已四舍五入 remaining_hours，避免前端浮点数精度问题
+        var remaining = (student.remaining_hours !== undefined && student.remaining_hours !== null)
+          ? student.remaining_hours
+          : Math.round(((student.total_hours || 0) - (student.used_hours || 0)) * 100) / 100;
         var card = document.createElement('a');
         var token = encodeStudentToken(student.id);
         card.href = './index.html?token=' + token;

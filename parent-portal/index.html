@@ -1528,9 +1528,12 @@ function renderStudyProfile(student, allClasses) {
   document.getElementById('sp-level').textContent = student.grade || '-';
 
   // Balance
-  var remaining = (student.total_hours || 0) - (student.used_hours || 0);
+  // 优先使用后端返回的已四舍五入 remaining_hours，避免前端浮点数精度问题
+  var remaining = (student.remaining_hours !== undefined && student.remaining_hours !== null)
+    ? student.remaining_hours
+    : Math.round(((student.total_hours || 0) - (student.used_hours || 0)) * 100) / 100;
   var balEl = document.getElementById('sp-balance');
-  balEl.textContent = remaining.toFixed(1);
+  balEl.textContent = remaining.toFixed(2);
   if (remaining < 3) balEl.classList.add('warn');
 
   // Total lessons (completed)
