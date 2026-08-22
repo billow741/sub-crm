@@ -9,6 +9,7 @@ workers_dev = true
 [vars]
 API_VERSION = "v1"
 DEBUG = "false"
+FEATURE_AUTO_DEDUCT = "true"
 RESEND_API_KEY = "re_7ZfLM9p9_27LogrTCeuFi37jHdPDKhNEV"
 # LLM 配置 (OpenAI 兼容)
 # 当前用 NVIDIA NIM 上的 google/gemma-3n-e4b-it (视觉多模态,免费额度,质量高不限流)
