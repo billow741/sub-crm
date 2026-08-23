@@ -905,11 +905,13 @@ document.addEventListener('click', function(e) {
 function openFeedback(cls) {
   selectedClass = cls;
 
+  // 标题：scheduled = 提交反馈，其它 = 编辑反馈
   var modalTitle = cls.status !== 'scheduled' ? 'Edit Feedback' : 'Submit Feedback';
   document.querySelector('#feedback-modal h2').textContent = modalTitle;
 
+  // status 字段：completed/cancelled/absent 是终态，隐藏；scheduled/in_progress 允许选择
   var statusField = document.getElementById('status-field');
-  if (cls.status !== 'scheduled') {
+  if (cls.status === 'completed' || cls.status === 'cancelled' || cls.status === 'absent') {
     statusField.style.display = 'none';
   } else {
     statusField.style.display = 'block';
@@ -1040,12 +1042,9 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
   e.preventDefault();
   if (!selectedClass) return;
 
-  // 要求选择 Class Status（completed/cancelled/absent）
-  var status = document.getElementById('input-status').value;
-  if (!status) {
-    alert('Please select Class Status');
-    return;
-  }
+  // 收集反馈字段（无论 status 字段是否显示都收集）
+  var statusFieldVisible = document.getElementById('status-field').style.display !== 'none';
+  var status = statusFieldVisible ? document.getElementById('input-status').value : null;
 
   // Collect pronunciation errors
   var pronErrors = [];
@@ -1079,9 +1078,12 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
     textbook_code: document.getElementById('fb-textbook-code').value || null,
     unit_number: document.getElementById('fb-unit-num').value ? parseInt(document.getElementById('fb-unit-num').value) : null,
     page_from: document.getElementById('fb-page-from').value ? parseInt(document.getElementById('fb-page-from').value) : null,
-    page_to: document.getElementById('fb-page-to').value ? parseInt(document.getElementById('fb-page-to').value) : null,
-    status: status
+    page_to: document.getElementById('fb-page-to').value ? parseInt(document.getElementById('fb-page-to').value) : null
   };
+  // 仅当 status 字段可见（scheduled/in_progress）才传 status
+  if (statusFieldVisible && status) {
+    data.status = status;
+  }
 
   try {
     // PATCH /classes/:id — 后端根据 status 自动扣课时/回退课时
@@ -1091,10 +1093,19 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
     closeModal();
     loadTeacherData();
 
-    var msg = status === 'completed' ? 'Feedback submitted! Hours deducted.' :
-              status === 'cancelled' ? 'Class cancelled. Hours restored.' :
-              status === 'absent' ? 'Marked as absent.' :
-              'Feedback submitted.';
+    // 提示消息：仅当本次提交包含 status 时显示扣/还课时提示
+    var msg;
+    if (!statusFieldVisible) {
+      msg = 'Feedback updated.';
+    } else if (status === 'completed') {
+      msg = 'Feedback submitted! Hours deducted.';
+    } else if (status === 'cancelled') {
+      msg = 'Class cancelled. Hours restored.';
+    } else if (status === 'absent') {
+      msg = 'Marked as absent.';
+    } else {
+      msg = 'Feedback submitted.';
+    }
     alert(msg);
 
     // 检查里程碑触发（仅 completed 时）
