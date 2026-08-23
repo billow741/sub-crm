@@ -645,20 +645,15 @@ if (c.class_link) {
 }
 html += '</div>';
 html += '</div>';
-// Trial class shows Assessment button, regular class shows state-based buttons
+// Trial class shows Assessment button, regular class shows Submit Feedback button
 if (c.is_trial) {
   html += '<button onclick="openAssessment(' + i + ')" class="mt-4 w-full py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm">📝 Assessment</button>';
+} else if (c.status === 'completed') {
+  html += '<button onclick="openTodayFeedback(' + i + ')" class="mt-4 w-full py-2 bg-gray-400 text-white rounded-lg cursor-not-allowed text-sm" disabled>Feedback Submitted</button>';
 } else {
-  // State machine: scheduled -> in_progress -> completed
-  if (c.status === 'scheduled') {
-    html += '<button onclick="startClass(' + i + ')" class="mt-4 w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">▶️ Start Class</button>';
-  } else if (c.status === 'in_progress') {
-    html += '<button onclick="completeClass(' + i + ')" class="mt-4 w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">✅ Complete Class</button>';
-  } else if (c.status === 'completed') {
-    html += '<button onclick="openTodayFeedback(' + i + ')" class="mt-4 w-full py-2 bg-gray-400 text-white rounded-lg cursor-not-allowed text-sm" disabled>Feedback Submitted</button>';
-  } else {
-    html += '<button onclick="openTodayFeedback(' + i + ')" class="mt-4 w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">Submit Feedback</button>';
-  }
+  // scheduled / in_progress / cancelled 都允许填写反馈
+  // 提交反馈 = 课程完成 + 自动扣课时
+  html += '<button onclick="openTodayFeedback(' + i + ')" class="mt-4 w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">📝 Submit Feedback & Complete</button>';
 }
 html += '</div>';
 }
@@ -672,77 +667,7 @@ function openTodayFeedback(idx) {
   if (cls) openFeedback(cls);
 }
 
-// ===== State Machine: Start Class =====
-async function startClass(idx) {
-  var cls = window_todayClasses[idx];
-  if (!cls) return;
-  
-  if (!confirm('Start class for ' + formatStudentName(cls) + '?')) return;
-  
-  try {
-    var result = await apiPost('/classes/' + cls.id + '/start', {});
-    if (result.error) throw new Error(result.error.message);
-    
-    cls.status = 'in_progress';
-    cls.actual_start_at = result.data.actual_start_at;
-    renderTodayClasses(window_todayClasses);
-    alert('Class started!');
-  } catch (err) {
-    alert('Failed to start: ' + err.message);
-  }
-}
-
-// ===== State Machine: Complete Class =====
-async function completeClass(idx) {
-  var cls = window_todayClasses[idx];
-  if (!cls) return;
-  
-  // Open feedback modal first to collect required feedback
-  selectedClass = cls;
-  var modalTitle = 'Complete Class - Submit Feedback';
-  document.querySelector('#feedback-modal h2').textContent = modalTitle;
-  
-  var statusField = document.getElementById('status-field');
-  statusField.style.display = 'none'; // Hide status field since we're completing
-  
-  // Pre-fill lesson info
-  var info = '';
-  info += '<div><span class="font-medium">Student:</span> ' + formatStudentName(cls) + '</div>';
-  info += '<div><span class="font-medium">Date:</span> ' + cls.date + '</div>';
-  info += '<div><span class="font-medium">Time:</span> ' + formatTime(cls.start_time) + '</div>';
-  info += '<div><span class="font-medium">Subject:</span> ' + (cls.subject || 'English') + '</div>';
-  document.getElementById('class-info').innerHTML = info;
-  
-  // Fill defaults
-  document.getElementById('fb-level').value = cls.student_grade || '';
-  document.getElementById('fb-unit').value = cls.fb_unit || '';
-  document.getElementById('fb-lesson').value = cls.fb_lesson || '';
-  document.getElementById('fb-vocab').value = cls.fb_vocab || '';
-  document.getElementById('fb-patterns').value = cls.fb_patterns || '';
-  document.getElementById('fb-grammar').value = cls.fb_grammar || '';
-  document.getElementById('fb-homework').value = cls.fb_homework || '';
-  document.getElementById('fb-next').value = cls.fb_next_preview || '';
-  document.getElementById('fb-message').value = cls.fb_teacher_message || '';
-  document.getElementById('fb-textbook-code').value = cls.textbook_code || '';
-  document.getElementById('fb-unit-num').value = cls.unit_number || '';
-  document.getElementById('fb-page-from').value = cls.page_from || '';
-  document.getElementById('fb-page-to').value = cls.page_to || '';
-  renderPagesPreview();
-  
-  // Clear error rows
-  document.getElementById('fb-pron-errors').innerHTML = '';
-  document.getElementById('fb-gram-errors').innerHTML = '';
-  
-  // Set status to completed (will be used in submit)
-  document.getElementById('input-status').value = 'completed';
-  
-  document.getElementById('feedback-modal').classList.remove('hidden');
-  document.getElementById('feedback-modal').classList.add('flex');
-  
-  // Override the submit handler to call the complete endpoint
-  window._completingClass = true;
-  window._completeClassId = cls.id;
-}
+// ===== Render Today Classes (helper used by openTodayFeedback) =====
 
 function getDayOfWeek(dateStr) {
   var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1069,8 +994,6 @@ function closeModal() {
   document.getElementById('feedback-modal').classList.add('hidden');
   document.getElementById('feedback-modal').classList.remove('flex');
   selectedClass = null;
-  window._completingClass = false;
-  window._completeClassId = null;
   var statusField = document.getElementById('status-field');
   if (statusField) statusField.style.display = 'block';
 }
@@ -1112,84 +1035,16 @@ function escapeAttr(s) {
 }
 
 // ===== Submit Feedback =====
+// 流程：填反馈 → PATCH /classes/:id (status=completed) → 后端自动扣课时
 document.getElementById('feedback-form').addEventListener('submit', async function(e) {
   e.preventDefault();
   if (!selectedClass) return;
 
-  // Check if we're completing a class (state machine)
-  if (window._completingClass) {
-    // Validate required feedback fields for class completion
-    var textbookPages = [];
-    var pageFrom = document.getElementById('fb-page-from').value;
-    var pageTo = document.getElementById('fb-page-to').value;
-    if (pageFrom && pageTo) {
-      for (var p = parseInt(pageFrom); p <= parseInt(pageTo); p++) textbookPages.push(p);
-    }
-    if (textbookPages.length === 0) {
-      alert('教材页码必填 (page_from 和 page_to)');
-      return;
-    }
-
-    // Collect pronunciation errors
-    var pronErrors = [];
-    document.querySelectorAll('#fb-pron-errors .error-row').forEach(function(row) {
-      var wrong = row.querySelector('.err-wrong').value;
-      var right = row.querySelector('.err-right').value;
-      if (wrong || right) pronErrors.push({ wrong: wrong, right: right });
-    });
-
-    // Collect grammar errors
-    var gramErrors = [];
-    document.querySelectorAll('#fb-gram-errors .error-row').forEach(function(row) {
-      var wrong = row.querySelector('.err-wrong').value;
-      var right = row.querySelector('.err-right').value;
-      if (wrong || right) gramErrors.push({ wrong: wrong, right: right });
-    });
-
-    var data = {
-      idempotency_key: 'teacher_complete_' + window._completeClassId + '_' + Date.now(),
-      feedback: {
-        pronunciation_corrections: pronErrors,
-        grammar_corrections: gramErrors,
-        homework: document.getElementById('fb-homework').value,
-        teacher_comment: document.getElementById('fb-message').value,
-        textbook_pages: textbookPages,
-        vocab_count: (document.getElementById('fb-vocab').value || '').split(',').filter(Boolean).length,
-        // 兼容旧字段
-        fb_pronunciation_errors: pronErrors.length ? JSON.stringify(pronErrors) : null,
-        fb_grammar_errors: gramErrors.length ? JSON.stringify(gramErrors) : null,
-        fb_teacher_message: document.getElementById('fb-message').value,
-        fb_homework: document.getElementById('fb-homework').value,
-        fb_next_preview: document.getElementById('fb-next').value,
-        fb_unit: document.getElementById('fb-unit').value,
-        fb_lesson: document.getElementById('fb-lesson').value,
-        fb_lesson_level: document.getElementById('fb-level').value,
-      }
-    };
-
-    try {
-      var result = await apiPost('/classes/' + window._completeClassId + '/complete', data);
-      if (result.error) throw new Error(result.error.message);
-      
-      closeModal();
-      window._completingClass = false;
-      window._completeClassId = null;
-      loadTeacherData();
-      alert('Class completed! Hours deducted: ' + result.data.hours_consumed + ', Remaining: ' + result.data.student.remaining_hours);
-    } catch (err) {
-      alert('Failed to complete class: ' + err.message);
-    }
+  // 要求选择 Class Status（completed/cancelled/absent）
+  var status = document.getElementById('input-status').value;
+  if (!status) {
+    alert('Please select Class Status');
     return;
-  }
-
-  // Original feedback submission logic for editing existing classes
-  // New submission: require Class Status
-  if (selectedClass.status === 'scheduled') {
-    var status = document.getElementById('input-status').value;
-    if (!status) {
-      alert('Please select Class Status');
-      return;
-    }
   }
 
   // Collect pronunciation errors
@@ -1225,20 +1080,25 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
     unit_number: document.getElementById('fb-unit-num').value ? parseInt(document.getElementById('fb-unit-num').value) : null,
     page_from: document.getElementById('fb-page-from').value ? parseInt(document.getElementById('fb-page-from').value) : null,
     page_to: document.getElementById('fb-page-to').value ? parseInt(document.getElementById('fb-page-to').value) : null,
-    status: document.getElementById('input-status').value
+    status: status
   };
 
   try {
-    // Update class record
+    // PATCH /classes/:id — 后端根据 status 自动扣课时/回退课时
     var result = await apiPatch('/classes/' + selectedClass.id, data);
     var responseData = result.data || result;
 
     closeModal();
     loadTeacherData();
-    alert('Feedback submitted successfully!');
 
-    // 检查里程碑触发
-    if (responseData.milestone && !responseData.milestone.alreadyExists) {
+    var msg = status === 'completed' ? 'Feedback submitted! Hours deducted.' :
+              status === 'cancelled' ? 'Class cancelled. Hours restored.' :
+              status === 'absent' ? 'Marked as absent.' :
+              'Feedback submitted.';
+    alert(msg);
+
+    // 检查里程碑触发（仅 completed 时）
+    if (status === 'completed' && responseData.milestone && !responseData.milestone.alreadyExists) {
       var m = responseData.milestone;
       var reportType = m.reportType || (m.levelUp ? m.levelUp.reportType : null);
       if (reportType) {
