@@ -400,7 +400,12 @@ async function apiPatch(endpoint, data) {
     headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
     body: JSON.stringify(data)
   });
-  return res.json();
+  var text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error('Server returned non-JSON (status ' + res.status + '): ' + text.slice(0, 100));
+  }
 }
 
 async function apiPost(endpoint, data) {
@@ -1038,9 +1043,16 @@ function escapeAttr(s) {
 
 // ===== Submit Feedback =====
 // 流程：填反馈 → PATCH /classes/:id (status=completed) → 后端自动扣课时
+var _isSubmitting = false;  // 防重入锁
 document.getElementById('feedback-form').addEventListener('submit', async function(e) {
   e.preventDefault();
   if (!selectedClass) return;
+  if (_isSubmitting) return;  // 防止重复提交
+  _isSubmitting = true;
+
+  // 临时禁用 submit 按钮，防止用户多次点击
+  var submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
 
   // 收集反馈字段（无论 status 字段是否显示都收集）
   var statusFieldVisible = document.getElementById('status-field').style.display !== 'none';
@@ -1120,6 +1132,10 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
     }
   } catch (err) {
     alert('Failed to submit: ' + err.message);
+  } finally {
+    // 恢复 submit 按钮 + 解锁（不论成功失败）
+    _isSubmitting = false;
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
   }
 });
 
