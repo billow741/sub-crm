@@ -353,7 +353,7 @@ students.patch('/:id/add-hours', validateParams(idParamSchema), async (c) => {
   const DB = c.env.DB;
   const { id } = c.req.validatedParams;
   const body = await c.req.json();
-  const hours = parseInt(body.hours) || 0;
+  const hours = parseFloat(body.hours) || 0;
 
   if (hours <= 0) {
     return c.json(error('BAD_REQUEST', '课时数必须大于0'), 400);

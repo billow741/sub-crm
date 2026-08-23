@@ -8,7 +8,7 @@ workers_dev = true
 
 [vars]
 API_VERSION = "v1"
-DEBUG = "false"
+DEBUG = "true"
 FEATURE_AUTO_DEDUCT = "true"
 RESEND_API_KEY = "re_7ZfLM9p9_27LogrTCeuFi37jHdPDKhNEV"
 # LLM 配置 (OpenAI 兼容)

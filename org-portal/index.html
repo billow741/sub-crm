@@ -962,9 +962,10 @@ function bindScheduleEvents(date) {
       data.teacher = teacher?.name||'';
       // 自动计算 end_time
       const [hh, mm] = (data.start_time||'10:00').split(':').map(Number);
-      const endH = hh + Math.floor(duration / 60);
-      const endM = mm + (duration % 60);
-      data.end_time = `${String(endH).padStart(2,'0')}:${String(endM % 60).padStart(2,'0')}`;
+      const totalMinutes = hh * 60 + mm + duration;
+      const endH = Math.floor(totalMinutes / 60) % 24;
+      const endM = totalMinutes % 60;
+      data.end_time = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
       try {
         await api(`/classes/student/${data.student_id}`, { method: 'POST', body: JSON.stringify(data) });
         modal.remove(); renderSchedule(document.getElementById('main-content'));

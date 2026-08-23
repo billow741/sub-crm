@@ -81,26 +81,24 @@ classes.get('/', async (c) => {
 
   if (studentId) {
     whereClause += ' AND c.student_id = ?';
-    params.push(studentId);
+    params.push(parseInt(studentId));
   }
-
   if (teacherId) {
     whereClause += ' AND c.teacher_id = ?';
-    params.push(teacherId);
+    params.push(parseInt(teacherId));
   }
-
   if (status) {
     whereClause += ' AND c.status = ?';
     params.push(status);
   }
 
-  // 统计总数
+  // 查总数
   const countResult = await DB.prepare(`SELECT COUNT(*) as total FROM classes c ${whereClause}`).bind(...params).first();
   const total = countResult?.total || 0;
-  const pagination = calculatePagination(page, pageSize, total);
 
-  // 查询数据
-  const results = await DB.prepare(`
+  // 分页查询
+  const offset = (parseInt(page) - 1) * parseInt(pageSize);
+  const data = await DB.prepare(`
     SELECT c.*, s.name as student_name, s.grade as student_grade, p.name as package_name, t.name as teacher_name
     FROM classes c
     JOIN students s ON c.student_id = s.id
@@ -109,117 +107,12 @@ classes.get('/', async (c) => {
     ${whereClause}
     ORDER BY c.date DESC, c.start_time DESC
     LIMIT ? OFFSET ?
-  `).bind(...params, pagination.page_size, pagination.offset).all();
+  `).bind(...params, parseInt(pageSize), offset).all();
 
-const data = results.results?.map(cls => ({
-  id: cls.id,
-  student_id: cls.student_id,
-  student_name: cls.student_name,
-  student_grade: cls.student_grade,
-  package_id: cls.package_id,
-  package_name: cls.package_name,
-  teacher: cls.teacher,
-  teacher_id: cls.teacher_id,
-  teacher_name: cls.teacher_name,
-  subject: cls.subject,
-  hours: cls.hours,
-  date: cls.date,
-  start_time: cls.start_time,
-  end_time: cls.end_time,
-  content: cls.content,
-  homework: cls.homework,
-  notes: cls.notes,
-  status: cls.status,
-  class_link: cls.class_link,
-  is_trial: cls.is_trial || 0,
-  organization_id: cls.organization_id,
-  created_at: cls.created_at,
-  updated_at: cls.updated_at,
-  fb_lesson_level: cls.fb_lesson_level,
-  fb_unit: cls.fb_unit,
-  fb_lesson: cls.fb_lesson,
-  fb_vocab: cls.fb_vocab,
-  fb_patterns: cls.fb_patterns,
-  fb_grammar: cls.fb_grammar,
-  fb_pronunciation_errors: cls.fb_pronunciation_errors,
-  fb_grammar_errors: cls.fb_grammar_errors,
-  fb_teacher_message: cls.fb_teacher_message,
-  fb_homework: cls.fb_homework,
-  fb_next_preview: cls.fb_next_preview,
-  textbook_code: cls.textbook_code,
-  unit_number: cls.unit_number,
-  page_from: cls.page_from,
-  page_to: cls.page_to,
-})) || [];
+  // 计算分页信息
+  const pagination = calculatePagination(parseInt(page), parseInt(pageSize), total);
 
-  return c.json(success({ data, pagination }));
-});
-
-// 获取学生的上课记录
-classes.get('/student/:student_id', async (c) => {
-  const DB = c.env.DB;
-  const studentId = c.req.param('student_id');
-  const page = c.req.query('page') || '1';
-  const pageSize = c.req.query('page_size') || '20';
-
-  // 检查学生是否存在
-  const student = await DB.prepare('SELECT id, name FROM students WHERE id = ?').bind(studentId).first();
-  if (!student) {
-    return c.json(error('NOT_FOUND', '学生不存在'), 404);
-  }
-
-  // 查询总数
-  const countResult = await DB.prepare('SELECT COUNT(*) as total FROM classes WHERE student_id = ?').bind(studentId).first();
-  const total = countResult?.total || 0;
-  const pagination = calculatePagination(page, pageSize, total);
-
-  const results = await DB.prepare(`
-    SELECT c.*, p.name as package_name
-    FROM classes c
-    LEFT JOIN packages p ON c.package_id = p.id
-    WHERE c.student_id = ?
-    ORDER BY c.date DESC, c.start_time DESC
-    LIMIT ? OFFSET ?
-  `).bind(studentId, pagination.page_size, pagination.offset).all();
-
-const data = results.results?.map(cls => ({
-  id: cls.id,
-  student_id: cls.student_id,
-  package_id: cls.package_id,
-  package_name: cls.package_name,
-  teacher: cls.teacher,
-  teacher_id: cls.teacher_id,
-  subject: cls.subject,
-  hours: cls.hours,
-  date: cls.date,
-  start_time: cls.start_time,
-  end_time: cls.end_time,
-  content: cls.content,
-  homework: cls.homework,
-  notes: cls.notes,
-  class_link: cls.class_link,
-  status: cls.status,
-  is_trial: cls.is_trial || 0,
-  organization_id: cls.organization_id,
-  created_at: cls.created_at,
-  fb_lesson_level: cls.fb_lesson_level,
-  fb_unit: cls.fb_unit,
-  fb_lesson: cls.fb_lesson,
-  fb_vocab: cls.fb_vocab,
-  fb_patterns: cls.fb_patterns,
-  fb_grammar: cls.fb_grammar,
-  fb_pronunciation_errors: cls.fb_pronunciation_errors,
-  fb_grammar_errors: cls.fb_grammar_errors,
-  fb_teacher_message: cls.fb_teacher_message,
-  fb_homework: cls.fb_homework,
-  fb_next_preview: cls.fb_next_preview,
-  textbook_code: cls.textbook_code,
-  unit_number: cls.unit_number,
-  page_from: cls.page_from,
-  page_to: cls.page_to,
-})) || [];
-
-  return c.json(success({ data, pagination }));
+  return c.json(success({ data: data.results || [], pagination }));
 });
 
 // 获取单个上课记录
@@ -275,6 +168,7 @@ return c.json(success({
   fb_teacher_message: cls.fb_teacher_message,
   fb_homework: cls.fb_homework,
   fb_next_preview: cls.fb_next_preview,
+  duration: cls.duration,
 }));
 });
 
@@ -283,6 +177,15 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
   const DB = c.env.DB;
   const studentId = c.req.param('student_id');
   const data = c.req.validated;
+
+  // ── 自动计算 end_time（如果传了 duration 但没传 end_time）──
+  if (data.duration && data.start_time && !data.end_time) {
+    const [hh, mm] = data.start_time.split(':').map(Number);
+    const totalMinutes = hh * 60 + mm + parseInt(data.duration);
+    const endH = Math.floor(totalMinutes / 60) % 24;
+    const endM = totalMinutes % 60;
+    data.end_time = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+  }
 
   // 检查学生是否存在
   const student = await DB.prepare('SELECT id, name FROM students WHERE id = ?').bind(studentId).first();
@@ -331,10 +234,11 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
   }
 
   const result = await DB.prepare(`
-    INSERT INTO classes (student_id, package_id, teacher, teacher_id, subject, hours, date, start_time, end_time, content, homework, notes, status, organization_id, is_trial,
+    INSERT INTO classes (student_id, package_id, teacher, teacher_id, subject, hours, date, start_time, end_time, duration, content, homework, notes, status, organization_id, is_trial,
                         textbook_code, unit_number, page_from, page_to,
-                        fb_unit, fb_lesson, fb_lesson_level, fb_vocab, fb_patterns, fb_homework)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        fb_unit, fb_lesson, fb_lesson_level, fb_vocab, fb_patterns, fb_grammar,
+                        fb_pronunciation_errors, fb_grammar_errors, fb_teacher_message, fb_homework, fb_next_preview)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     studentId,
     data.package_id || null,
@@ -345,6 +249,7 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
     data.date || new Date().toISOString().split('T')[0],
     data.start_time || null,
     data.end_time || null,
+    data.duration || null,
     data.content || null,
     data.homework || null,
     data.notes || null,
@@ -360,7 +265,12 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
     data.fb_lesson_level || null,
     data.fb_vocab || null,
     data.fb_patterns || null,
-    data.fb_homework || null
+    data.fb_grammar || null,
+    data.fb_pronunciation_errors || null,
+    data.fb_grammar_errors || null,
+    data.fb_teacher_message || null,
+    data.fb_homework || null,
+    data.fb_next_preview || null
   ).run();
 
   const classId = result.meta.last_row_id;
@@ -384,47 +294,72 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
         `UPDATE org_packages SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
       ).bind(classHours, targetPkg.id).run();
 
-      // 记录分配明细到 org_hour_allocations（负值=课程消耗）
       await DB.prepare(
-        `INSERT INTO org_hour_allocations (org_id, package_id, student_id, hours, notes, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-      ).bind(organizationId, targetPkg.id, studentId, -classHours, `课程消耗 -${classHours}节 (class ${classId})`, 'system').run();
+        `INSERT INTO hour_changes (org_package_id, student_id, class_id, change_type, hours_change, note, created_by)
+         VALUES (?, ?, ?, 'deduct', ?, ?, 'system')`
+      ).bind(targetPkg.id, studentId, classId, classHours, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
     }
   }
 
-  // 如果是已完成状态，记录课时消耗
-  if (classStatus === 'completed') {
-    const student = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(studentId).first();
-    const newUsed = (student.used_hours || 0) + classHours;
-    const newRemaining = (student.total_hours || 0) - newUsed;
+  // ── 同步学生课时 ──
+  const studentHours = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(studentId).first();
+  if (studentHours && classStatus === 'completed') {
+    await DB.prepare(
+      `UPDATE students SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
+    ).bind(classHours, studentId).run();
 
-    await DB.prepare('UPDATE students SET used_hours = ? WHERE id = ?').bind(newUsed, studentId).run();
-
-    // 记录课时变动
-    await DB.prepare(`
-      INSERT INTO hour_changes (student_id, type, amount, related_id, description)
-      VALUES (?, 'class', ?, ?, ?)
-    `).bind(studentId, -classHours, classId, `上课消耗 - ${classHours}节`).run();
+    await DB.prepare(
+      `INSERT INTO hour_changes (student_id, class_id, change_type, hours_change, note, created_by)
+       VALUES (?, ?, 'deduct', ?, ?, 'system')`
+    ).bind(studentId, classId, classHours, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
   }
-  } // end if (!isTrial)
+  }
+
+  const newClass = await DB.prepare(`
+    SELECT c.*, s.name as student_name, s.grade as student_grade, p.name as package_name, t.name as teacher_name
+    FROM classes c
+    JOIN students s ON c.student_id = s.id
+    LEFT JOIN packages p ON c.package_id = p.id
+    LEFT JOIN teachers t ON c.teacher_id = t.id
+    WHERE c.id = ?
+  `).bind(classId).first();
 
   return c.json(success({
-    id: classId,
-    student_id: parseInt(studentId),
-    package_id: data.package_id || null,
-    teacher: data.teacher || null,
-    teacher_id: data.teacher_id || null,
-    subject: data.subject || null,
-    hours: classHours,
-    date: data.date || new Date().toISOString().split('T')[0],
-    start_time: data.start_time || null,
-    end_time: data.end_time || null,
-    content: data.content || null,
-    homework: data.homework || null,
-    notes: data.notes || null,
-    status: classStatus,
-    is_trial: data.is_trial || 0,
-    created_at: new Date().toISOString()
+    id: newClass.id,
+    student_id: newClass.student_id,
+    student_name: newClass.student_name,
+    student_grade: newClass.student_grade,
+    package_id: newClass.package_id,
+    package_name: newClass.package_name,
+    teacher: newClass.teacher,
+    teacher_id: newClass.teacher_id,
+    teacher_name: newClass.teacher_name,
+    subject: newClass.subject,
+    hours: newClass.hours,
+    date: newClass.date,
+    start_time: newClass.start_time,
+    end_time: newClass.end_time,
+    content: newClass.content,
+    homework: newClass.homework,
+    notes: newClass.notes,
+    class_link: newClass.class_link,
+    is_trial: newClass.is_trial || 0,
+    status: newClass.status,
+    organization_id: newClass.organization_id,
+    created_at: newClass.created_at,
+    updated_at: newClass.updated_at,
+    fb_lesson_level: newClass.fb_lesson_level,
+    fb_unit: newClass.fb_unit,
+    fb_lesson: newClass.fb_lesson,
+    fb_vocab: newClass.fb_vocab,
+    fb_patterns: newClass.fb_patterns,
+    fb_grammar: newClass.fb_grammar,
+    fb_pronunciation_errors: newClass.fb_pronunciation_errors,
+    fb_grammar_errors: newClass.fb_grammar_errors,
+    fb_teacher_message: newClass.fb_teacher_message,
+    fb_homework: newClass.fb_homework,
+    fb_next_preview: newClass.fb_next_preview,
+    duration: newClass.duration,
   }), 201);
 });
 
@@ -434,25 +369,42 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
   const { id } = c.req.validatedParams;
   const data = c.req.validated;
 
-  // 检查上课记录是否存在
+  // ── 自动计算 end_time（如果传了 duration 但没传 end_time）──
+  if (data.duration && data.start_time && !data.end_time) {
+    const [hh, mm] = data.start_time.split(':').map(Number);
+    const totalMinutes = hh * 60 + mm + parseInt(data.duration);
+    const endH = Math.floor(totalMinutes / 60) % 24;
+    const endM = totalMinutes % 60;
+    data.end_time = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+  }
+
+  // 检查记录是否存在
   const existing = await DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
   if (!existing) {
     return c.json(error('NOT_FOUND', '上课记录不存在'), 404);
   }
 
+  // 如果指定了课时包，检查是否属于该学生
+  if (data.package_id) {
+    const pkg = await DB.prepare('SELECT id, student_id FROM packages WHERE id = ?').bind(data.package_id).first();
+    if (!pkg || pkg.student_id !== existing.student_id) {
+      return c.json(error('INVALID_PACKAGE', '课时包不存在或不属于该学生'), 400);
+    }
+  }
+
   // ── 老师时间冲突检查 ──
-  // 用更新后的值（缺省回退到现有值）做检查
   const checkTeacherId = data.teacher_id ?? existing.teacher_id;
   const checkDate = data.date ?? existing.date;
   const checkStart = data.start_time ?? existing.start_time;
   const checkEnd = data.end_time ?? existing.end_time;
+
   if (checkTeacherId && checkDate && checkStart && checkEnd) {
     const conflicts = await checkTeacherConflict(DB, {
       teacherId: checkTeacherId,
       date: checkDate,
       startTime: checkStart,
       endTime: checkEnd,
-      excludeId: id
+      excludeId: parseInt(id)
     });
     if (conflicts.length > 0) {
       const conflictStudentIds = conflicts.map(c => c.student_id);
@@ -466,7 +418,7 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
     }
   }
 
-  // 构建更新语句
+  // 更新字段
   const fields = [];
   const values = [];
 
@@ -526,97 +478,121 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
         ).bind(delta, targetPkg.id).run();
 
         await DB.prepare(
-          `INSERT INTO org_hour_allocations (org_id, package_id, student_id, hours, notes, created_by, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-        ).bind(clsOrgId, targetPkg.id, existing.student_id, delta > 0 ? -delta : Math.abs(delta), note, 'system').run();
+          `INSERT INTO hour_changes (org_package_id, student_id, class_id, change_type, hours_change, note, created_by)
+           VALUES (?, ?, ?, 'adjust', ?, ?, 'system')`
+        ).bind(targetPkg.id, existing.student_id, id, delta, note).run();
       }
     }
   }
 
-  // 同步学生 used_hours（当 status 在 completed ↔ 其他 之间切换时）
+  // ── 同步学生课时 ──
   if (oldStatus !== newStatus) {
+    let delta = 0;
+    let note = '';
     if (newStatus === 'completed' && oldStatus !== 'completed') {
-      // 非完成 → 完成：增加学生 used_hours
+      delta = clsHours;
+      note = `课程标记完成 +${clsHours}节 (class ${id})`;
+    } else if (oldStatus === 'completed' && newStatus !== 'completed') {
+      delta = -clsHours;
+      note = `课程取消完成 -${clsHours}节 (class ${id})`;
+    }
+
+    if (delta !== 0) {
       await DB.prepare(
         `UPDATE students SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
-      ).bind(clsHours, existing.student_id).run();
-    } else if (oldStatus === 'completed' && newStatus !== 'completed') {
-      // 完成 → 非完成：减少学生 used_hours
-      const student = await DB.prepare('SELECT used_hours FROM students WHERE id = ?').bind(existing.student_id).first();
-      const newUsed = Math.max(0, (student?.used_hours || 0) - clsHours);
+      ).bind(delta, existing.student_id).run();
+
       await DB.prepare(
-        `UPDATE students SET used_hours = ?, updated_at = datetime('now') WHERE id = ?`
-      ).bind(newUsed, existing.student_id).run();
+        `INSERT INTO hour_changes (student_id, class_id, change_type, hours_change, note, created_by)
+         VALUES (?, ?, 'adjust', ?, ?, 'system')`
+      ).bind(existing.student_id, id, delta, note).run();
     }
   }
-  } // end if (!isTrialUpdate)
+  }
 
-  // 返回更新后的记录
-  const cls = await DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
-
-  // ── 里程碑检测 ──
+  // ── 里程碑自动检测 ──
+  // 仅当非体验课、状态变为 completed 时触发
   let milestone = null;
-  if (newStatus === 'completed' && oldStatus !== 'completed' && !isTrialUpdate) {
-    // 检查已完成正课数
-    const cntResult = await DB.prepare(
+  if (!isTrialUpdate && newStatus === 'completed' && oldStatus !== 'completed') {
+    // 查该学生已完成非体验课数量
+    const completedCount = await DB.prepare(
       'SELECT COUNT(*) as cnt FROM classes WHERE student_id = ? AND status = ? AND is_trial = 0'
     ).bind(existing.student_id, 'completed').first();
-    const completedCount = cntResult?.cnt || 0;
+
     const milestones = [10, 30, 60];
-    const hit = milestones.find(m => completedCount === m);
-    if (hit) {
-      milestone = { lessonCount: completedCount, type: 'milestone_' + hit, reportType: 'milestone_' + hit };
+    for (const m of milestones) {
+      if (completedCount.cnt === m) {
+        milestone = { type: 'milestone', completedCount: m, reportType: `milestone_${m}` };
+        break;
+      }
     }
-  }
 
-  // ── 等级升级检测 ──
-  if (data.fb_lesson_level && existing.student_id) {
-    const currentStudent = await DB.prepare('SELECT grade FROM students WHERE id = ?').bind(existing.student_id).first();
-    const oldGrade = currentStudent?.grade;
-    if (oldGrade && oldGrade !== data.fb_lesson_level) {
-      if (!milestone) milestone = {};
-      milestone.levelUp = { fromLevel: oldGrade, toLevel: data.fb_lesson_level, reportType: 'level_up' };
-    }
-  }
-
-  // 检查是否已有同类报告（避免重复触发）
-  if (milestone) {
-    const reportType = milestone.reportType || milestone.levelUp?.reportType;
-    if (reportType) {
-      const existingReport = await DB.prepare(
-        'SELECT id FROM progress_reports WHERE student_id = ? AND report_type = ? ORDER BY created_at DESC LIMIT 1'
-      ).bind(existing.student_id, reportType).first();
-      if (existingReport) {
-        milestone.alreadyExists = true;
-      } else {
-        milestone.alreadyExists = false;
+    if (milestone) {
+      const reportType = milestone.reportType || milestone.levelUp?.reportType;
+      if (reportType) {
+        const existingReport = await DB.prepare(
+          'SELECT id FROM progress_reports WHERE student_id = ? AND report_type = ? ORDER BY created_at DESC LIMIT 1'
+        ).bind(existing.student_id, reportType).first();
+        if (existingReport) {
+          milestone.alreadyExists = true;
+        } else {
+          milestone.alreadyExists = false;
+        }
       }
     }
   }
 
+  // 重新查询更新后的记录
+  const updated = await DB.prepare(`
+    SELECT c.*, s.name as student_name, s.grade as student_grade, p.name as package_name, t.name as teacher_name
+    FROM classes c
+    JOIN students s ON c.student_id = s.id
+    LEFT JOIN packages p ON c.package_id = p.id
+    LEFT JOIN teachers t ON c.teacher_id = t.id
+    WHERE c.id = ?
+  `).bind(id).first();
+
 return c.json(success({
-  id: cls.id,
-  student_id: cls.student_id,
-  package_id: cls.package_id,
-  teacher: cls.teacher,
-  teacher_id: cls.teacher_id,
-  subject: cls.subject,
-  hours: cls.hours,
-  date: cls.date,
-  start_time: cls.start_time,
-  end_time: cls.end_time,
-  content: cls.content,
-  homework: cls.homework,
-  notes: cls.notes,
-  status: cls.status,
-  class_link: cls.class_link,
-  is_trial: cls.is_trial || 0,
-  updated_at: cls.updated_at,
+  id: updated.id,
+  student_id: updated.student_id,
+  student_name: updated.student_name,
+  student_grade: updated.student_grade,
+  package_id: updated.package_id,
+  package_name: updated.package_name,
+  teacher: updated.teacher,
+  teacher_id: updated.teacher_id,
+  teacher_name: updated.teacher_name,
+  subject: updated.subject,
+  hours: updated.hours,
+  date: updated.date,
+  start_time: updated.start_time,
+  end_time: updated.end_time,
+  content: updated.content,
+  homework: updated.homework,
+  notes: updated.notes,
+  class_link: updated.class_link,
+  is_trial: updated.is_trial || 0,
+  status: updated.status,
+  organization_id: updated.organization_id,
+  created_at: updated.created_at,
+  updated_at: updated.updated_at,
+  fb_lesson_level: updated.fb_lesson_level,
+  fb_unit: updated.fb_unit,
+  fb_lesson: updated.fb_lesson,
+  fb_vocab: updated.fb_vocab,
+  fb_patterns: updated.fb_patterns,
+  fb_grammar: updated.fb_grammar,
+  fb_pronunciation_errors: updated.fb_pronunciation_errors,
+  fb_grammar_errors: updated.fb_grammar_errors,
+  fb_teacher_message: updated.fb_teacher_message,
+  fb_homework: updated.fb_homework,
+  fb_next_preview: updated.fb_next_preview,
+  duration: updated.duration,
   milestone: milestone
- }));
+}));
 });
 
- // 删除上课记录
+// 删除上课记录
 classes.delete('/:id', validateParams(idParamSchema), async (c) => {
   const DB = c.env.DB;
   const { id } = c.req.validatedParams;
@@ -631,18 +607,11 @@ classes.delete('/:id', validateParams(idParamSchema), async (c) => {
   if (cls.status === 'completed') {
     // 1. 恢复学生 used_hours
     const student = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(cls.student_id).first();
-    const newUsed = Math.max(0, (student.used_hours || 0) - cls.hours);
-    const newRemaining = (student.total_hours || 0) - newUsed;
+    if (student) {
+      await DB.prepare('UPDATE students SET used_hours = used_hours - ?, updated_at = datetime(\'now\') WHERE id = ?').bind(cls.hours, cls.student_id).run();
+    }
 
-    await DB.prepare('UPDATE students SET used_hours = ? WHERE id = ?').bind(newUsed, cls.student_id).run();
-
-    // 记录学生课时变动（反向）
-    await DB.prepare(`
-      INSERT INTO hour_changes (student_id, type, amount, related_id, description)
-      VALUES (?, 'class', ?, ?, ?)
-    `).bind(cls.student_id, cls.hours, id, `删除上课记录 +${cls.hours}节`).run();
-
-    // 2. 回退机构课时包 used_hours（与 PATCH 逻辑对称）
+    // 2. 恢复机构课时包
     if (cls.organization_id) {
       const targetPkg = await DB.prepare(
         `SELECT id FROM org_packages
@@ -651,23 +620,21 @@ classes.delete('/:id', validateParams(idParamSchema), async (c) => {
       ).bind(cls.organization_id).first();
 
       if (targetPkg) {
-        await DB.prepare(
-          `UPDATE org_packages SET used_hours = MAX(0, used_hours - ?), updated_at = datetime('now') WHERE id = ?`
-        ).bind(cls.hours, targetPkg.id).run();
-
-        // 记录机构课时变动（反向）
-        const note = `删除上课记录 -${cls.hours}节 (class ${id})`;
-        await DB.prepare(
-          `INSERT INTO org_hour_allocations (org_id, package_id, student_id, hours, notes, created_by, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-        ).bind(cls.organization_id, targetPkg.id, cls.student_id, cls.hours, note, 'system').run();
+        await DB.prepare('UPDATE org_packages SET used_hours = used_hours - ?, updated_at = datetime(\'now\') WHERE id = ?').bind(cls.hours, targetPkg.id).run();
       }
     }
+
+    // 3. 记录 hour_changes（恢复）
+    await DB.prepare(
+      `INSERT INTO hour_changes (org_package_id, student_id, class_id, change_type, hours_change, note, created_by)
+       VALUES (?, ?, ?, 'restore', ?, ?, 'system')`
+    ).bind(targetPkg?.id || null, cls.student_id, id, -cls.hours, `删除课程恢复 ${cls.hours} 课时`).run();
   }
 
+  // 删除记录
   await DB.prepare('DELETE FROM classes WHERE id = ?').bind(id).run();
 
-  return c.json(success({ message: '上课记录已删除' }));
+  return c.json(success({ message: '删除成功' }));
 });
 
 export default classes;

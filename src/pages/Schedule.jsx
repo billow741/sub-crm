@@ -158,11 +158,14 @@ export default function Schedule() {
   const getAvailableTeachers = () => {
     const filtered = getFilteredTeachers();
     if (!formData.date || !formData.time) return filtered;
+    // 防御：time 必须是 'HH:MM' 格式字符串
+    if (typeof formData.time !== 'string' || !formData.time.includes(':')) return filtered;
     // 计算结束时间
     const [h, m] = formData.time.split(':').map(Number);
-    const endH = h + Math.floor(formData.duration / 60);
-    const endM = m + (formData.duration % 60);
-    const endTime = `${String(endH).padStart(2, '0')}:${String(endM % 60).padStart(2, '0')}`;
+    const totalMinutes = h * 60 + m + formData.duration;
+    const endH = Math.floor(totalMinutes / 60) % 24;
+    const endM = totalMinutes % 60;
+    const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
     return filtered.filter(t => {
       const hasConflict = schedules.some(s => {
         if (editingSchedule && s.id === editingSchedule.id) return false;
@@ -195,12 +198,14 @@ export default function Schedule() {
     // 从课程的学生反查机构
     const matchedStudent = students.find(s => s.id === schedule.student_id);
     const orgId = matchedStudent?.organization_id || matchedStudent?.organization_ids?.[0] || '';
+    // 优先用 duration，fallback 到 hours * 60
+    const duration = schedule.duration ?? (schedule.hours ? schedule.hours * 60 : 50);
     setFormData({
       student_id: schedule.student_id?.toString() || '',
       teacher_id: schedule.teacher_id?.toString() || '',
       date: schedule.date,
       time: schedule.start_time || '10:00',
-      duration: schedule.hours ? schedule.hours * 60 : 60,
+      duration: duration,
       subject: schedule.subject || '英语',
       notes: schedule.notes || '',
       is_trial: schedule.is_trial ? true : false,
@@ -225,9 +230,10 @@ export default function Schedule() {
     try {
       // 计算结束时间
       const [hours, minutes] = formData.time.split(':').map(Number);
-      const endHours = hours + Math.floor(formData.duration / 60);
-      const endMinutes = minutes + (formData.duration % 60);
-      const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+      const totalMinutes = hours * 60 + minutes + formData.duration;
+      const endHours = Math.floor(totalMinutes / 60) % 24;
+      const endMinutes = totalMinutes % 60;
+      const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
       
       // ── 前端老师时间冲突检查（提前拦截，给更好体验）──
       if (formData.teacher_id) {
@@ -292,6 +298,8 @@ export default function Schedule() {
     // 模糊匹配：找到该时间段内的课程
     return schedules.filter(s => {
       if (s.date !== dateKey) return false;
+      // 防御：start_time 必须存在
+      if (!s.start_time || typeof s.start_time !== 'string') return false;
       // 精确匹配
       if (s.start_time === time) return true;
       // 如果课程时间不在标准时间槽，显示在最接近的时间槽
