@@ -295,9 +295,9 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
       ).bind(classHours, targetPkg.id).run();
 
       await DB.prepare(
-        `INSERT INTO hour_changes (org_package_id, student_id, class_id, change_type, hours_change, note, created_by)
-         VALUES (?, ?, ?, 'deduct', ?, ?, 'system')`
-      ).bind(targetPkg.id, studentId, classId, classHours, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
+        `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
+         VALUES (?, 'class', ?, ?, ?)`
+      ).bind(studentId, -classHours, classId, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
     }
   }
 
@@ -309,9 +309,9 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
     ).bind(classHours, studentId).run();
 
     await DB.prepare(
-      `INSERT INTO hour_changes (student_id, class_id, change_type, hours_change, note, created_by)
-       VALUES (?, ?, 'deduct', ?, ?, 'system')`
-    ).bind(studentId, classId, classHours, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
+      `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
+       VALUES (?, 'class', ?, ?, ?)`
+    ).bind(studentId, -classHours, classId, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
   }
   }
 
@@ -478,9 +478,9 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
         ).bind(delta, targetPkg.id).run();
 
         await DB.prepare(
-          `INSERT INTO hour_changes (org_package_id, student_id, class_id, change_type, hours_change, note, created_by)
-           VALUES (?, ?, ?, 'adjust', ?, ?, 'system')`
-        ).bind(targetPkg.id, existing.student_id, id, delta, note).run();
+          `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
+           VALUES (?, 'adjust', ?, ?, ?)`
+        ).bind(existing.student_id, -delta, id, note).run();
       }
     }
   }
@@ -503,9 +503,9 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
       ).bind(delta, existing.student_id).run();
 
       await DB.prepare(
-        `INSERT INTO hour_changes (student_id, class_id, change_type, hours_change, note, created_by)
-         VALUES (?, ?, 'adjust', ?, ?, 'system')`
-      ).bind(existing.student_id, id, delta, note).run();
+        `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
+         VALUES (?, 'adjust', ?, ?, ?)`
+      ).bind(existing.student_id, -delta, id, note).run();
     }
   }
   }
@@ -626,9 +626,9 @@ classes.delete('/:id', validateParams(idParamSchema), async (c) => {
 
     // 3. 记录 hour_changes（恢复）
     await DB.prepare(
-      `INSERT INTO hour_changes (org_package_id, student_id, class_id, change_type, hours_change, note, created_by)
-       VALUES (?, ?, ?, 'restore', ?, ?, 'system')`
-    ).bind(targetPkg?.id || null, cls.student_id, id, -cls.hours, `删除课程恢复 ${cls.hours} 课时`).run();
+      `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
+       VALUES (?, 'adjust', ?, ?, ?)`
+    ).bind(cls.student_id, -cls.hours, id, `删除课程恢复 ${cls.hours} 课时`).run();
   }
 
   // 删除记录
