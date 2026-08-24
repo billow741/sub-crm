@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Trash2, CheckCircle, Clock, XCircle, Building2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, CheckCircle, Clock, XCircle, Building2, Copy } from 'lucide-react';
 import { teacherOps, studentOps, classOps } from '../store';
 import OrgFilter from '../components/OrgFilter';
 import TeacherFilter from '../components/TeacherFilter';
+import CopyWeekModal from '../components/CopyWeekModal';
 import { setSelectedOrg, organizationOps } from '../store/api';
 
 // 时长(分钟) → 后端根据系数自动计算课时，前端只传 duration
@@ -47,6 +48,8 @@ export default function Schedule() {
   const [selectedOrg, setSelectedOrgState] = useState('');
   const [selectedTeacherIds, setSelectedTeacherIds] = useState(new Set());
   const [orgs, setOrgs] = useState([]);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copyData, setCopyData] = useState(null);
   const [formData, setFormData] = useState({
     student_id: '',
     teacher_id: '',
@@ -233,6 +236,105 @@ export default function Schedule() {
     }
   };
 
+  // 打开复制 modal:计算源周(上周)和目标周(本周),拉取两边的课
+  const handleOpenCopyModal = async () => {
+    // 当前显示的两周:第一周是 currentDate 所在周,第二周是下周
+    // 我们复制的是"上一周" → "第一周"(本周)
+    const currentWeekStart = new Date(currentDate);
+    currentWeekStart.setDate(currentDate.getDate() - currentDate.getDay()); // 本周日
+
+    const sourceWeekStart = new Date(currentWeekStart);
+    sourceWeekStart.setDate(sourceWeekStart.getDate() - 7);
+    const sourceWeekEnd = new Date(sourceWeekStart);
+    sourceWeekEnd.setDate(sourceWeekEnd.getDate() + 6);
+
+    const targetWeekStart = currentWeekStart;
+    const targetWeekEnd = new Date(currentWeekStart);
+    targetWeekEnd.setDate(targetWeekEnd.getDate() + 6);
+
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    try {
+      const params = selectedOrg ? { org_id: selectedOrg } : {};
+      const [sourceSchedules, targetSchedules] = await Promise.all([
+        classOps.getAll({
+          ...params,
+          date_from: fmt(sourceWeekStart),
+          date_to: fmt(sourceWeekEnd)
+        }),
+        classOps.getAll({
+          ...params,
+          date_from: fmt(targetWeekStart),
+          date_to: fmt(targetWeekEnd)
+        })
+      ]);
+
+      setCopyData({
+        sourceSchedules: sourceSchedules || [],
+        targetSchedules: targetSchedules || [],
+        sourceWeekLabel: `${fmt(sourceWeekStart)} ~ ${fmt(sourceWeekEnd)}`,
+        targetWeekLabel: `${fmt(targetWeekStart)} ~ ${fmt(targetWeekEnd)}`
+      });
+      setShowCopyModal(true);
+    } catch (err) {
+      alert('加载排课失败: ' + err.message);
+    }
+  };
+
+  // 确认复制:对每条预览的课循环 POST
+  const handleCopyConfirm = async (previewList, onProgress) => {
+    let done = 0;
+    const errors = [];
+
+    for (const item of previewList) {
+      // 找到源课,基于它创建新课
+      const source = copyData.sourceSchedules.find(s => s.id === item.source_id);
+      if (!source) {
+        errors.push(`源课 ${item.source_id} 找不到`);
+        continue;
+      }
+
+      // 计算结束时间
+      const [sh, sm] = (source.start_time || '00:00').split(':').map(Number);
+      const duration = source.duration || 50;
+      const totalMin = sh * 60 + sm + duration;
+      const endH = Math.floor(totalMin / 60) % 24;
+      const endM = totalMin % 60;
+      const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+
+      const newClass = {
+        student_id: source.student_id,
+        teacher_id: source.teacher_id,
+        teacher: source.teacher_name || source.teacher || '',
+        date: item.new_date,
+        start_time: source.start_time,
+        end_time: endTime,
+        hours: source.hours,
+        duration: source.duration,
+        subject: source.subject || '英语',
+        notes: source.notes || '',
+        is_trial: source.is_trial || 0,
+        status: 'scheduled',
+        organization_id: source.organization_id
+      };
+
+      try {
+        await classOps.add(newClass.student_id, newClass);
+        done++;
+        if (onProgress) onProgress(done);
+      } catch (err) {
+        errors.push(`${source.student_name || source.student_id} ${item.new_date}: ${err.message}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      alert(`复制完成,${done} 条成功,${errors.length} 条失败:\n\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n...还有 ${errors.length - 5} 条` : ''}`);
+    } else {
+      alert(`✅ 成功复制 ${done} 条排课`);
+    }
+    loadData();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -362,6 +464,14 @@ export default function Schedule() {
               className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
             >
               今天
+            </button>
+            <button
+              onClick={handleOpenCopyModal}
+              className="px-3 py-1.5 text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg flex items-center gap-1"
+              title="复制上周排课到本周"
+            >
+              <Copy className="w-4 h-4" />
+              复制上周
             </button>
             <button
               onClick={handlePrevWeek}
@@ -631,6 +741,20 @@ export default function Schedule() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 复制上周到本周 modal */}
+      {showCopyModal && copyData && (
+        <CopyWeekModal
+          isOpen={showCopyModal}
+          onClose={() => setShowCopyModal(false)}
+          teachers={teachers}
+          sourceSchedules={copyData.sourceSchedules}
+          targetSchedules={copyData.targetSchedules}
+          sourceWeekLabel={copyData.sourceWeekLabel}
+          targetWeekLabel={copyData.targetWeekLabel}
+          onConfirm={handleCopyConfirm}
+        />
       )}
     </div>
   );
