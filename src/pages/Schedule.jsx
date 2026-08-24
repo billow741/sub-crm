@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Trash2, CheckCircle, Clock, XCircle, Building2 } from 'lucide-react';
 import { teacherOps, studentOps, classOps } from '../store';
 import OrgFilter from '../components/OrgFilter';
+import TeacherFilter from '../components/TeacherFilter';
 import { setSelectedOrg, organizationOps } from '../store/api';
 
 // 时长(分钟) → 后端根据系数自动计算课时，前端只传 duration
@@ -44,6 +45,7 @@ export default function Schedule() {
   const [showModal, setShowModal] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [selectedOrg, setSelectedOrgState] = useState('');
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState(new Set());
   const [orgs, setOrgs] = useState([]);
   const [formData, setFormData] = useState({
     student_id: '',
@@ -86,6 +88,13 @@ export default function Schedule() {
   useEffect(() => {
     loadData();
   }, [currentDate, selectedOrg]);
+
+  // 当 teachers 加载完后,默认全选(让用户看到所有老师的课)
+  useEffect(() => {
+    if (teachers.length > 0 && selectedTeacherIds.size === 0) {
+      setSelectedTeacherIds(new Set(teachers.map(t => t.id)));
+    }
+  }, [teachers]);
 
   const getTwoWeeks = () => {
     const weeks = [];
@@ -300,6 +309,11 @@ export default function Schedule() {
       if (s.date !== dateKey) return false;
       // 防御：start_time 必须存在
       if (!s.start_time || typeof s.start_time !== 'string') return false;
+      // 老师过滤(0 = 全部不显示,等于 teachers.length = 全部显示)
+      if (selectedTeacherIds.size > 0 && selectedTeacherIds.size < teachers.length
+          && !selectedTeacherIds.has(s.teacher_id)) {
+        return false;
+      }
       // 精确匹配
       if (s.start_time === time) return true;
       // 如果课程时间不在标准时间槽，显示在最接近的时间槽
@@ -335,6 +349,11 @@ export default function Schedule() {
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-gray-900">排课管理</h1>
           <OrgFilter selectedOrg={selectedOrg} onChange={(orgId) => { setSelectedOrgState(orgId); setSelectedOrg(orgId); }} />
+          <TeacherFilter
+            teachers={teachers}
+            selectedIds={selectedTeacherIds}
+            onChange={setSelectedTeacherIds}
+          />
         </div>
         <div className="flex items-center gap-2">
           <button
