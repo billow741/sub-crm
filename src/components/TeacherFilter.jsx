@@ -107,6 +107,7 @@ export default function TeacherFilter({ teachers, selectedIds, onChange, classNa
               return (
                 <label
                   key={t.id}
+                  onClick={() => toggleTeacher(t.id)}
                   className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
                 >
                   <span className={`w-4 h-4 border rounded flex items-center justify-center flex-shrink-0 ${
