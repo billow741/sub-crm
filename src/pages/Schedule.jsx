@@ -345,66 +345,69 @@ export default function Schedule() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">排课管理</h1>
-          <OrgFilter selectedOrg={selectedOrg} onChange={(orgId) => { setSelectedOrgState(orgId); setSelectedOrg(orgId); }} />
-          <TeacherFilter
-            teachers={teachers}
-            selectedIds={selectedTeacherIds}
-            onChange={setSelectedTeacherIds}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleToday}
-            className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
-          >
-            今天
-          </button>
-          <button
-            onClick={handlePrevWeek}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleNextWeek}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-          <span className="text-gray-600 font-medium">
-            {weeks[0][0].toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} -
-            {weeks[1][6].toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
-          </span>
+      <div className="sticky top-0 z-30 bg-gray-50 pb-3 -mx-4 px-4 pt-1">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold text-gray-900">排课管理</h1>
+            <OrgFilter selectedOrg={selectedOrg} onChange={(orgId) => { setSelectedOrgState(orgId); setSelectedOrg(orgId); }} />
+            <TeacherFilter
+              teachers={teachers}
+              selectedIds={selectedTeacherIds}
+              onChange={setSelectedTeacherIds}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToday}
+              className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
+            >
+              今天
+            </button>
+            <button
+              onClick={handlePrevWeek}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleNextWeek}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <span className="text-gray-600 font-medium">
+              {weeks[0][0].toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} -
+              {weeks[1][6].toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-x-auto">
-        <div className="min-w-[1400px]">
-          {/* 表头 */}
-          <div className="grid grid-cols-[80px_repeat(14,minmax(90px,1fr))] border-b">
-            <div className="p-3 text-center text-gray-500 font-medium border-r bg-gray-50">时间</div>
-            {weeks.map((week, weekIdx) => (
-              week.map((date, dayIdx) => (
-                <div
-                  key={`${weekIdx}-${dayIdx}`}
-                  className={`p-3 text-center border-r last:border-r-0 ${isToday(date) ? 'bg-blue-50' : ''}`}
-                >
-                  <div className="text-xs text-gray-500">{DAYS[date.getDay()]}</div>
-                  <div className={`font-semibold text-lg ${isToday(date) ? 'text-blue-600' : 'text-gray-700'}`}>
-                    {date.getDate()}
+      <div className="bg-white rounded-lg shadow overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+        <div className="overflow-auto flex-1">
+          <div className="min-w-[1400px]">
+            {/* 表头 — sticky 在日历顶部 */}
+            <div className="grid grid-cols-[80px_repeat(14,minmax(90px,1fr))] border-b sticky top-0 z-20 bg-white shadow-sm">
+              <div className="p-3 text-center text-gray-500 font-medium border-r bg-gray-50 sticky left-0 z-10">时间</div>
+              {weeks.map((week, weekIdx) => (
+                week.map((date, dayIdx) => (
+                  <div
+                    key={`${weekIdx}-${dayIdx}`}
+                    className={`p-3 text-center border-r last:border-r-0 ${isToday(date) ? 'bg-blue-50' : ''}`}
+                  >
+                    <div className="text-xs text-gray-500">{DAYS[date.getDay()]}</div>
+                    <div className={`font-semibold text-lg ${isToday(date) ? 'text-blue-600' : 'text-gray-700'}`}>
+                      {date.getDate()}
+                    </div>
                   </div>
-                </div>
-              ))
-            ))}
-          </div>
+                ))
+              ))}
+            </div>
 
           {/* 时间行 */}
           {TIME_SLOTS.map(time => (
             <div key={time} className="grid grid-cols-[80px_repeat(14,minmax(90px,1fr))] border-b hover:bg-gray-50">
-              <div className="p-3 text-center text-sm text-gray-600 font-medium border-r bg-gray-50">
+              <div className="p-3 text-center text-sm text-gray-600 font-medium border-r bg-gray-50 sticky left-0 z-10">
                 {time}
               </div>
               {weeks.map((week, weekIdx) => (
@@ -458,10 +461,11 @@ export default function Schedule() {
               ))}
             </div>
           ))}
+          </div>
+          </div>
         </div>
-      </div>
 
-      {/* 添加/编辑排课弹窗 */}
+        {/* 添加/编辑排课弹窗 */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] flex flex-col">
