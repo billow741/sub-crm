@@ -237,9 +237,9 @@ export default function Schedule() {
   };
 
   // 打开复制 modal:计算源周(上周)和目标周(本周),拉取两边的课
+  // 周定义:周日到周六(本周末是周六,下个新一周从周日开始)
+  // 例:今天 8-24(周一),本周 = 8-23(周日) ~ 8-29(周六),上周 = 8-16 ~ 8-22
   const handleOpenCopyModal = async () => {
-    // 当前显示的两周:第一周是 currentDate 所在周,第二周是下周
-    // 我们复制的是"上一周" → "第一周"(本周)
     const currentWeekStart = new Date(currentDate);
     currentWeekStart.setDate(currentDate.getDate() - currentDate.getDay()); // 本周日
 
