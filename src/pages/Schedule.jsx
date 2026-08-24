@@ -256,22 +256,17 @@ export default function Schedule() {
 
     try {
       const params = selectedOrg ? { org_id: selectedOrg } : {};
-      const [sourceSchedules, targetSchedules] = await Promise.all([
-        classOps.getAll({
-          ...params,
-          date_from: fmt(sourceWeekStart),
-          date_to: fmt(sourceWeekEnd)
-        }),
-        classOps.getAll({
-          ...params,
-          date_from: fmt(targetWeekStart),
-          date_to: fmt(targetWeekEnd)
-        })
-      ]);
+      // 后端不直接支持 date_from/date_to,前端用 page_size=1000 拉所有,然后本地过滤
+      const allSchedules = await classOps.getAll({ ...params });
+      const inRange = (date) => date >= fmt(sourceWeekStart) && date <= fmt(sourceWeekEnd);
+      const inTargetRange = (date) => date >= fmt(targetWeekStart) && date <= fmt(targetWeekEnd);
+
+      const sourceSchedules = (allSchedules || []).filter(s => inRange(s.date));
+      const targetSchedules = (allSchedules || []).filter(s => inTargetRange(s.date));
 
       setCopyData({
-        sourceSchedules: sourceSchedules || [],
-        targetSchedules: targetSchedules || [],
+        sourceSchedules,
+        targetSchedules,
         sourceWeekLabel: `${fmt(sourceWeekStart)} ~ ${fmt(sourceWeekEnd)}`,
         targetWeekLabel: `${fmt(targetWeekStart)} ~ ${fmt(targetWeekEnd)}`
       });
