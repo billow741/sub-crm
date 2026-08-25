@@ -73,7 +73,16 @@ export async function request(endpoint, options = {}) {
     return null;
   }
 
-  const data = await response.json();
+  // 按 content-type 选择解析方式：后端可能因异常返回纯文本 500
+  const contentType = response.headers.get('content-type') || '';
+  let data;
+  if (contentType.includes('application/json')) {
+    data = await response.json();
+  } else {
+    const text = await response.text();
+    data = { error: { message: text || `HTTP ${response.status}` } };
+  }
+
   if (!response.ok) {
     throw new Error(data.error?.message || `HTTP ${response.status}`);
   }
