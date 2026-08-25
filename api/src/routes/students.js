@@ -255,16 +255,34 @@ students.delete('/:id', validateParams(idParamSchema), async (c) => {
   const DB = c.env.DB;
   const { id } = c.req.validatedParams;
 
-  // 检查学生是否存在
-  const existing = await DB.prepare('SELECT id FROM students WHERE id = ?').bind(id).first();
-  if (!existing) {
-    return c.json(error('NOT_FOUND', '学生不存在'), 404);
+  try {
+    // 检查学生是否存在
+    const existing = await DB.prepare('SELECT id FROM students WHERE id = ?').bind(id).first();
+    if (!existing) {
+      return c.json(error('NOT_FOUND', '学生不存在'), 404);
+    }
+
+    // 显式清理无 ON DELETE CASCADE 的关联表，避免外键约束失败
+    // SQLite/D1 CASCADE 按声明顺序触发；任何一张无 CASCADE 的表阻塞都会中断 DELETE
+    await DB.batch([
+      DB.prepare('DELETE FROM org_settlement_items WHERE student_id = ?').bind(id),
+      DB.prepare('DELETE FROM org_hour_allocations WHERE student_id = ?').bind(id),
+      DB.prepare('DELETE FROM progress_reports WHERE student_id = ?').bind(id),
+      DB.prepare('DELETE FROM notifications WHERE student_id = ?').bind(id),
+      DB.prepare('DELETE FROM ops_tasks WHERE student_id = ?').bind(id),
+      DB.prepare('DELETE FROM bill_records WHERE student_id = ?').bind(id),
+      // packages / classes / payments / assessments / hour_changes 已有 ON DELETE CASCADE，会自动处理
+      DB.prepare('DELETE FROM students WHERE id = ?').bind(id),
+    ]);
+
+    return c.body(null, 204);
+  } catch (err) {
+    console.error('Delete student failed:', err);
+    return c.json(
+      error('DELETE_FAILED', err.message || '删除失败，请检查关联数据'),
+      500
+    );
   }
-
-  // 删除（级联删除会自动处理关联的 packages, classes, payments）
-  await DB.prepare('DELETE FROM students WHERE id = ?').bind(id).run();
-
-  return c.body(null, 204);
 });
 
 // 兼容路由：GET /students 等同于 GET /students/list
@@ -353,7 +371,7 @@ students.patch('/:id/add-hours', validateParams(idParamSchema), async (c) => {
   const DB = c.env.DB;
   const { id } = c.req.validatedParams;
   const body = await c.req.json();
-  const hours = parseInt(body.hours) || 0;
+  const hours = parseFloat(body.hours) || 0;
 
   if (hours <= 0) {
     return c.json(error('BAD_REQUEST', '课时数必须大于0'), 400);

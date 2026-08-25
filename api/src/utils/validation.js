@@ -61,6 +61,7 @@ export const classSchema = z.object({
   date: z.string().optional(),
   start_time: z.string().optional().nullable().transform(v => v || null),
   end_time: z.string().optional().nullable().transform(v => v || null),
+  duration: z.number().int().positive().optional().nullable(),  // 时长(分钟)，用于自动计算 end_time
   content: z.string().optional().nullable().transform(v => v || null),
   homework: z.string().optional().nullable().transform(v => v || null),
   notes: z.string().optional().nullable().transform(v => v || null),
