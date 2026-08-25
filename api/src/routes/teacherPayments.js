@@ -337,27 +337,3 @@ teacherPayments.delete('/:id', async (c) => {
 
 export default teacherPayments;
 
-// 删除结算记录
-teacherPayments.delete('/:id', async (c) => {
-  const DB = c.env.DB;
-  const id = c.req.param('id');
-
-  const payment = await DB.prepare(`
-    SELECT id, status FROM teacher_payments WHERE id = ?
-  `).bind(id).first();
-
-  if (!payment) {
-    return c.json(error('NOT_FOUND', '结算记录不存在'), 404);
-  }
-
-  // 只允许删除待支付或已取消的记录
-  if (payment.status === 'paid') {
-    return c.json(error('BAD_REQUEST', '已支付的记录不能删除'), 400);
-  }
-
-  await DB.prepare(`
-    DELETE FROM teacher_payments WHERE id = ?
-  `).bind(id).run();
-
-  return c.body(null, 204);
-});

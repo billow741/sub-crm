@@ -34,6 +34,7 @@ hourChanges.get('/student/:student_id', async (c) => {
       hc.amount,
       hc.description,
       hc.related_id,
+      hc.balance_after,
       hc.created_at,
       CASE 
         WHEN hc.type = 'payment' THEN p.description
@@ -60,6 +61,7 @@ hourChanges.get('/student/:student_id', async (c) => {
     related_id: hc.related_id,
     description: hc.description,
     detail_text: hc.detail_text,
+    balance_after: hc.balance_after,
     created_at: hc.created_at
   })) || [];
 
@@ -84,6 +86,7 @@ hourChanges.get('/:id', async (c) => {
       hc.amount,
       hc.description,
       hc.related_id,
+      hc.balance_after,
       hc.created_at,
       s.name as student_name
     FROM hour_changes hc
@@ -102,6 +105,7 @@ hourChanges.get('/:id', async (c) => {
     type: hc.type,
     amount: hc.amount,
     related_id: hc.related_id,
+    balance_after: hc.balance_after,
     description: hc.description,
     created_at: hc.created_at
   }));

@@ -274,9 +274,20 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
   ).run();
 
   const classId = result.meta.last_row_id;
-  const classHours = await resolveClassHours(DB, data, organizationId);
-  const classStatus = data.status || 'completed';
-  const isTrial = data.is_trial || 0;
+
+  // 查询实际写入数据库的记录，用 newClass.hours 作为权威课时数（体验课为0）
+  const newClass = await DB.prepare(`
+    SELECT c.*, s.name as student_name, s.grade as student_grade, p.name as package_name, t.name as teacher_name
+    FROM classes c
+    JOIN students s ON c.student_id = s.id
+    LEFT JOIN packages p ON c.package_id = p.id
+    LEFT JOIN teachers t ON c.teacher_id = t.id
+    WHERE c.id = ?
+  `).bind(classId).first();
+
+  const classHours = newClass.hours;
+  const classStatus = newClass.status;
+  const isTrial = newClass.is_trial || 0;
 
   // 体验课免费，不扣课时（机构课时包 + 学生课时都不扣）
   if (!isTrial) {
@@ -304,25 +315,18 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
   // ── 同步学生课时 ──
   const studentHours = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(studentId).first();
   if (studentHours && classStatus === 'completed') {
+    const newUsedHours = (studentHours.used_hours || 0) + classHours;
+    const balanceAfter = Math.round(((studentHours.total_hours || 0) - newUsedHours) * 100) / 100;
     await DB.prepare(
       `UPDATE students SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
     ).bind(classHours, studentId).run();
 
     await DB.prepare(
-      `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
-       VALUES (?, 'class', ?, ?, ?)`
-    ).bind(studentId, -classHours, classId, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
+      `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
+       VALUES (?, 'class', ?, ?, ?, ?)`
+    ).bind(studentId, -classHours, balanceAfter, classId, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
   }
   }
-
-  const newClass = await DB.prepare(`
-    SELECT c.*, s.name as student_name, s.grade as student_grade, p.name as package_name, t.name as teacher_name
-    FROM classes c
-    JOIN students s ON c.student_id = s.id
-    LEFT JOIN packages p ON c.package_id = p.id
-    LEFT JOIN teachers t ON c.teacher_id = t.id
-    WHERE c.id = ?
-  `).bind(classId).first();
 
   return c.json(success({
     id: newClass.id,

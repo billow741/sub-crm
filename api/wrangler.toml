@@ -1,7 +1,7 @@
 name = "sunnybridge-crm-api"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
-account_id = "5a225d0bf11ade96374b59a3743dacd0"
+account_id = "3ec55f7fdb8c8b5f03f10da9ae5c9591"
 
 # workers.dev 子域名
 workers_dev = true
@@ -22,12 +22,12 @@ LLM_MODEL = "google/gemma-3n-e4b-it"
 [[d1_databases]]
 binding = "DB"
 database_name = "sunnybridge-crm"
-database_id = "ec11b207-8e7f-4796-9875-45ccb4cb1ef5"
+database_id = "07e4b171-ca90-45ce-86b6-7bb59e8e7411"
 
 # R2 存储配置 (教材 PDF)
-[[r2_buckets]]
-binding = "TEXTBOOKS_R2"
-bucket_name = "sunnybridge-textbooks"
+# [[r2_buckets]]
+# binding = "TEXTBOOKS_R2"
+# bucket_name = "sunnybridge-textbooks"
 
 # 开发环境变量
 [env.dev]

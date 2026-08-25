@@ -220,14 +220,14 @@ payments.post('/student/:student_id', validate(paymentSchema), async (c) => {
   if (data.hours && data.hours > 0) {
     const student = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(studentId).first();
     const newTotal = (student.total_hours || 0) + data.hours;
-    const newRemaining = newTotal - (student.used_hours || 0);
+    const balanceAfter = Math.round((newTotal - (student.used_hours || 0)) * 100) / 100;
 
     await DB.prepare('UPDATE students SET total_hours = ? WHERE id = ?').bind(newTotal, studentId).run();
 
     await DB.prepare(`
-      INSERT INTO hour_changes (student_id, type, amount, related_id, description)
-      VALUES (?, 'payment', ?, ?, ?)
-    `).bind(studentId, data.hours, paymentId, data.description || '购买课时').run();
+      INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
+      VALUES (?, 'payment', ?, ?, ?, ?)
+    `).bind(studentId, data.hours, balanceAfter, paymentId, data.description || '购买课时').run();
   }
 
   return c.json(success({
@@ -282,7 +282,7 @@ payments.patch('/:id', validateParams(idParamSchema), async (c) => {
     id: payment.id,
     amount: payment.amount,
     hours: payment.hours || 0,
-    updated_at: payment.created_at,
+    created_at: payment.created_at,  // payments 表无 updated_at 字段
     _links: {
       self: `/api/v1/payments/${payment.id}`
     }

@@ -62,8 +62,7 @@ students.get('/list', validateQuery(studentQuerySchema), async (c) => {
   const sql = `
     SELECT id, name, english_name, phone, email, age, grade, parent_name, notes, status, total_hours, used_hours, organization_id, created_at, updated_at FROM students 
     ${whereClause}
-    
-    ORDER BY ${safeSortField} ${safeSortOrder}
+    ORDER BY ${safeSortField} ${sortOrder}
     LIMIT ? OFFSET ?
   `;
 
@@ -261,10 +260,19 @@ students.delete('/:id', validateParams(idParamSchema), async (c) => {
     return c.json(error('NOT_FOUND', '学生不存在'), 404);
   }
 
-  // 删除（级联删除会自动处理关联的 packages, classes, payments）
-  await DB.prepare('DELETE FROM students WHERE id = ?').bind(id).run();
+  try {
+    // Cloudflare D1 默认不启用外键级联，手动删除关联数据
+    await DB.prepare('DELETE FROM assessments WHERE student_id = ?').bind(id).run();
+    await DB.prepare('DELETE FROM payments WHERE student_id = ?').bind(id).run();
+    await DB.prepare('DELETE FROM classes WHERE student_id = ?').bind(id).run();
+    await DB.prepare('DELETE FROM packages WHERE student_id = ?').bind(id).run();
+    await DB.prepare('DELETE FROM students WHERE id = ?').bind(id).run();
 
-  return c.body(null, 204);
+    return c.body(null, 204);
+  } catch (e) {
+    console.error('删除学生失败:', e);
+    return c.json(error('INTERNAL_ERROR', '删除失败，请稍后重试'), 500);
+  }
 });
 
 // 兼容路由：GET /students 等同于 GET /students/list
@@ -404,9 +412,9 @@ students.patch('/:id/adjust-hours', validateParams(idParamSchema), async (c) => 
 
   // 记录课时变动
   await DB.prepare(`
-    INSERT INTO hour_changes (student_id, type, amount, description)
-    VALUES (?, 'adjust', ?, ?)
-  `).bind(id, adjustment, reason || '手动调整').run();
+    INSERT INTO hour_changes (student_id, type, amount, balance_after, description)
+    VALUES (?, 'adjust', ?, ?, ?)
+  `).bind(id, adjustment, r2(newTotal - (student.used_hours || 0)), reason || '手动调整').run();
   return c.json(success({
     id: student.id,
     name: student.name,

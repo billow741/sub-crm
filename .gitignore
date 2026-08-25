@@ -31,3 +31,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Database backups
+prod_backup.sql
+*.sqlite

@@ -1,5 +1,7 @@
 // API 配置
-const API_BASE_URL = 'https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1';
+// 本地测试: http://127.0.0.1:8787/api/v1
+// 生产环境: https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://sunnybridge-crm-api.roger-zyt.workers.dev/api/v1';
 const API_KEY='sunnyb...2024';
 
 // 当前选中的机构 ID（用于多机构数据隔离）
@@ -112,11 +114,12 @@ export const studentOps = {
     await request(`/students/${id}`, { method: 'DELETE' });
     return true;
   },
+  // 返回完整响应：{ data: [...], pagination: { total, page, page_size, pages } }
   getPaginated: async (page = 1, pageSize = 20, filters = {}) => {
     const params = { page, page_size: pageSize, ...filters };
     const query = new URLSearchParams(params).toString();
     const result = await request(`/students?${query}`);
-    return result.data?.data || [];
+    return result.data || { data: [], pagination: { total: 0, pages: 0 } };
   },
   search: async (searchTerm, status = '') => {
     const params = { search: searchTerm };
@@ -229,32 +232,24 @@ export const classOps = {
 
 // ============================================
 // 应收账款相关操作
+// ⚠️ 该模块对应的后端路由 /receivables 尚未实现，调用时会抛出错误。
+// TODO: 如需应收账款功能，请先在后端创建 /api/v1/receivables 路由。
 // ============================================
 export const receivableOps = {
-  getByStudent: async (studentId) => {
-    const result = await request(`/receivables/student/${studentId}`);
-    return result.data?.data || result.data || [];
+  getByStudent: async (_studentId) => {
+    throw new Error('[receivableOps] 应收账款后端路由尚未实现，请联系开发者');
   },
   getAll: async () => {
-    const result = await request('/receivables');
-    return result.data?.data || result.data || [];
+    throw new Error('[receivableOps] 应收账款后端路由尚未实现，请联系开发者');
   },
-  add: async (studentId, receivable) => {
-    const result = await request(`/receivables/student/${studentId}`, {
-      method: 'POST',
-      body: receivable,
-    });
-    return result.data;
+  add: async (_studentId, _receivable) => {
+    throw new Error('[receivableOps] 应收账款后端路由尚未实现，请联系开发者');
   },
-  markPaid: async (id) => {
-    const result = await request(`/receivables/${id}/paid`, {
-      method: 'POST',
-    });
-    return result.data;
+  markPaid: async (_id) => {
+    throw new Error('[receivableOps] 应收账款后端路由尚未实现，请联系开发者');
   },
-  delete: async (id) => {
-    await request(`/receivables/${id}`, { method: 'DELETE' });
-    return true;
+  delete: async (_id) => {
+    throw new Error('[receivableOps] 应收账款后端路由尚未实现，请联系开发者');
   },
 };
 
@@ -305,7 +300,7 @@ export const teacherOps = {
   getAll: async (params = {}) => {
     const query = new URLSearchParams(params).toString();
     const result = await request(query ? `/teachers?${query}` : '/teachers');
-    return result.data?.items || result.data?.data || result.data || [];
+    return result.data?.data || result.data || [];
   },
   getById: async (id) => {
     const result = await request(`/teachers/${id}`);

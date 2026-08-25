@@ -261,13 +261,13 @@ classComplete.post('/:id/complete', validateParams(idParamSchema), validate(comp
     // 写 hour_changes（课时流水）
     if (!isTrial) {
       statements.push(DB.prepare(`
-        INSERT INTO hour_changes (student_id, type, amount, ref_type, ref_id, description, created_at)
-        VALUES (?, 'class_consume', ?, 'class', ?, ?, datetime('now'))
+        INSERT INTO hour_changes (student_id, type, amount, related_type, related_id, description, created_at)
+        VALUES (?, 'class', ?, 'class', ?, ?, datetime('now'))
       `).bind(studentId, -classHours, id, `正课消耗 ${classHours}节`));
     } else {
       statements.push(DB.prepare(`
-        INSERT INTO hour_changes (student_id, type, amount, ref_type, ref_id, description, created_at)
-        VALUES (?, 'trial', 0, 'class', ?, ?, datetime('now'))
+        INSERT INTO hour_changes (student_id, type, amount, related_type, related_id, description, created_at)
+        VALUES (?, 'class', 0, 'class', ?, ?, datetime('now'))
       `).bind(studentId, id, '体验课不扣课时'));
     }
 
@@ -429,8 +429,8 @@ classComplete.post('/:id/rollback', validateParams(idParamSchema), validate(roll
     // 写回滚流水
     if (!isTrial) {
       statements.push(DB.prepare(`
-        INSERT INTO hour_changes (student_id, type, amount, ref_type, ref_id, description, created_at)
-        VALUES (?, 'adjustment', ?, 'class', ?, ?, datetime('now'))
+        INSERT INTO hour_changes (student_id, type, amount, related_type, related_id, description, created_at)
+        VALUES (?, 'adjust', ?, 'class', ?, ?, datetime('now'))
       `).bind(studentId, classHours, id, `撤销上课回滚 +${classHours}节：${reason}`));
 
       statements.push(DB.prepare(`

@@ -13,7 +13,7 @@ export const paginationSchema = z.object({
 // Students Schema
 export const studentSchema = z.object({
   name: z.string().min(1, '姓名不能为空').max(100),
-  english_name: z.string().min(1, '英文名不能为空').max(100),
+  english_name: z.string().max(100).optional().nullable().transform(v => v || null),
   phone: z.string().max(20).optional().nullable().transform(v => v || null),
   email: z.string().email('邮箱格式不正确').optional().nullable().transform(v => v || null),
   age: z.number().int().min(0).max(120).optional().nullable(),
@@ -139,6 +139,9 @@ export const teacherSchema = z.object({
   hourly_rate: z.number().min(0).optional(),
   status: z.enum(['active', 'inactive']).optional().default('active'),
   notes: z.string().optional().or(z.literal('')),
+  hourly_rate_25: z.number().min(0).optional(),  // 25分钟课单价
+  organization_id: z.number().int().optional().nullable(),
+  organization_ids: z.array(z.number().int()).optional(),  // 多机构关联
   hours: z.number().min(0).optional().default(0)
 });
 
@@ -195,10 +198,7 @@ export const validate = (schema) => {
 export const validateQuery = (schema) => {
   return async (c, next) => {
     try {
-      const query = {};
-      for (const [key, value] of c.req.queries()) {
-        query[key] = value[0];
-      }
+      const query = c.req.query();
       const result = schema.parse(query);
       c.req.validatedQuery = result;
       await next();

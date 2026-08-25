@@ -255,9 +255,9 @@ async function getOrgStats(DB, orgId) {
   const studentResult = await DB.prepare('SELECT COUNT(*) as count FROM students WHERE organization_id = ?').bind(orgId).first();
   const classResult = await DB.prepare('SELECT COUNT(*) as count FROM classes WHERE organization_id = ?').bind(orgId).first();
   
-  // teachers 用 organization_ids JSON 数组，用 LIKE 匹配
+  // teachers 用 organization_ids JSON 数组，用 LIKE 匹配（参数化查询防注入）
   const likePattern = `%${orgId}%`;
-  const teacherResult = await DB.prepare(`SELECT COUNT(*) as count FROM teachers WHERE organization_ids LIKE '${likePattern}'`).first();
+  const teacherResult = await DB.prepare(`SELECT COUNT(*) as count FROM teachers WHERE organization_ids LIKE ?`).bind(likePattern).first();
 
   return {
     student_count: studentResult?.count || 0,
