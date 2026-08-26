@@ -7,7 +7,7 @@ import { setSelectedOrg, organizationOps } from '../store/api';
 
 // API 增加课时
 const addStudentHours = async (studentId, hours) => {
-  const res = await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/students/${studentId}/add-hours`, {
+  const res = await fetch(`https://api.changtian.dpdns.org/api/v1/students/${studentId}/add-hours`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',

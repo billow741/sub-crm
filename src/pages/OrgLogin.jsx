@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Lock, Building2, ArrowLeft, Loader2 } from 'lucide-react';
 import { setOrgSession, isOrgLoggedIn } from '../store/api';
 
-const API_BASE_URL = 'https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1';
+const API_BASE_URL = 'https://api.changtian.dpdns.org/api/v1';
 
 export default function OrgLogin() {
   const navigate = useNavigate();

@@ -287,14 +287,14 @@ function ParentStudentView() {
                             return (
                               <a
                                 key={page}
-                                href={`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`}
+                                href={`https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="block border rounded overflow-hidden hover:shadow-md"
                                 title={`点击看大图: 第 ${page} 页`}
                               >
                                 <img
-                                  src={`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`}
+                                  src={`https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`}
                                   alt={`第 ${page} 页`}
                                   className="w-full h-auto"
                                   loading="lazy"

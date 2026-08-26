@@ -861,7 +861,7 @@ textbooks.get('/unit-pages/:code/:num', async (c) => {
   })).sort((a, b) => a.page_num - b.page_num);
 
   // 给前端一个 R2 public URL 或直接 base path
-  const baseUrl = `https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/page-img/${code}/${num}`;
+  const baseUrl = `https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${code}/${num}`;
   return c.json({ data: {
     textbook_code: code,
     unit_number: num,

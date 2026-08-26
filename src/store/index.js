@@ -10,7 +10,6 @@ export {
   packageOps,
   classOps,
   paymentOps,
-  receivableOps,
   teacherOps,
   teacherPaymentOps,
   courseOps,

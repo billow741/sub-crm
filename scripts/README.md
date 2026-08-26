@@ -51,7 +51,7 @@ python extract_textbook.py path/to/file.pdf EU-L1 1 -o result.json
 |---|---|---|
 | `NVIDIA_API_KEY` | (内置) | NVIDIA NIM API key (OpenAI 兼容) |
 | `NVIDIA_MODEL` | `z-ai/glm-5.2` | 模型名 |
-| `CRM_API_BASE` | `https://sunnybridge-crm-api.xiwanqin03.workers.dev` | CRM API |
+| `CRM_API_BASE` | `https://api.changtian.dpdns.org` | CRM API |
 | `CRM_API_KEY` | `sunnybridge-dev-key-2024` | CRM API key |
 
 切换 LLM 提供商只需要改 `NVIDIA_BASE_URL` / `NVIDIA_API_KEY` / `NVIDIA_MODEL` 常量（或环境变量），代码里使用的是 OpenAI SDK 兼容接口。

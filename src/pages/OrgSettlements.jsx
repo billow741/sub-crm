@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Receipt, Plus, CheckCircle, Trash2, Eye, FileText } from 'lucide-react';
+import { Receipt, Plus, CheckCircle, Trash2, Eye, FileText, Download } from 'lucide-react';
 import { request, organizationOps } from '../store/api';
 
-const API_BASE = 'https://sunnybridge-crm-api.xiwanqin03.workers.dev';
+const API_BASE = 'https://api.changtian.dpdns.org';
 
 export default function OrgSettlements() {
   const [settlements, setSettlements] = useState([]);
@@ -115,6 +115,37 @@ export default function OrgSettlements() {
     } catch (e) {
       alert('加载详情失败: ' + e.message);
     }
+  };
+
+  const handleExportCSV = () => {
+    if (!showDetailModal || !showDetailModal.items) return;
+    
+    // CSV Header
+    const headers = ['机构名称', '结算周期', '学生姓名', '教师姓名', '上课日期', '课时', '课时单价(元)', '小计金额(元)'];
+    
+    // CSV Rows
+    const rows = showDetailModal.items.map(item => [
+      showDetailModal.org_name,
+      `${showDetailModal.period_start} ~ ${showDetailModal.period_end}`,
+      item.student_name || '-',
+      item.teacher_name || '-',
+      item.class_date,
+      item.hours,
+      item.unit_price_cny,
+      item.subtotal_cny
+    ]);
+    
+    // Combine and add BOM for Excel UTF-8 support
+    const csvContent = "\\ufeff" + [headers, ...rows].map(e => e.join(",")).join("\\n");
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `结算单明细_${showDetailModal.org_name}_${showDetailModal.period_start}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const totalPending = settlements.filter(s => s.status === 'pending').reduce((sum, s) => sum + (s.amount_due_cny || 0), 0);
@@ -336,7 +367,16 @@ export default function OrgSettlements() {
           <div className="bg-white rounded-xl shadow-xl p-6 w-[700px] max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold">结算单明细 #{showDetailModal.id}</h2>
-              <button onClick={() => setShowDetailModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors"
+                >
+                  <Download size={16} />
+                  导出表格
+                </button>
+                <button onClick={() => setShowDetailModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+              </div>
             </div>
             <div className="grid grid-cols-4 gap-2 mb-4 text-sm">
               <div><span className="text-gray-500">机构:</span> {showDetailModal.org_name}</div>

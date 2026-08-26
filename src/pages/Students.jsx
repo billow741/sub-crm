@@ -50,7 +50,7 @@ export default function Students() {
       if (statusFilter !== 'all') params.status = statusFilter;
       if (selectedOrg) params.org_id = selectedOrg;
       const result = await studentOps.getPaginated(1, 100, params);
-      setStudents(result || []);
+      setStudents(Array.isArray(result) ? result : (result?.data || []));
     } catch (error) {
       console.error('加载学生失败:', error);
     } finally {
@@ -114,14 +114,17 @@ export default function Students() {
   };
 
   const handleDelete = async (id) => {
-    if (confirm('确定要删除该学生吗？此操作不可恢复。')) {
-      try {
-        await studentOps.delete(id);
-        loadStudents();
-      } catch (error) {
-        console.error('删除学生失败:', error);
-        alert('删除失败: ' + error.message);
-      }
+    const pwd = window.prompt('【高危操作】删除学生将导致所有关联记录消失！\\n请输入授权密码 "DELETE" 确认删除：');
+    if (pwd !== 'DELETE') {
+      if (pwd !== null) alert('密码错误，取消删除。');
+      return;
+    }
+    try {
+      await studentOps.delete(id);
+      loadStudents();
+    } catch (error) {
+      console.error('删除学生失败:', error);
+      alert('删除失败: ' + error.message);
     }
   };
 

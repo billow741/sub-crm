@@ -9,4 +9,4 @@ cd /home/billow/.openclaw/workspace/projects/sunnybridge-crm/api
 
 npx wrangler deploy
 
-echo "✅ API 已部署到 https://sunnybridge-crm-api.xiwanqin03.workers.dev"
+echo "✅ API 已部署到 https://api.changtian.dpdns.org"

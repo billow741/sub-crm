@@ -1068,7 +1068,7 @@ function escapeHtml(text) {
 }
 
 // ===== 全局变量 =====
-var API_BASE = 'https://api.qsct.dpdns.org/api/v1';
+var API_BASE = 'https://api.changtian.dpdns.org/api/v1';
 var API_KEY = '***'; // 同登录页
 var STATUS_LABELS = { scheduled: 'Scheduled', completed: 'Completed', cancelled: 'Cancelled', absent: 'Absent' };
 var STATUS_CSS = { scheduled: 'status-scheduled', completed: 'status-completed', cancelled: 'status-cancelled', absent: 'status-absent' };
@@ -1361,7 +1361,7 @@ function showViewFeedback(idx) {
 
   // 📖 教材页码 (嵌入 PDF 真实页面图, 方便家长指导复习)
   if (cls.textbook_code && cls.unit_number && cls.page_from && cls.page_to) {
-    var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.qsct.dpdns.org/api/v1';
+    var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
     html += '<div class="modal-feedback__group"><label>📖 教材第 ' + cls.page_from + '-' + cls.page_to + ' 页 (点击放大)</label>';
     html += '<div class="modal-feedback__box"><div class="grid grid-cols-3 gap-1">';
     for (var p = parseInt(cls.page_from); p <= parseInt(cls.page_to); p++) {
@@ -1588,7 +1588,7 @@ function renderStudyProfile(student, allClasses) {
         }
         // 📖 教材 PDF 页图 (history 紧凑版 grid)
         if (c.textbook_code && c.unit_number && c.page_from && c.page_to) {
-          var API_TXT2 = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.qsct.dpdns.org/api/v1';
+          var API_TXT2 = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
           histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📖 教材第 ' + c.page_from + '-' + c.page_to + ' 页 (点击放大)</div><div class="sp-feedback-text"><div class="grid grid-cols-3 gap-1">';
           for (var pidx = parseInt(c.page_from); pidx <= parseInt(c.page_to); pidx++) {
             var purl = API_TXT2 + '/textbooks/page-img/' + encodeURIComponent(c.textbook_code) + '/' + encodeURIComponent(c.unit_number) + '/' + pidx;

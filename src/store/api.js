@@ -1,7 +1,7 @@
 // API 配置
 // 本地测试: http://127.0.0.1:8787/api/v1
-// 生产环境: https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://sunnybridge-crm-api.roger-zyt.workers.dev/api/v1';
+// 生产环境: https://api.changtian.dpdns.org/api/v1
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.changtian.dpdns.org/api/v1';
 const API_KEY='sunnyb...2024';
 
 // 当前选中的机构 ID（用于多机构数据隔离）
@@ -232,27 +232,6 @@ export const classOps = {
 
 // ============================================
 // 应收账款相关操作
-// ⚠️ 该模块对应的后端路由 /receivables 尚未实现，调用时会抛出错误。
-// TODO: 如需应收账款功能，请先在后端创建 /api/v1/receivables 路由。
-// ============================================
-export const receivableOps = {
-  getByStudent: async (_studentId) => {
-    throw new Error('[receivableOps] 应收账款后端路由尚未实现，请联系开发者');
-  },
-  getAll: async () => {
-    throw new Error('[receivableOps] 应收账款后端路由尚未实现，请联系开发者');
-  },
-  add: async (_studentId, _receivable) => {
-    throw new Error('[receivableOps] 应收账款后端路由尚未实现，请联系开发者');
-  },
-  markPaid: async (_id) => {
-    throw new Error('[receivableOps] 应收账款后端路由尚未实现，请联系开发者');
-  },
-  delete: async (_id) => {
-    throw new Error('[receivableOps] 应收账款后端路由尚未实现，请联系开发者');
-  },
-};
-
 // ============================================
 // 付款记录相关操作
 // ============================================
@@ -409,6 +388,7 @@ export async function getStats() {
     activeStudents: data.this_month?.active_students || 0,
     classesThisMonth: data.this_month?.classes || 0,
     revenueThisMonth: data.this_month?.revenue || 0,
+    pendingReceivables: data.this_month?.pending_receivables || 0,
     warningStudents: data.warnings?.low_balance_students?.length || 0,
     warningStudentDetails: data.warnings?.low_balance_students || [],
   };

@@ -214,7 +214,22 @@ classComplete.post('/:id/complete', validateParams(idParamSchema), validate(comp
     const newUsedHours = isTrial ? student.used_hours : Math.round((student.used_hours + classHours) * 100) / 100;
     const newRemaining = Math.round((student.total_hours - newUsedHours) * 100) / 100;
 
-    // 4.3 批量执行所有写操作
+    // 4.3 检查个人课时包 (自费逻辑)
+    let isSelfPaid = 0;
+    let personalPackage = null;
+    if (!isTrial) {
+      personalPackage = await DB.prepare(`
+        SELECT id, remaining, used FROM packages 
+        WHERE student_id = ? AND remaining >= ? AND status = 'active'
+        ORDER BY purchase_date ASC LIMIT 1
+      `).bind(studentId, classHours).first();
+      
+      if (personalPackage) {
+        isSelfPaid = 1;
+      }
+    }
+
+    // 4.4 批量执行所有写操作
     const statements = [];
 
     // 更新课程状态
@@ -231,6 +246,7 @@ classComplete.post('/:id/complete', validateParams(idParamSchema), validate(comp
         fb_unit = ?,
         fb_lesson = ?,
         fb_lesson_level = ?,
+        is_self_paid = ?,
         updated_at = datetime('now')
       WHERE id = ?
     `).bind(
@@ -244,6 +260,7 @@ classComplete.post('/:id/complete', validateParams(idParamSchema), validate(comp
       feedback.fb_unit,
       feedback.fb_lesson,
       feedback.fb_lesson_level,
+      isSelfPaid,
       id
     ));
 
@@ -280,8 +297,8 @@ classComplete.post('/:id/complete', validateParams(idParamSchema), validate(comp
       VALUES (?, ?, ?, ?, 0, ?, ?, datetime('now'))
     `).bind(studentId, id, isTrial ? 'trial' : 'class_consume', isTrial ? 0 : -classHours, newRemaining, billNote));
 
-    // 同步机构课时包（非体验课、有机构）
-    if (!isTrial && orgId) {
+    // 同步机构课时包（非体验课、有机构，并且不是自费）
+    if (!isTrial && orgId && !isSelfPaid) {
       statements.push(DB.prepare(`
         UPDATE org_packages SET used_hours = used_hours + ?, updated_at = datetime('now')
         WHERE org_id = ? AND status IN ('pending', 'partial_paid')
@@ -293,6 +310,19 @@ classComplete.post('/:id/complete', validateParams(idParamSchema), validate(comp
         SELECT ?, id, ?, ?, ?, 'system', datetime('now')
         FROM org_packages WHERE org_id = ? AND status IN ('pending', 'partial_paid') ORDER BY created_at DESC LIMIT 1
       `).bind(orgId, studentId, -classHours, `课程消耗 -${classHours}节 (class ${id})`, orgId));
+    }
+    
+    // 如果是自费，扣除个人课时包
+    if (!isTrial && isSelfPaid && personalPackage) {
+      statements.push(DB.prepare(`
+        UPDATE packages SET used = used + ?, remaining = remaining - ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).bind(classHours, classHours, personalPackage.id));
+      
+      // 更新 class 的 package_id，以便记录这节课是从哪个个人包扣的
+      statements.push(DB.prepare(`
+        UPDATE classes SET package_id = ? WHERE id = ?
+      `).bind(personalPackage.id, id));
     }
 
     // 执行所有语句

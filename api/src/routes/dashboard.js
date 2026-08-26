@@ -43,6 +43,11 @@ dashboard.get('/stats', async (c) => {
     WHERE strftime('%Y-%m', date) = ?
   `).bind(thisMonth).first();
 
+  const pendingReceivables = await DB.prepare(`
+    SELECT COALESCE(SUM(amount_due_cny), 0) as total FROM org_settlements
+    WHERE status = 'pending'
+  `).first();
+
   // 预警：课时不足的学生（剩余<=5）
   const lowBalanceStudents = await DB.prepare(`
     SELECT s.id, s.name, s.phone,
@@ -94,6 +99,7 @@ dashboard.get('/stats', async (c) => {
       classes: thisMonthStats?.class_count || 0,
       total_hours: thisMonthStats?.total_hours || 0,
       revenue: revenue?.total || 0,
+      pending_receivables: pendingReceivables?.total || 0,
       active_students: thisMonthStats?.active_students || 0
     },
     warnings: {

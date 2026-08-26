@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Package, CreditCard, Calendar, AlertTriangle, ArrowRight, Loader2, Clock } from 'lucide-react';
+import { Users, Package, CreditCard, Calendar, AlertTriangle, ArrowRight, Loader2, Clock, Receipt } from 'lucide-react';
 import { getStats, getTodayClasses } from '../store';
 import { Link } from 'react-router-dom';
 
@@ -85,6 +85,12 @@ export default function Dashboard() {
       icon: CreditCard,
       color: 'bg-emerald-500',
     },
+    {
+      title: '待收账款',
+      value: `¥${(stats?.pendingReceivables || 0).toLocaleString()}`,
+      icon: Receipt,
+      color: 'bg-amber-500',
+    },
   ];
 
   return (
@@ -95,7 +101,7 @@ export default function Dashboard() {
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
         {statCards.map((card, index) => (
           <div key={index} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-4">

@@ -16,7 +16,7 @@
 环境变量:
     NVIDIA_API_KEY  (or default to key below)
     CRM_API_KEY     (default: sunnybridge-dev-key-2024)
-    CRM_API_BASE    (default: https://sunnybridge-crm-api.xiwanqin03.workers.dev)
+    CRM_API_BASE    (default: https://api.changtian.dpdns.org)
 """
 import sys, os, json, re, argparse, time
 from pathlib import Path
@@ -36,7 +36,7 @@ LLM_MODEL = os.environ.get("NVIDIA_MODEL", "z-ai/glm-5.2")
 
 CRM_API_BASE = os.environ.get(
     "CRM_API_BASE",
-    "https://sunnybridge-crm-api.xiwanqin03.workers.dev"
+    "https://api.changtian.dpdns.org"
 )
 CRM_API_KEY = os.environ.get("CRM_API_KEY", "sunnybridge-dev-key-2024")
 

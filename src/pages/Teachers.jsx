@@ -116,7 +116,11 @@ export default function Teachers() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('确定要删除这个教师吗？')) return;
+    const pwd = window.prompt('【高危操作】删除教师将导致关联课程和薪资数据消失！\\n请输入授权密码 "DELETE" 确认删除：');
+    if (pwd !== 'DELETE') {
+      if (pwd !== null) alert('密码错误，取消删除。');
+      return;
+    }
     try {
       await teacherOps.delete(id);
       loadTeachers();
@@ -145,7 +149,7 @@ export default function Teachers() {
 
   const verifyPassword = async () => {
     try {
-      const API_BASE = 'https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1';
+      const API_BASE = 'https://api.changtian.dpdns.org/api/v1';
       const res = await fetch(`${API_BASE}/settings/verify-teacher-payment-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -442,7 +446,7 @@ function TeacherCard({ teacher, onEdit, onDelete, orgs }) {
   };
 
   const [shareUrl, setShareUrl] = useState(null);
-  const API_BASE = 'https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1';
+  const API_BASE = 'https://api.changtian.dpdns.org/api/v1';
 
   const handleGenerateShareLink = async () => {
     try {

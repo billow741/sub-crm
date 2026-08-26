@@ -104,6 +104,7 @@ orgSettlements.get('/preview', async (c) => {
     FROM classes c
     WHERE c.organization_id = ?
       AND c.status = 'completed'
+      AND c.is_self_paid = 0
       AND c.date >= ? AND c.date <= ?
       AND c.id NOT IN (
         SELECT class_id FROM org_settlement_items
@@ -208,6 +209,7 @@ orgSettlements.post('/generate', async (c) => {
     LEFT JOIN teachers t ON c.teacher_id = t.id
     WHERE c.organization_id = ?
       AND c.status = 'completed'
+      AND c.is_self_paid = 0
       AND c.date >= ? AND c.date <= ?
       AND c.id NOT IN (
         SELECT class_id FROM org_settlement_items

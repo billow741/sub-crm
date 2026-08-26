@@ -42,7 +42,7 @@ export default function TeacherShare() {
     status: 'completed'
   });
 
-  const API_BASE = 'https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1';
+  const API_BASE = 'https://api.changtian.dpdns.org/api/v1';
 
   useEffect(() => {
     loadTeacherInfo();

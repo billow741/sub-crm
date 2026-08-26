@@ -1,4 +1,4 @@
-﻿-- Sunnybridge CRM Database Schema for Cloudflare D1
+-- Sunnybridge CRM Database Schema for Cloudflare D1
 -- SQLite 语法
 -- 完整版 Schema（含所有迁移文件中添加的字段）
 -- 最后更新：2026-08-25
@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS classes (
   page_to INTEGER,
   actual_end_at TEXT,
   idempotency_key TEXT UNIQUE,
+  is_self_paid INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,

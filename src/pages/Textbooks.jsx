@@ -115,7 +115,7 @@ export default function Textbooks() {
       const fd = new FormData();
       renderedImages.forEach((img, i) => fd.append('images', img.blob, `page-${i+1}.png`));
       const url = `/textbooks/preview-unit/${selectedBook.code}/${selectedUnit.unit_number}`;
-      const r = await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1${url}`, {
+      const r = await fetch(`https://api.changtian.dpdns.org/api/v1${url}`, {
         method: 'POST',
         headers: { 'X-API-Key': 'sunnybridge-dev-key-2024' },
         body: fd
@@ -158,7 +158,7 @@ export default function Textbooks() {
   const updateManageBook = async (code, field, value) => {
     setManageBooks(prev => prev.map(b => b.code === code ? { ...b, [field]: value } : b));
     try {
-      await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/books-manage/${code}`, {
+      await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/books-manage/${code}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'X-API-Key': 'sunnybridge-dev-key-2024' },
         body: JSON.stringify({ [field]: field === 'total_units' || field === 'is_active' ? (field === 'is_active' ? Boolean(value) : parseInt(value)) : value })
@@ -172,7 +172,7 @@ export default function Textbooks() {
   const addManageBook = async () => {
     if (!newBook.code || !newBook.name) { alert('code 和 name 必填'); return; }
     try {
-      const r = await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/books-manage`, {
+      const r = await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/books-manage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-API-Key': 'sunnybridge-dev-key-2024' },
         body: JSON.stringify(newBook)
@@ -192,7 +192,7 @@ export default function Textbooks() {
   const deleteManageBook = async (code, name) => {
     if (!confirm(`删除整本教材 ${name} (${code})?\n\n这本教材的所有 unit 和 AI 提取内容都会一并删除!\n\n此操作不可恢复,确认吗?`)) return;
     try {
-      await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/books-manage/${code}`, {
+      await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/books-manage/${code}`, {
         method: 'DELETE',
         headers: { 'X-API-Key': 'sunnybridge-dev-key-2024' }
       });
@@ -207,7 +207,7 @@ export default function Textbooks() {
     setShowUnitsManage(true);
     setManageLoading(true);
     try {
-      const r = await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/units-manage/${selectedBook.code}`,
+      const r = await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/units-manage/${selectedBook.code}`,
         { headers: { 'X-API-Key': 'sunnybridge-dev-key-2024' } });
       const resp = await r.json();
       setManageUnits(resp.data?.units || []);
@@ -216,7 +216,7 @@ export default function Textbooks() {
   };
 
   const refreshUnitsManage = async () => {
-    const r = await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/units-manage/${selectedBook.code}`,
+    const r = await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/units-manage/${selectedBook.code}`,
       { headers: { 'X-API-Key': 'sunnybridge-dev-key-2024' } });
     const resp = await r.json();
     setManageUnits(resp.data?.units || []);
@@ -230,13 +230,13 @@ export default function Textbooks() {
     try {
       // 改 unit_number 是单独路径
       if (field === 'unit_number' && value !== oldNum) {
-        await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/units-manage/${selectedBook.code}/${oldNum}`, {
+        await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/units-manage/${selectedBook.code}/${oldNum}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'X-API-Key': 'sunnybridge-dev-key-2024' },
           body: JSON.stringify({ new_unit_number: parseInt(value) || 0 })
         });
       } else if (field !== 'unit_number') {
-        await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/units-manage/${selectedBook.code}/${oldNum}`, {
+        await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/units-manage/${selectedBook.code}/${oldNum}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'X-API-Key': 'sunnybridge-dev-key-2024' },
           body: JSON.stringify({ [field]: field === 'is_active' ? Boolean(value) : (field === 'lesson_count' ? parseInt(value) : value) })
@@ -251,7 +251,7 @@ export default function Textbooks() {
   const deleteManageUnit = async (num) => {
     if (!confirm(`删除 Unit ${num}?\n该单元的 AI 提取内容也会一并删除`)) return;
     try {
-      await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/units-manage/${selectedBook.code}/${num}`, {
+      await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/units-manage/${selectedBook.code}/${num}`, {
         method: 'DELETE',
         headers: { 'X-API-Key': 'sunnybridge-dev-key-2024' }
       });
@@ -262,7 +262,7 @@ export default function Textbooks() {
   const addManageUnit = async () => {
     if (!newUnitNum) { alert('请填 unit 编号'); return; }
     try {
-      await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/units-manage/${selectedBook.code}`, {
+      await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/units-manage/${selectedBook.code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-API-Key': 'sunnybridge-dev-key-2024' },
         body: JSON.stringify({ unit_number: parseInt(newUnitNum), unit_title: newUnitTitle, lesson_count: 1, is_active: true })
@@ -299,7 +299,7 @@ export default function Textbooks() {
       // 注: 用 batch_start 参数告知后端这是第几页起 (用于 R2 保存图片名使用真实页码)
       const fd = new FormData();
       renderedImages.forEach((img, i) => fd.append('images', img.blob, `page-${batchStart + i + 1}.png`));
-      const r = await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/preview-book/${selectedBook.code}?batch_start=${batchStart}`, {
+      const r = await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/preview-book/${selectedBook.code}?batch_start=${batchStart}`, {
         method: 'POST',
         headers: { 'X-API-Key': 'sunnybridge-dev-key-2024' },
         body: fd
@@ -392,7 +392,7 @@ export default function Textbooks() {
     if (previewUnits && previewUnits.length > 0) allUnits.push(...previewUnits);
     setCommitting(true);
     try {
-      const r = await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/commit-units/${selectedBook.code}`, {
+      const r = await fetch(`https://api.changtian.dpdns.org/api/v1/textbooks/commit-units/${selectedBook.code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-API-Key': 'sunnybridge-dev-key-2024' },
         body: JSON.stringify({ units: allUnits })
@@ -914,7 +914,7 @@ export default function Textbooks() {
             {pdfs.map(p => (
               <li key={p.key} className="text-sm text-gray-600 flex items-center gap-2">
                 <FileText size={14} />
-                <a href={`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/pdf/${encodeURIComponent(p.key)}`}
+                <a href={`https://api.changtian.dpdns.org/api/v1/textbooks/pdf/${encodeURIComponent(p.key)}`}
                    target="_blank" rel="noreferrer" className="text-primary-600 hover:underline">
                   {p.key}
                 </a>

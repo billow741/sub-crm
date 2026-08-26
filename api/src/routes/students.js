@@ -266,6 +266,12 @@ students.delete('/:id', validateParams(idParamSchema), async (c) => {
     await DB.prepare('DELETE FROM payments WHERE student_id = ?').bind(id).run();
     await DB.prepare('DELETE FROM classes WHERE student_id = ?').bind(id).run();
     await DB.prepare('DELETE FROM packages WHERE student_id = ?').bind(id).run();
+    await DB.prepare('DELETE FROM hour_changes WHERE student_id = ?').bind(id).run();
+    await DB.prepare('DELETE FROM progress_reports WHERE student_id = ?').bind(id).run();
+    await DB.prepare('DELETE FROM org_hour_allocations WHERE student_id = ?').bind(id).run();
+    await DB.prepare('DELETE FROM bill_records WHERE student_id = ?').bind(id).run();
+    await DB.prepare('DELETE FROM notifications WHERE student_id = ?').bind(id).run();
+    await DB.prepare('DELETE FROM ops_tasks WHERE student_id = ?').bind(id).run();
     await DB.prepare('DELETE FROM students WHERE id = ?').bind(id).run();
 
     return c.body(null, 204);

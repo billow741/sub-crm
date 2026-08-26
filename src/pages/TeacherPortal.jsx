@@ -108,7 +108,7 @@ export default function TeacherPortal() {
 
       if (selectedClass.status === 'scheduled' && feedbackForm.status === 'completed' && selectedClass.student_id) {
         const hoursToDeduct = selectedClass.hours || 1;
-        const res = await fetch(`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/students/${selectedClass.student_id}/use-hours`, {
+        const res = await fetch(`https://api.changtian.dpdns.org/api/v1/students/${selectedClass.student_id}/use-hours`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -448,14 +448,14 @@ export default function TeacherPortal() {
                           return (
                             <a
                               key={page}
-                              href={`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/page-img/${feedbackForm.textbook_code}/${feedbackForm.unit_number}/${page}`}
+                              href={`https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${feedbackForm.textbook_code}/${feedbackForm.unit_number}/${page}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="block border rounded overflow-hidden hover:shadow-md"
                               title={`点击看大图: 页 ${page}`}
                             >
                               <img
-                                src={`https://sunnybridge-crm-api.xiwanqin03.workers.dev/api/v1/textbooks/page-img/${feedbackForm.textbook_code}/${feedbackForm.unit_number}/${page}`}
+                                src={`https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${feedbackForm.textbook_code}/${feedbackForm.unit_number}/${page}`}
                                 alt={`Page ${page}`}
                                 className="w-full h-auto"
                                 loading="lazy"
