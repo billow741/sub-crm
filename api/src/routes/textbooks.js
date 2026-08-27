@@ -803,20 +803,24 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
 
   const formData = await c.req.formData();
   const images = formData.getAll('images').filter(f => f && f.name);
-  if (images.length === 0) return c.json({ error: { code: 'BAD_REQUEST', message: 'Missing images[]' } }, 400);
+  if (images.length === 0) return c.json({ error: { code: 'BAD_REQUEST', message: '未收到图片数据 (Missing images[])' } }, 400);
 
-  // 校验 unit 存在
-  const unit = await c.env.DB.prepare(`
-    SELECT id, unit_title FROM textbook_units WHERE textbook_code = ? AND unit_number = ?
-  `).bind(code, num).first();
-  if (!unit) return c.json({ error: { code: 'NOT_FOUND', message: 'Unit not found' } }, 404);
+  // 查询 DB 中是否已有此 unit
+  let dbUnitTitle = '';
+  try {
+    const unit = await c.env.DB.prepare(`
+      SELECT id, unit_title FROM textbook_units WHERE textbook_code = ? AND unit_number = ?
+    `).bind(code, num).first();
+    if (unit) dbUnitTitle = unit.unit_title;
+  } catch (e) {
+    console.error('DB query error:', e);
+  }
 
   try {
-    // 单 Unit prompt 提取 (返回 vocab/patterns/grammar 对象,不是 array)
+    // 单 Unit prompt 提取 (返回 vocab/patterns/grammar 对象)
     const content = await callLLMWithImages(c, images, { bookMode: false, maxPages: 8 });
 
     // 把这次上传的 PDF 页面图保存到 R2 (path: `${code}/Unit${num}/page-${i}.png`)
-    // 老师填 feedback 时会引用这些图, 家长端显示
     const R2 = c.env.TEXTBOOKS_R2;
     let pagesSaved = 0;
     if (R2) {
@@ -825,22 +829,21 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       for (let i = 0; i < images_arr.length; i++) {
         const f = images_arr[i];
         const buf = await f.arrayBuffer();
-        const key = `${code}/Unit${num}/page-${String(i+1).padStart(2,'0')}.png`;
+        const key = `${code}/Unit${num}/${f.name || `page-${String(i+1).padStart(2,'0')}.png`}`;
         await R2.put(key, buf, { httpMetadata: { contentType: f.type || 'image/png' } });
       }
     }
 
     return c.json({ data: {
       unit_number: num,
-      // 优先用 AI 从 PDF 看到的真实标题, fallback 到 DB 默认
-      unit_title: content.unit_title || unit.unit_title || '',
+      unit_title: content.unit_title || dbUnitTitle || (num === 0 ? 'Welcome' : `Unit ${num}`),
       vocab: content.vocab || [],
       patterns: content.patterns || [],
       grammar: content.grammar || [],
       pages_saved: pagesSaved
     }});
   } catch (err) {
-    return c.json({ error: { code: 'LLM_ERROR', message: err.message } }, 502);
+    return c.json({ error: { code: 'LLM_ERROR', message: `AI 识别失败: ${err.message}` } }, 502);
   }
 });
 

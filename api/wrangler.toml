@@ -28,10 +28,3 @@ database_id = "07e4b171-ca90-45ce-86b6-7bb59e8e7411"
 [[r2_buckets]]
 binding = "TEXTBOOKS_R2"
 bucket_name = "sunnybridge-textbooks"
-
-# 开发环境变量
-[env.dev]
-vars = { DEBUG = "true" }
-
-[env.production]
-vars = { DEBUG = "false" }

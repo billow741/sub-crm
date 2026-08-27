@@ -1145,17 +1145,20 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
             return list;
           });
         } else {
+          const errMsg = json.error?.message || '提取失败';
           updateOutlineItem(idx, 'status', 'error');
+          setStatusMsg(`⚠️ Unit ${item.unit_number} 提取失败: ${errMsg}`);
         }
       } catch (err) {
         console.error(err);
         updateOutlineItem(idx, 'status', 'error');
+        setStatusMsg(`⚠️ Unit ${item.unit_number} 请求异常: ${err.message}`);
       }
     }
 
     setProcessing(false);
     setCurrentProcessingUnit(null);
-    setStatusMsg('🎉 所有选中单元提取完毕！请点击下方【全部保存入库】完成入库');
+    setStatusMsg('🎉 批次处理完毕！请查看各单元状态');
   };
 
   // 全部保存入库
