@@ -1555,9 +1555,9 @@ function renderStudyProfile(student, allClasses) {
   balEl.textContent = remaining.toFixed(2);
   if (remaining < 3) balEl.classList.add('warn');
 
-  // Total lessons (completed)
-  var totalLessons = myClasses.filter(function(c) { return c.status === 'completed'; }).length;
-  document.getElementById('sp-total-lessons').textContent = totalLessons;
+  // 正式课程节数（阶段性评估与里程碑仅计算正式课，体验课不计入）
+  var regularLessons = myClasses.filter(function(c) { return c.status === 'completed' && c.is_trial !== 1; }).length;
+  document.getElementById('sp-total-lessons').textContent = regularLessons;
 
   // Vocab count
   var vocabCount = spCountVocab(myClasses);
@@ -1866,17 +1866,17 @@ function renderStudyProfile(student, allClasses) {
 
   document.getElementById('sp-reports-list').innerHTML = rpHtml;
 
-  // === 目标里程碑进度计算 ===
+  // === 目标里程碑进度计算（严格基于正式课，体验课不计入） ===
   var nextMilestone = 10;
-  if (totalLessons >= 10 && totalLessons < 30) nextMilestone = 30;
-  else if (totalLessons >= 30 && totalLessons < 60) nextMilestone = 60;
-  else if (totalLessons >= 60) nextMilestone = Math.ceil((totalLessons + 1) / 10) * 10;
+  if (regularLessons >= 10 && regularLessons < 30) nextMilestone = 30;
+  else if (regularLessons >= 30 && regularLessons < 60) nextMilestone = 60;
+  else if (regularLessons >= 60) nextMilestone = Math.ceil((regularLessons + 1) / 10) * 10;
 
   var prevMilestone = nextMilestone === 10 ? 0 : (nextMilestone === 30 ? 10 : 30);
   var diffTotal = nextMilestone - prevMilestone;
-  var diffDone = totalLessons - prevMilestone;
+  var diffDone = regularLessons - prevMilestone;
   var pct = Math.min(100, Math.max(0, Math.round((diffDone / diffTotal) * 100)));
-  var leftLessons = Math.max(0, nextMilestone - totalLessons);
+  var leftLessons = Math.max(0, nextMilestone - regularLessons);
 
   var mTitleEl = document.getElementById('sp-milestone-title');
   var mPctEl = document.getElementById('sp-milestone-pct');
@@ -1884,10 +1884,10 @@ function renderStudyProfile(student, allClasses) {
   var mDescEl = document.getElementById('sp-milestone-desc');
 
   if (mTitleEl && mPctEl && mBarEl && mDescEl) {
-    mTitleEl.textContent = '🎯 目标: 第 ' + nextMilestone + ' 课时阶段进阶评估';
-    mPctEl.textContent = pct + '% (' + totalLessons + '/' + nextMilestone + ' 节)';
+    mTitleEl.textContent = '🎯 阶段目标: 第 ' + nextMilestone + ' 节正式课能力进阶评估';
+    mPctEl.textContent = pct + '% (正式课 ' + regularLessons + '/' + nextMilestone + ' 节)';
     mBarEl.style.width = pct + '%';
-    mDescEl.textContent = '已完成 ' + totalLessons + ' 节课，还需 ' + leftLessons + ' 节课即可达成下一进阶里程碑，生成专属能力大考评估！';
+    mDescEl.textContent = '💡 体验课不计入阶段评估。当前已完成 ' + regularLessons + ' 节正式课，还需 ' + leftLessons + ' 节课即可达成下一里程碑，解锁专属能力大考评估！';
   }
 
   // === Tab: 学习轨迹 (only milestones) ===
