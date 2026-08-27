@@ -205,16 +205,51 @@ export default function Textbooks() {
     setExtracting(true);
     try {
       const fd = new FormData();
+      const loadedBlobs = [];
+
       if (renderedImages.length > 0) {
         renderedImages.forEach((img, i) => {
-          fd.append('images', img.blob, `page-${String(i + 1).padStart(2, '0')}.png`);
+          loadedBlobs.push(img.blob);
+          fd.append('images', img.blob, `page-${String(i + 1).padStart(2, '0')}.jpg`);
         });
       } else {
         for (const p of r2Pages) {
           const res = await fetch(p.url, { headers: { 'X-API-Key': API_KEY } });
           const blob = await res.blob();
-          fd.append('images', blob, `page-${String(p.page_num).padStart(2, '0')}.png`);
+          loadedBlobs.push(blob);
+          fd.append('images', blob, `page-${String(p.page_num).padStart(2, '0')}.jpg`);
         }
+      }
+
+      // 合成 1200px 超清拼图
+      if (loadedBlobs.length > 0) {
+        const coreBlobs = loadedBlobs.slice(0, Math.min(4, loadedBlobs.length));
+        const loadedImgs = await Promise.all(coreBlobs.map(b => new Promise(res => {
+          const img = new Image();
+          img.onload = () => res(img);
+          img.src = URL.createObjectURL(b);
+        })));
+
+        const cols = loadedImgs.length === 1 ? 1 : 2;
+        const rows = Math.ceil(loadedImgs.length / cols);
+        const singleW = 1200;
+        const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
+
+        const collageCanvas = document.createElement('canvas');
+        collageCanvas.width = singleW * cols;
+        collageCanvas.height = singleH * rows;
+        const cCtx = collageCanvas.getContext('2d');
+        cCtx.fillStyle = '#ffffff';
+        cCtx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
+
+        loadedImgs.forEach((img, i) => {
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
+        });
+
+        const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.88));
+        fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
       }
 
       if (llmConfig.baseUrl) fd.append('llm_base_url', llmConfig.baseUrl);
@@ -243,7 +278,7 @@ export default function Textbooks() {
           grammar: d.grammar || []
         }));
         loadUnitPages(selectedBookCode, selectedUnitNum);
-        alert('🎉 AI 视觉识别完成！已自动为词汇和句型匹配标准中文翻译，请校对后点击【保存入库】');
+        alert(`🎉 AI 识别成功！已识别 ${(d.vocab || []).length} 个核心词汇与 ${(d.patterns || []).length} 个句型，请在右侧校对后点击【保存入库】！`);
       } else {
         alert('AI 识别失败: ' + (json.error?.message || '未知错误'));
       }
@@ -597,10 +632,11 @@ export default function Textbooks() {
                     type="button"
                     onClick={handleAiExtract}
                     disabled={extracting || (renderedImages.length === 0 && r2Pages.length === 0)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-xs font-semibold rounded-lg hover:shadow-md transition disabled:opacity-50 cursor-pointer shadow-xs"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 hover:shadow-md transition disabled:opacity-50 cursor-pointer shadow-xs"
+                    title="根据左侧已存切图，调用 AI 视觉大模型重新提取并翻译词汇与句型"
                   >
                     {extracting ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                    <span>{extracting ? 'AI 识别中...' : '🤖 AI 视觉提取'}</span>
+                    <span>{extracting ? '正在 AI 视觉提取...' : '✨ 重新 AI 提取本单元'}</span>
                   </button>
 
                   <button
