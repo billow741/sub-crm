@@ -912,8 +912,16 @@
       .sp-share-result { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
       .sp-share-result.show { display: flex; }
       .sp-share-result img { max-width: 90%; max-height: 70vh; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-      .sp-share-result p { color: #fff; font-size: 14px; }
       .sp-share-result .close { background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 8px 24px; border-radius: 100px; cursor: pointer; }
+      /* Collapsible Cards */
+      .sp-card-summary { cursor: pointer; user-select: none; transition: opacity 0.15s ease; }
+      .sp-card-summary:hover { opacity: 0.88; }
+      .sp-collapse-body { overflow: hidden; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); opacity: 1; max-height: 2000px; }
+      .sp-collapse-body.collapsed { max-height: 0 !important; opacity: 0; margin-top: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; pointer-events: none; }
+      .sp-toggle-btn { font-size: 12px; font-weight: 600; color: var(--sb-blue); display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; background: rgba(75,159,224,0.08); border: none; cursor: pointer; }
+      .sp-toggle-btn:hover { background: rgba(75,159,224,0.15); color: var(--sb-blue-dark); }
+      .sp-arrow-icon { transition: transform 0.25s ease; display: inline-block; font-size: 10px; }
+      .sp-arrow-icon.open { transform: rotate(180deg); }
       /* Responsive */
       @media (max-width: 600px) {
         .sp-info-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -1559,6 +1567,9 @@ function renderStudyProfile(student, allClasses) {
   // === Tab: 上课记录 (replaces old History section + feedback) ===
   var pastClasses = myClasses.filter(function(c) {
     return c.date < getLocalDate() || c.status !== 'scheduled';
+  // === Tab: 上课记录 (replaces old History section + feedback) ===
+  var pastClasses = myClasses.filter(function(c) {
+    return c.date < getLocalDate() || c.status !== 'scheduled';
   });
   pastClasses.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
 
@@ -1575,9 +1586,14 @@ function renderStudyProfile(student, allClasses) {
   if (months.length === 0) {
     histHtml = '<div class="sp-card" style="text-align:center;color:var(--sb-muted);">暂无上课记录</div>';
   }
+  
+  var classCounter = 0;
   months.forEach(function(month) {
     histHtml += '<div class="sp-month-header">' + month + '</div>';
     monthGroups[month].forEach(function(c) {
+      classCounter++;
+      var isFirstClass = classCounter === 1; // 仅最新一节课默认展开
+      var collapseId = 'cls-fb-' + c.id;
       var hasFb = c.fb_vocab || c.fb_patterns || c.fb_grammar ||
                   c.fb_pronunciation_errors || c.fb_grammar_errors ||
                   c.fb_homework || c.fb_teacher_message || c.fb_next_preview ||
@@ -1585,18 +1601,41 @@ function renderStudyProfile(student, allClasses) {
       var isTrialWithReport = c.is_trial === 1 && window_allAssessments && window_allAssessments.some(function(a) { return parseInt(a.class_id) === parseInt(c.id); });
       var globalIdx = window_allPastClasses ? window_allPastClasses.indexOf(c) : -1;
 
-      histHtml += '<div class="sp-card">';
-      histHtml += '<div class="sp-card-header"><span class="sp-card-date">' + (c.date || '') + ' ' + formatTime(c.start_time) + (c.is_trial ? ' <span class="trial-badge">体验</span>' : '') + '</span><span class="sp-card-teacher">' + (c.teacher_name || '-') + '</span></div>';
+      histHtml += '<div class="sp-card" style="margin-bottom:12px;padding:16px 18px;">';
+      
+      // Card Summary Header (Clickable to toggle)
+      histHtml += '<div class="sp-card-summary" onclick="toggleCollapse(\'' + collapseId + '\')">';
+      histHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+      histHtml += '<div>';
+      histHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+      histHtml += '<span class="sp-card-date" style="font-size:15px;">' + (c.date || '') + ' ' + formatTime(c.start_time) + '</span>';
+      if (c.is_trial) histHtml += '<span class="trial-badge">体验</span>';
+      var statusLabels = { completed: '✅ 已完课', absent: '❌ 缺勤', cancelled: '🚫 已取消', scheduled: '📅 已排课' };
+      histHtml += '<span style="font-size:12px;color:var(--sb-muted);margin-left:4px;">' + (statusLabels[c.status] || c.status) + '</span>';
+      histHtml += '</div>';
+      histHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:4px;">';
+      histHtml += '执教老师: <b style="color:var(--sb-dark);">' + (c.teacher_name || '-') + '</b>';
+      if (c.fb_lesson_level || c.fb_unit || c.fb_lesson) {
+        histHtml += ' · <span style="color:var(--sb-blue);font-weight:600;">' + (c.fb_lesson_level ? c.fb_lesson_level + ' ' : '') + 'Unit ' + (c.fb_unit || '-') + ' / Lesson ' + (c.fb_lesson || '-') + '</span>';
+      }
+      histHtml += '</div>';
+      histHtml += '</div>';
 
-      // Status badge
-      var statusLabels = { completed: '✅ 已完成', absent: '❌ 缺勤', cancelled: '🚫 已取消', scheduled: '📅 已排课' };
-      histHtml += '<div style="margin-bottom:6px;"><span style="font-size:12px;color:var(--sb-muted);">' + (statusLabels[c.status] || c.status) + '</span></div>';
+      // Toggle Action
+      histHtml += '<div style="display:flex;align-items:center;gap:8px;">';
+      if (hasFb || isTrialWithReport) {
+        histHtml += '<button class="sp-toggle-btn" type="button">';
+        histHtml += '<span id="' + collapseId + '-txt">' + (isFirstClass ? '收起反馈 ▲' : '查看反馈 ▼') + '</span>';
+        histHtml += '</button>';
+      }
+      histHtml += '</div>';
+      histHtml += '</div>';
+      histHtml += '</div>'; // End sp-card-summary
 
-      // Feedback preview (compact)
-      if (hasFb) {
-        if (c.fb_lesson_level || c.fb_unit || c.fb_lesson) {
-          histHtml += '<div style="margin-bottom:4px;"><span class="sp-level-badge">' + (c.fb_lesson_level || '') + ' · Unit ' + (c.fb_unit || '-') + ' / Lesson ' + (c.fb_lesson || '-') + '</span></div>';
-        }
+      // Collapsible Feedback Body
+      if (hasFb || isTrialWithReport) {
+        histHtml += '<div id="' + collapseId + '" class="sp-collapse-body ' + (isFirstClass ? '' : 'collapsed') + '" style="margin-top:12px;padding-top:12px;border-top:1px dashed #E2E8F0;">';
+        
         // 📖 教材 PDF 页图 (history 紧凑版 grid)
         if (c.textbook_code && c.unit_number && c.page_from && c.page_to) {
           var API_TXT2 = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
@@ -1612,6 +1651,7 @@ function renderStudyProfile(student, allClasses) {
         }
         if (c.fb_vocab) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📚 词汇</div><div class="sp-feedback-text">' + spEsc(c.fb_vocab) + '</div></div>';
         if (c.fb_patterns) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💬 句型</div><div class="sp-feedback-text">' + spEsc(c.fb_patterns) + '</div></div>';
+        
         // 发音纠正
         if (c.fb_pronunciation_errors) {
           try {
@@ -1635,24 +1675,29 @@ function renderStudyProfile(student, allClasses) {
           } catch(ex) {}
         }
         if (c.fb_homework) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📝 作业</div><div class="sp-feedback-text">' + spEsc(c.fb_homework) + '</div></div>';
-        if (c.fb_teacher_message) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师反馈</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:6px 8px;border-radius:6px;">' + spEsc(c.fb_teacher_message) + '</div></div>';
+        if (c.fb_teacher_message) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师反馈</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:8px 10px;border-radius:8px;">' + spEsc(c.fb_teacher_message) + '</div></div>';
+        
         // Old format fallback
         if (!c.fb_vocab && !c.fb_homework) {
           if (c.content) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">上课内容</div><div class="sp-feedback-text">' + spEsc(c.content) + '</div></div>';
           if (c.homework) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">作业</div><div class="sp-feedback-text">' + spEsc(c.homework) + '</div></div>';
         }
-        histHtml += '<div style="display:flex;gap:8px;margin-top:8px;">';
-        histHtml += '<button class="sp-share-btn" style="position:static;" onclick="spShareCard(this)">📸分享</button>';
+
+        histHtml += '<div style="display:flex;gap:8px;margin-top:10px;">';
+        histHtml += '<button class="sp-share-btn" style="position:static;padding:5px 12px;font-size:12px;background:linear-gradient(135deg,#F5A623,#E26B31);color:#fff;border:none;" onclick="spShareCard(this)">📸 分享海报</button>';
         if (globalIdx >= 0) {
-          histHtml += '<button class="sp-share-btn" style="position:static;" onclick="showViewFeedback(' + globalIdx + ')">查看详情</button>';
+          histHtml += '<button class="sp-share-btn" style="position:static;padding:5px 12px;font-size:12px;" onclick="showViewFeedback(' + globalIdx + ')">弹窗详情</button>';
+        }
+        if (isTrialWithReport) {
+          var aId = window_allAssessments.find(function(a) { return parseInt(a.class_id) === parseInt(c.id); }).id;
+          histHtml += '<button class="sp-share-btn" style="position:static;padding:5px 12px;font-size:12px;" onclick="viewAssessmentReport(' + aId + ')">查看体验课报告</button>';
         }
         histHtml += '</div>';
-      } else if (isTrialWithReport) {
-        var aId = window_allAssessments.find(function(a) { return parseInt(a.class_id) === parseInt(c.id); }).id;
-        histHtml += '<div style="margin-top:6px;"><button class="sp-share-btn" style="position:static;" onclick="viewAssessmentReport(' + aId + ')">查看评估报告</button></div>';
+
+        histHtml += '</div>'; // End sp-collapse-body
       }
 
-      histHtml += '</div>';
+      histHtml += '</div>'; // End sp-card
     });
   });
   document.getElementById('sp-history-list').innerHTML = histHtml;
@@ -1679,33 +1724,42 @@ function renderStudyProfile(student, allClasses) {
   if (progressReports.length === 0) {
     rpHtml += '<div class="sp-card" style="text-align:center;padding:24px;color:var(--sb-muted);font-size:13px;background:#FAFCFF;border:1px dashed #D3E2F2;border-radius:14px;">🌱 学习进行中，完成第 10、30、60 节课或晋升等级时将自动生成阶段进阶大考报告</div>';
   } else {
+    var prCounter = 0;
     progressReports.forEach(function(r) {
+      prCounter++;
+      var isFirstPr = prCounter === 1; // 仅最新一份阶段报告默认展开
+      var collapseId = 'pr-body-' + r.id;
       var typeInfo = REPORT_TYPE_INFO[r.report_type] || { icon: '📋', label: '阶段成长报告', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' };
-      rpHtml += '<div class="sp-card" style="border-left:4px solid ' + typeInfo.color + ';border-radius:14px;box-shadow:0 4px 20px rgba(28,36,75,0.05);margin-bottom:16px;padding:20px 22px;">';
       
-      // Header
-      rpHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
+      rpHtml += '<div class="sp-card" style="border-left:4px solid ' + typeInfo.color + ';border-radius:14px;box-shadow:0 4px 20px rgba(28,36,75,0.05);margin-bottom:14px;padding:18px 20px;">';
+      
+      // Header Summary (Clickable to toggle)
+      rpHtml += '<div class="sp-card-summary" onclick="toggleCollapse(\'' + collapseId + '\')">';
+      rpHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">';
       rpHtml += '<div>';
       rpHtml += '<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:' + typeInfo.bg + ';border-radius:20px;margin-bottom:6px;">';
       rpHtml += '<span style="font-size:15px;">' + typeInfo.icon + '</span>';
       rpHtml += '<span style="font-size:13px;font-weight:700;color:' + typeInfo.color + ';">' + typeInfo.label + '</span>';
       rpHtml += '</div>';
       rpHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:2px;">执教外教: <b style="color:var(--sb-dark);">' + spEsc(r.teacher_name || '-') + '</b> · 生成日期: ' + ((r.created_at || '').substring(0, 10)) + '</div>';
-      rpHtml += '</div>';
-
-      // Actions
-      rpHtml += '<div style="display:flex;gap:8px;">';
-      rpHtml += '<button class="sp-share-btn" style="position:static;padding:6px 12px;font-size:12px;" onclick="viewProgressReport(' + r.id + ')">📄 查看完整报告</button>';
-      rpHtml += '<button class="sp-share-btn" style="position:static;padding:6px 12px;font-size:12px;background:linear-gradient(135deg,#F5A623,#E26B31);color:#fff;border:none;" onclick="spShareCard(this)">📸 分享海报</button>';
-      rpHtml += '</div>';
-      rpHtml += '</div>';
-
-      // Level jump badge
-      if ((r.from_level || r.to_level)) {
-        rpHtml += '<div style="margin:8px 0 12px;padding:8px 12px;background:rgba(139,92,246,0.06);border-radius:8px;font-size:13px;color:#6D28D9;font-weight:600;display:inline-block;">';
-        rpHtml += '🎓 级别晋升: ' + spEsc(r.from_level || '入学') + ' <span style="color:#A78BFA;">➔</span> <b style="color:#4C1D95;">' + spEsc(r.to_level) + '</b>';
-        rpHtml += '</div>';
+      if (r.from_level || r.to_level) {
+        rpHtml += '<div style="margin-top:6px;font-size:12px;color:#6D28D9;font-weight:600;">🎓 晋升: ' + spEsc(r.from_level || '入学') + ' ➔ ' + spEsc(r.to_level) + '</div>';
       }
+      rpHtml += '</div>';
+
+      // Actions + Toggle Button
+      rpHtml += '<div style="display:flex;align-items:center;gap:6px;" onclick="event.stopPropagation();">';
+      rpHtml += '<button class="sp-toggle-btn" type="button" onclick="toggleCollapse(\'' + collapseId + '\')">';
+      rpHtml += '<span id="' + collapseId + '-txt">' + (isFirstPr ? '收起报告 ▲' : '查看报告 ▼') + '</span>';
+      rpHtml += '</button>';
+      rpHtml += '<button class="sp-share-btn" style="position:static;padding:5px 10px;font-size:12px;" onclick="viewProgressReport(' + r.id + ')">📄 PDF</button>';
+      rpHtml += '<button class="sp-share-btn" style="position:static;padding:5px 10px;font-size:12px;background:linear-gradient(135deg,#F5A623,#E26B31);color:#fff;border:none;" onclick="spShareCard(this)">📸 海报</button>';
+      rpHtml += '</div>';
+      rpHtml += '</div>';
+      rpHtml += '</div>'; // End sp-card-summary
+
+      // Collapsible Report Body
+      rpHtml += '<div id="' + collapseId + '" class="sp-collapse-body ' + (isFirstPr ? '' : 'collapsed') + '" style="margin-top:14px;padding-top:14px;border-top:1px dashed #E2E8F0;">';
 
       // Summary
       if (r.summary) {
@@ -1744,7 +1798,8 @@ function renderStudyProfile(student, allClasses) {
         rpHtml += '</div>';
       }
 
-      rpHtml += '</div>';
+      rpHtml += '</div>'; // End sp-collapse-body
+      rpHtml += '</div>'; // End sp-card
     });
   }
   rpHtml += '</div>';
@@ -1760,23 +1815,34 @@ function renderStudyProfile(student, allClasses) {
   } else {
     assessments.forEach(function(a) {
       var cls = myClasses.find(function(c) { return parseInt(c.id) === parseInt(a.class_id); });
-      rpHtml += '<div class="sp-card" style="border-radius:14px;box-shadow:0 4px 20px rgba(28,36,75,0.05);padding:20px 22px;margin-bottom:16px;">';
+      var collapseId = 'assess-body-' + a.id;
       
-      rpHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
+      rpHtml += '<div class="sp-card" style="border-radius:14px;box-shadow:0 4px 20px rgba(28,36,75,0.05);padding:18px 20px;margin-bottom:14px;">';
+      
+      // Summary Header (Clickable)
+      rpHtml += '<div class="sp-card-summary" onclick="toggleCollapse(\'' + collapseId + '\')">';
+      rpHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">';
       rpHtml += '<div>';
-      rpHtml += '<div style="font-size:14px;font-weight:700;color:var(--sb-dark);">🎁 体验课综合评估报告</div>';
+      rpHtml += '<div style="font-size:14px;font-weight:700;color:var(--sb-dark);">🎁 体验课综合入学评估</div>';
       rpHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:2px;">上课日期: ' + (cls ? cls.date : (a.created_at || '').substring(0, 10)) + ' · 执教老师: <b style="color:var(--sb-dark);">' + (cls ? (cls.teacher_name || '-') : (a.teacher_name || '-')) + '</b></div>';
-      rpHtml += '</div>';
-      rpHtml += '<div style="display:flex;gap:8px;">';
-      rpHtml += '<button class="sp-share-btn" style="position:static;padding:6px 12px;font-size:12px;" onclick="viewAssessmentReport(' + a.id + ')">📄 查阅 / 打印PDF</button>';
-      rpHtml += '<button class="sp-share-btn" style="position:static;padding:6px 12px;font-size:12px;background:linear-gradient(135deg,#F5A623,#E26B31);color:#fff;border:none;" onclick="spShareCard(this)">📸 分享海报</button>';
-      rpHtml += '</div>';
-      rpHtml += '</div>';
-
       if (a.recommended_level) {
-        rpHtml += '<div style="margin:6px 0 10px;"><span class="sp-level-badge">🎓 建议入学级别: ' + spEsc(a.recommended_level) + '</span></div>';
+        rpHtml += '<div style="margin-top:4px;"><span class="sp-level-badge">🎓 建议入学级别: ' + spEsc(a.recommended_level) + '</span></div>';
       }
+      rpHtml += '</div>';
 
+      // Actions
+      rpHtml += '<div style="display:flex;align-items:center;gap:6px;" onclick="event.stopPropagation();">';
+      rpHtml += '<button class="sp-toggle-btn" type="button" onclick="toggleCollapse(\'' + collapseId + '\')">';
+      rpHtml += '<span id="' + collapseId + '-txt">查看详情 ▼</span>';
+      rpHtml += '</button>';
+      rpHtml += '<button class="sp-share-btn" style="position:static;padding:5px 10px;font-size:12px;" onclick="viewAssessmentReport(' + a.id + ')">📄 PDF</button>';
+      rpHtml += '<button class="sp-share-btn" style="position:static;padding:5px 10px;font-size:12px;background:linear-gradient(135deg,#F5A623,#E26B31);color:#fff;border:none;" onclick="spShareCard(this)">📸 海报</button>';
+      rpHtml += '</div>';
+      rpHtml += '</div>';
+      rpHtml += '</div>'; // End sp-card-summary
+
+      // Collapsible Assess Body
+      rpHtml += '<div id="' + collapseId + '" class="sp-collapse-body collapsed" style="margin-top:14px;padding-top:14px;border-top:1px dashed #E2E8F0;">';
       var dims = [
         ['speaking_pronunciation', '发音清晰度'],
         ['speaking_communication', '开口主动性'],
@@ -1794,7 +1860,9 @@ function renderStudyProfile(student, allClasses) {
       if (a.strengths) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💪 强项亮点</div><div class="sp-feedback-text">' + spEsc(a.strengths) + '</div></div>';
       if (a.improvements) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📈 建议提升</div><div class="sp-feedback-text">' + spEsc(a.improvements) + '</div></div>';
       if (a.teacher_message) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师寄语</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:8px 10px;border-radius:8px;">' + spEsc(a.teacher_message) + '</div></div>';
-      rpHtml += '</div>';
+      rpHtml += '</div>'; // End sp-collapse-body
+
+      rpHtml += '</div>'; // End sp-card
     });
   }
   rpHtml += '</div>';
@@ -1881,6 +1949,29 @@ function renderStudyProfile(student, allClasses) {
   var lessonsLeft = Math.floor(remaining);
   document.getElementById('renew-lessons').textContent = lessonsLeft;
   document.getElementById('renew-target').textContent = leftLessons;
+}
+
+// ===== Toggle Collapse Helper =====
+function toggleCollapse(id) {
+  var el = document.getElementById(id);
+  var txt = document.getElementById(id + '-txt');
+  if (!el) return;
+  var isCollapsed = el.classList.contains('collapsed');
+  if (isCollapsed) {
+    el.classList.remove('collapsed');
+    if (txt) {
+      if (txt.textContent.includes('反馈')) txt.textContent = '收起反馈 ▲';
+      else if (txt.textContent.includes('报告')) txt.textContent = '收起报告 ▲';
+      else txt.textContent = '收起详情 ▲';
+    }
+  } else {
+    el.classList.add('collapsed');
+    if (txt) {
+      if (txt.textContent.includes('反馈')) txt.textContent = '查看反馈 ▼';
+      else if (txt.textContent.includes('报告')) txt.textContent = '查看报告 ▼';
+      else txt.textContent = '查看详情 ▼';
+    }
+  }
 }
 
 function closeFeedbackModal() {
