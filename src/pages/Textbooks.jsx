@@ -214,11 +214,24 @@ export default function Textbooks() {
         });
       } else {
         for (const p of r2Pages) {
-          const res = await fetch(p.url, { headers: { 'X-API-Key': API_KEY } });
-          const blob = await res.blob();
-          loadedBlobs.push(blob);
-          fd.append('images', blob, `page-${String(p.page_num).padStart(2, '0')}.jpg`);
+          const directUrl = `${API_BASE_URL}/textbooks/page-img/${selectedBookCode}/${selectedUnitNum}/${p.page_num}`;
+          try {
+            const res = await fetch(directUrl, { headers: { 'X-API-Key': API_KEY } });
+            if (res.ok) {
+              const blob = await res.blob();
+              loadedBlobs.push(blob);
+              fd.append('images', blob, `page-${String(p.page_num).padStart(2, '0')}.jpg`);
+            }
+          } catch (fe) {
+            console.warn('Fetch page failed:', fe);
+          }
         }
+      }
+
+      if (loadedBlobs.length === 0) {
+        alert('未能加载到该单元的切图，请重新上传 PDF 切片后再试');
+        setExtracting(false);
+        return;
       }
 
       // 合成 1200px 超清拼图

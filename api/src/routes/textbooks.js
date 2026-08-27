@@ -665,12 +665,11 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     throw new Error('LLM_API_KEY not configured. Please set API Key in Model Settings.');
   }
 
-  // 把所有图片转 base64 (用 FileReader-like 方式)
-  // Workers 里没有 FileReader,但可以用 btoa + Uint8Array 的 chunk
+  // 把所有图片转 base64
   function arrayBufferToBase64(buf) {
     const bytes = new Uint8Array(buf);
     let binary = '';
-    const CHUNK = 0x1000;  // 4KB chunk,远小于 fromCharCode.apply 安全上限
+    const CHUNK = 0x1000;
     for (let i = 0; i < bytes.length; i += CHUNK) {
       const end = Math.min(i + CHUNK, bytes.length);
       let s = '';
@@ -689,7 +688,7 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     if (i >= maxPages) break;
     const buf = await f.arrayBuffer();
     const b64 = arrayBufferToBase64(buf);
-    const mime = f.type || 'image/png';
+    const mime = f.type || 'image/jpeg';
     imageContents.push({
       type: 'image_url',
       image_url: { url: `data:${mime};base64,${b64}` }
@@ -765,14 +764,13 @@ Rules:
       let raw = data.choices?.[0]?.message?.content || '';
       const parsed = cleanAndParseJson(raw);
       if (parsed) return parsed;
-      return { vocab: [], patterns: [], grammar: [], _raw: raw.substring(0, 500), _model: m };
+      throw new Error(`大模型返回了非标准 JSON: ${raw.substring(0, 200)}`);
     }
 
     const errText = await resp.text();
     lastError = `[${m}] 报错 (${resp.status}): ${errText.substring(0, 200)}`;
 
     if (resp.status === 429) {
-      // 限流 → 重试一次
       await new Promise(r => setTimeout(r, 2000));
       try { 
         resp = await tryCall(m); 
@@ -781,7 +779,7 @@ Rules:
           let raw = data.choices?.[0]?.message?.content || '';
           const parsed = cleanAndParseJson(raw);
           if (parsed) return parsed;
-          return { vocab: [], patterns: [], grammar: [], _raw: raw.substring(0, 500), _model: m };
+          throw new Error(`大模型返回了非标准 JSON: ${raw.substring(0, 200)}`);
         }
       } catch (err) {
         lastError = err.message;
