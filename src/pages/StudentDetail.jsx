@@ -19,7 +19,9 @@ export default function StudentDetail() {
   const [loading, setLoading] = useState(true);
   const [hourChanges, setHourChanges] = useState([]);
   const [assessments, setAssessments] = useState([]);
+  const [progressReports, setProgressReports] = useState([]);
   const [showAssessmentFeedback, setShowAssessmentFeedback] = useState(null);
+  const [showProgressReportModal, setShowProgressReportModal] = useState(null);
   const [classForm, setClassForm] = useState({ date: '', hours: 1, notes: '' });
 
   useEffect(() => {
@@ -101,13 +103,18 @@ export default function StudentDetail() {
             setHourChanges(merged);
           }
           
-          // 加载评估报告
-          try {
-            const assessmentsData = await request('/assessments?student_id=' + id + '&page_size=50');
-            const aData = assessmentsData?.data?.data || assessmentsData?.data || [];
-            setAssessments(Array.isArray(aData) ? aData : []);
-          } catch(e) { console.error('Load assessments:', e); }
-          
+            // 加载评估报告与阶段性成长报告
+            try {
+              const [assessmentsData, progressReportsData] = await Promise.all([
+                request('/assessments?student_id=' + id + '&page_size=50').catch(() => ({ data: [] })),
+                request('/progress-reports?student_id=' + id + '&page_size=50').catch(() => ({ data: [] }))
+              ]);
+              const aData = assessmentsData?.data?.data || assessmentsData?.data || [];
+              const prData = progressReportsData?.data?.data || progressReportsData?.data || [];
+              setAssessments(Array.isArray(aData) ? aData : []);
+              setProgressReports(Array.isArray(prData) ? prData : []);
+            } catch(e) { console.error('Load reports error:', e); }
+          }
         } catch (err) {
           console.error('Load student error:', err);
         } finally {
@@ -540,51 +547,149 @@ export default function StudentDetail() {
         </div>
       )}
 
-      {/* 评估报告 */}
+      {/* 评估与阶段成长报告 */}
       {activeTab === 'assessments' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="font-semibold text-gray-800 mb-6">体验课评估报告</h3>
-          {assessments.length > 0 ? (
-            <div className="space-y-4">
-              {assessments.map(a => (
-                <div key={a.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        {a.is_trial === 1 && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">🎁 体验课</span>}
-                        <span className="text-sm text-gray-500">{a.class_date} {a.start_time?.substring(0,5)} - {a.end_time?.substring(0,5)}</span>
-                        <span className="text-sm font-medium text-gray-700">教师：{a.teacher_name || '-'}</span>
+        <div className="space-y-6">
+          {/* 阶段性里程碑成长报告 */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-gray-800 text-lg flex items-center gap-2">
+                  <span>🏆 阶段性成长报告 (Milestone Reports)</span>
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full font-medium">共 {progressReports.length} 份</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">系统在学生完成第 10、30、60 节课或晋级升阶时自动生成的阶段能力综合评估</p>
+              </div>
+            </div>
+
+            {progressReports.length > 0 ? (
+              <div className="space-y-4">
+                {progressReports.map(pr => {
+                  const typeMap = {
+                    milestone_10: { label: '🥉 10课时适应期评估', color: 'bg-amber-50 text-amber-800 border-amber-200' },
+                    milestone_30: { label: '🥈 30课时进阶期评估', color: 'bg-blue-50 text-blue-800 border-blue-200' },
+                    milestone_60: { label: '🥇 60课时大纲总结', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+                    level_up: { label: '🚀 能力等级跃迁报告', color: 'bg-purple-50 text-purple-800 border-purple-200' }
+                  };
+                  const badge = typeMap[pr.report_type] || { label: '📋 ' + (pr.report_type || '阶段评估'), color: 'bg-gray-50 text-gray-800 border-gray-200' };
+
+                  return (
+                    <div key={pr.id} className="border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow bg-white">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className={`text-xs px-2.5 py-1 rounded-md font-semibold border ${badge.color}`}>
+                              {badge.label}
+                            </span>
+                            <span className="text-sm text-gray-500">{pr.created_at ? pr.created_at.substring(0,10) : ''}</span>
+                            <span className="text-sm font-medium text-gray-700">执教教师：{pr.teacher_name || '-'}</span>
+                          </div>
+                          {(pr.from_level || pr.to_level) && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 bg-purple-50 text-purple-700 text-xs px-3 py-1 rounded-lg font-medium">
+                              <span>🎓 级别晋升：</span>
+                              <span>{pr.from_level || '入学'}</span>
+                              <span>→</span>
+                              <span className="font-bold text-purple-900">{pr.to_level}</span>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setShowProgressReportModal(pr)}
+                          className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-sm hover:bg-purple-200 font-medium flex items-center gap-1"
+                        >
+                          <FileText className="w-4 h-4" />
+                          查看详情
+                        </button>
                       </div>
-                      <div className="text-sm text-gray-500">课程：{a.subject || '英语'}</div>
-                      {a.recommended_level && (
-                        <div className="mt-2 inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-lg">
-                          🎓 建议级别: {a.recommended_level}
+
+                      {/* 阶段摘要与评语 */}
+                      {pr.summary && (
+                        <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-700">
+                          <span className="font-semibold text-gray-800">📋 阶段总结：</span>{pr.summary}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                        {pr.strengths && (
+                          <div className="p-3 bg-green-50 rounded-lg text-xs text-green-900 border border-green-100">
+                            <span className="font-bold text-green-800 block mb-1">💪 亮点优势：</span>
+                            <p className="whitespace-pre-wrap">{pr.strengths}</p>
+                          </div>
+                        )}
+                        {pr.improvements && (
+                          <div className="p-3 bg-orange-50 rounded-lg text-xs text-orange-900 border border-orange-100">
+                            <span className="font-bold text-orange-800 block mb-1">📈 建议提升：</span>
+                            <p className="whitespace-pre-wrap">{pr.improvements}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {pr.teacher_message && (
+                        <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-blue-900 border border-blue-100">
+                          <span className="font-bold text-blue-800 block mb-1">💌 教师寄语：</span>
+                          <p className="whitespace-pre-wrap">{pr.teacher_message}</p>
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => openAssessmentReport(a)}
-                      className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm hover:bg-orange-200 font-medium flex items-center gap-1"
-                    >
-                      <FileText className="w-4 h-4" />
-                      查看 / 导出PDF
-                    </button>
-                  </div>
-                  {a.teacher_message && (
-                    <div className="mt-2 p-3 bg-blue-50 rounded-lg text-sm text-gray-600">
-                      <span className="font-medium">💌 教师寄语：</span>{a.teacher_message}
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <FileText className="w-8 h-8 mx-auto mb-2 opacity-40 text-purple-500" />
+                <p className="text-sm">暂无阶段性成长报告（完成 10、30、60 课时或升阶时将自动触发教师生成）</p>
+              </div>
+            )}
+          </div>
+
+          {/* 体验课评估报告 */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h3 className="font-semibold text-gray-800 text-lg mb-4 flex items-center gap-2">
+              <span>📝 体验课入学评估 (Trial Assessment)</span>
+              <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full font-medium">共 {assessments.length} 份</span>
+            </h3>
+            {assessments.length > 0 ? (
+              <div className="space-y-4">
+                {assessments.map(a => (
+                  <div key={a.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          {a.is_trial === 1 && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🎁 体验课</span>}
+                          <span className="text-sm text-gray-500">{a.class_date} {a.start_time?.substring(0,5)} - {a.end_time?.substring(0,5)}</span>
+                          <span className="text-sm font-medium text-gray-700">教师：{a.teacher_name || '-'}</span>
+                        </div>
+                        <div className="text-sm text-gray-500">课程：{a.subject || '英语'}</div>
+                        {a.recommended_level && (
+                          <div className="mt-2 inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-lg">
+                            🎓 建议级别: {a.recommended_level}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => openAssessmentReport(a)}
+                        className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm hover:bg-orange-200 font-medium flex items-center gap-1"
+                      >
+                        <FileText className="w-4 h-4" />
+                        查看 / 导出PDF
+                      </button>
                     </div>
-                  )}
-                  <div className="mt-2 text-xs text-gray-400">{a.status === 'published' ? '已发布' : '草稿'}</div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-400">
-              <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>暂无评估报告</p>
-            </div>
-          )}
+                    {a.teacher_message && (
+                      <div className="mt-2 p-3 bg-blue-50 rounded-lg text-sm text-gray-600">
+                        <span className="font-medium">💌 教师寄语：</span>{a.teacher_message}
+                      </div>
+                    )}
+                    <div className="mt-2 text-xs text-gray-400">{a.status === 'published' ? '已发布' : '草稿'}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <FileText className="w-8 h-8 mx-auto mb-2 opacity-40 text-orange-500" />
+                <p className="text-sm">暂无体验课评估报告</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -694,6 +799,108 @@ export default function StudentDetail() {
             </div>
             <div className="flex justify-end mt-6">
               <button onClick={() => setShowFeedbackModal(null)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 阶段性成长报告详情弹窗 */}
+      {showProgressReportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <span>🏆 阶段性成长评估报告</span>
+                </h2>
+                <p className="text-xs text-gray-400 mt-1">报告生成时间：{showProgressReportModal.created_at || '-'}</p>
+              </div>
+              <span className="text-xs font-semibold px-3 py-1 bg-purple-50 text-purple-700 rounded-full border border-purple-200">
+                {showProgressReportModal.report_type === 'milestone_10' ? '🥉 10课时适应期' :
+                 showProgressReportModal.report_type === 'milestone_30' ? '🥈 30课时进阶期' :
+                 showProgressReportModal.report_type === 'milestone_60' ? '🥇 60课时大纲总结' :
+                 showProgressReportModal.report_type === 'level_up' ? '🚀 等级跃迁' :
+                 (showProgressReportModal.report_type || '阶段里程碑')}
+              </span>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4 my-4 grid grid-cols-2 gap-3 text-sm">
+              <div><span className="text-gray-500">学生姓名：</span><span className="font-semibold text-gray-800">{student.name} {student.english_name ? `(${student.english_name})` : ''}</span></div>
+              <div><span className="text-gray-500">执教教师：</span><span className="font-semibold text-gray-800">{showProgressReportModal.teacher_name || '-'}</span></div>
+              {(showProgressReportModal.from_level || showProgressReportModal.to_level) && (
+                <div className="col-span-2 flex items-center gap-2 font-medium text-purple-700 bg-purple-50 p-2 rounded-lg">
+                  <span>🎓 能力级别跃迁：</span>
+                  <span>{showProgressReportModal.from_level || '入学'}</span>
+                  <span>→</span>
+                  <span className="font-bold text-purple-900">{showProgressReportModal.to_level}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4 text-sm">
+              {showProgressReportModal.summary && (
+                <div>
+                  <h4 className="font-bold text-gray-800 mb-1 flex items-center gap-1.5">
+                    <span>📋 阶段学习总结 (Summary)</span>
+                  </h4>
+                  <div className="p-3 bg-gray-50 rounded-xl text-gray-700 whitespace-pre-wrap leading-relaxed">
+                    {showProgressReportModal.summary}
+                  </div>
+                </div>
+              )}
+
+              {showProgressReportModal.strengths && (
+                <div>
+                  <h4 className="font-bold text-green-800 mb-1 flex items-center gap-1.5">
+                    <span>💪 亮点与优势 (Strengths)</span>
+                  </h4>
+                  <div className="p-3 bg-green-50 rounded-xl text-green-900 border border-green-100 whitespace-pre-wrap leading-relaxed">
+                    {showProgressReportModal.strengths}
+                  </div>
+                </div>
+              )}
+
+              {showProgressReportModal.improvements && (
+                <div>
+                  <h4 className="font-bold text-orange-800 mb-1 flex items-center gap-1.5">
+                    <span>📈 建议重点提升 (Areas to Improve)</span>
+                  </h4>
+                  <div className="p-3 bg-orange-50 rounded-xl text-orange-900 border border-orange-100 whitespace-pre-wrap leading-relaxed">
+                    {showProgressReportModal.improvements}
+                  </div>
+                </div>
+              )}
+
+              {showProgressReportModal.recommendation && (
+                <div>
+                  <h4 className="font-bold text-indigo-800 mb-1 flex items-center gap-1.5">
+                    <span>🎯 后续规划与建议教材 (Recommendations)</span>
+                  </h4>
+                  <div className="p-3 bg-indigo-50 rounded-xl text-indigo-900 border border-indigo-100 whitespace-pre-wrap leading-relaxed">
+                    {showProgressReportModal.recommendation}
+                  </div>
+                </div>
+              )}
+
+              {showProgressReportModal.teacher_message && (
+                <div>
+                  <h4 className="font-bold text-blue-800 mb-1 flex items-center gap-1.5">
+                    <span>💌 老师寄语 (Teacher's Message)</span>
+                  </h4>
+                  <div className="p-3 bg-blue-50 rounded-xl text-blue-900 border border-blue-100 whitespace-pre-wrap leading-relaxed">
+                    {showProgressReportModal.teacher_message}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end mt-6 pt-4 border-t border-gray-100">
+              <button
+                onClick={() => setShowProgressReportModal(null)}
+                className="px-5 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-medium"
+              >
                 关闭
               </button>
             </div>
