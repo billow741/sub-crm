@@ -1458,9 +1458,9 @@ function showViewFeedback(idx) {
   // 📚 今日学习内容
   if (cls.fb_vocab || cls.fb_patterns || cls.fb_grammar) {
     html += '<div class="modal-feedback__group"><label>📚 今日学习内容</label><div class="modal-feedback__box">';
-    if (cls.fb_vocab) html += '<div style="margin-bottom:4px;"><b>词汇：</b>' + esc(cls.fb_vocab) + '</div>';
-    if (cls.fb_patterns) html += '<div style="margin-bottom:4px;"><b>句型：</b>' + esc(cls.fb_patterns) + '</div>';
-    if (cls.fb_grammar) html += '<div><b>语法重点：</b>' + esc(cls.fb_grammar) + '</div>';
+    if (cls.fb_vocab) html += '<div style="margin-bottom:8px;"><b>词汇：</b>' + spFormatVocabPills(cls.fb_vocab) + '</div>';
+    if (cls.fb_patterns) html += '<div style="margin-bottom:8px;"><b>句型：</b>' + spFormatPatternPills(cls.fb_patterns) + '</div>';
+    if (cls.fb_grammar) html += '<div><b>语法重点：</b><span style="font-weight:600;color:#2563EB;">' + esc(cls.fb_grammar) + '</span></div>';
     html += '</div></div>';
   }
 
@@ -1518,6 +1518,30 @@ function spStarValue(val) {
 function spEsc(s) {
   if (!s) return '';
   return String(s).replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+}
+
+function spFormatVocabPills(vocabStr) {
+  if (!vocabStr) return '';
+  var words = vocabStr.split(/[,，\n]/).map(function(w) { return w.trim(); }).filter(Boolean);
+  if (words.length === 0) return spEsc(vocabStr);
+  var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">';
+  words.forEach(function(w) {
+    h += '<span style="display:inline-flex;align-items:center;background:#EEF2FF;color:#4338CA;font-weight:600;font-size:12px;padding:3px 9px;border-radius:100px;border:1px solid #E0E7FF;box-shadow:0 1px 2px rgba(0,0,0,0.02);">' + spEsc(w) + '</span>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function spFormatPatternPills(patternStr) {
+  if (!patternStr) return '';
+  var patterns = patternStr.split(/\n/).map(function(p) { return p.trim(); }).filter(Boolean);
+  if (patterns.length === 0) return spEsc(patternStr);
+  var h = '<div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">';
+  patterns.forEach(function(p) {
+    h += '<div style="background:#F8FAFC;border-left:3px solid #4B9FE0;padding:5px 10px;border-radius:4px;font-size:12px;color:#1E293B;line-height:1.4;">' + spEsc(p) + '</div>';
+  });
+  h += '</div>';
+  return h;
 }
 
 // Load html2canvas lazily
@@ -1825,8 +1849,8 @@ function renderStudyProfile(student, allClasses) {
           }
           histHtml += '</div></div></div>';
         }
-        if (c.fb_vocab) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📚 词汇</div><div class="sp-feedback-text">' + spEsc(c.fb_vocab) + '</div></div>';
-        if (c.fb_patterns) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💬 句型</div><div class="sp-feedback-text">' + spEsc(c.fb_patterns) + '</div></div>';
+        if (c.fb_vocab) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📚 词汇</div><div class="sp-feedback-text">' + spFormatVocabPills(c.fb_vocab) + '</div></div>';
+        if (c.fb_patterns) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💬 句型</div><div class="sp-feedback-text">' + spFormatPatternPills(c.fb_patterns) + '</div></div>';
         
         // 发音纠正
         if (c.fb_pronunciation_errors) {

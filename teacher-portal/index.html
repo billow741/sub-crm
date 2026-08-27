@@ -183,11 +183,40 @@
       <div id="fb-pages-preview" class="mt-2"></div>
     </div>
   </div>
-  <!-- 📚 Today's Learning -->
+  <!-- 📚 Today's Learning (带教材库智能联动推荐) -->
   <div class="border rounded-lg p-3">
-    <h3 class="font-semibold text-gray-800 text-sm mb-3">📚 Today's Learning</h3>
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="font-semibold text-gray-800 text-sm">📚 Today's Learning</h3>
+      <div id="fb-suggest-hint" class="text-xs text-purple-600 font-medium hidden">✨ 已匹配教材库内容</div>
+    </div>
+
+    <!-- 智能推荐药丸区 (当选择 Textbook + Unit 时自动展开) -->
+    <div id="fb-suggestions-box" class="hidden mb-3 p-3 bg-purple-50/70 border border-purple-100 rounded-lg space-y-2.5">
+      <div class="flex items-center justify-between">
+        <div class="text-xs font-semibold text-purple-900 flex items-center gap-1.5">
+          <span>📖</span> <span id="fb-suggest-unit-title">Unit Content</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="selectAllCoreVocab()" class="text-xs px-2 py-0.5 bg-purple-200 text-purple-800 rounded font-medium hover:bg-purple-300">⚡ 全选核心词</button>
+          <button type="button" onclick="clearVocabSelection()" class="text-xs px-1.5 py-0.5 text-gray-500 hover:text-gray-700">清空</button>
+        </div>
+      </div>
+      
+      <!-- 词汇 Pills -->
+      <div>
+        <div class="text-[11px] font-medium text-gray-600 mb-1.5">点击勾选词汇 (自动填入下方):</div>
+        <div id="fb-vocab-pills" class="flex flex-wrap gap-1.5"></div>
+      </div>
+
+      <!-- 句型 Pills -->
+      <div id="fb-patterns-box" class="hidden pt-1.5 border-t border-purple-100/80">
+        <div class="text-[11px] font-medium text-gray-600 mb-1.5">点击勾选核心句型:</div>
+        <div id="fb-patterns-pills" class="flex flex-wrap gap-1.5"></div>
+      </div>
+    </div>
+
     <div class="space-y-2">
-      <div><label class="block text-xs text-gray-500 mb-1">Vocabulary</label><textarea id="fb-vocab" rows="2" placeholder="Words learned..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea></div>
+      <div><label class="block text-xs text-gray-500 mb-1">Vocabulary</label><textarea id="fb-vocab" rows="2" placeholder="Words learned (或点击上方药丸快速填入)..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea></div>
       <div><label class="block text-xs text-gray-500 mb-1">Sentence Patterns</label><textarea id="fb-patterns" rows="2" placeholder="Key sentence patterns..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea></div>
       <div><label class="block text-xs text-gray-500 mb-1">Grammar Focus</label><textarea id="fb-grammar" rows="2" placeholder="Grammar points..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea></div>
     </div>
@@ -603,11 +632,35 @@ async function loadTeacherData() {
     window_historyPage = 1;
     renderHistory();
 
+    // 动态拉取教材库列表以填充下拉菜单
+    loadTextbookOptions();
+
 } catch (err) {
  console.error('Load failed:', err);
  alert('Load failed: ' + err.message);
  document.getElementById('today-classes').innerHTML = '<div class="col-span-full text-center py-8 text-red-500">Load failed: ' + err.message + '</div>';
 }
+}
+
+// ===== 动态拉取教材库列表 =====
+async function loadTextbookOptions() {
+  var sel = document.getElementById('fb-textbook-code');
+  if (!sel) return;
+  try {
+    var res = await apiGet('/textbooks');
+    var books = res.data || [];
+    if (Array.isArray(books) && books.length > 0) {
+      var currentVal = sel.value;
+      var html = '<option value="">None</option>';
+      books.forEach(function(b) {
+        html += '<option value="' + escapeAttr(b.code) + '">' + escapeHtml(b.name || b.code) + '</option>';
+      });
+      sel.innerHTML = html;
+      if (currentVal) sel.value = currentVal;
+    }
+  } catch(e) {
+    console.warn('Failed to load textbooks list:', e);
+  }
 }
 
 // ===== Render Today's Classes =====
@@ -973,6 +1026,194 @@ function openFeedback(cls) {
   document.getElementById('input-status').value = statusValue;
   document.getElementById('feedback-modal').classList.remove('hidden');
   document.getElementById('feedback-modal').classList.add('flex');
+
+  // 自动触发教材词汇/句型推荐
+  refreshTextbookSuggestions();
+}
+
+// ===== 智能教材词汇/句型推荐与一键勾选交互 =====
+var currentUnitContent = null;
+var selectedVocabSet = new Set();
+var selectedPatternsSet = new Set();
+
+async function refreshTextbookSuggestions() {
+  var code = document.getElementById('fb-textbook-code').value;
+  var unit = document.getElementById('fb-unit-num').value;
+  var box = document.getElementById('fb-suggestions-box');
+  var hint = document.getElementById('fb-suggest-hint');
+  var vocabPills = document.getElementById('fb-vocab-pills');
+  var patternsBox = document.getElementById('fb-patterns-box');
+  var patternsPills = document.getElementById('fb-patterns-pills');
+
+  if (!box || !vocabPills) return;
+
+  if (!code || !unit) {
+    box.classList.add('hidden');
+    if (hint) hint.classList.add('hidden');
+    currentUnitContent = null;
+    return;
+  }
+
+  try {
+    var res = await fetch(API_BASE + '/textbooks/suggest?textbook_code=' + encodeURIComponent(code) + '&unit_number=' + encodeURIComponent(unit), {
+      headers: { 'X-API-Key': API_KEY }
+    });
+    var json = await res.json();
+    var data = json.data;
+
+    if (!data || !data.has_content) {
+      box.classList.add('hidden');
+      if (hint) hint.classList.add('hidden');
+      currentUnitContent = null;
+      return;
+    }
+
+    currentUnitContent = data;
+    if (hint) hint.classList.remove('hidden');
+    box.classList.remove('hidden');
+
+    var titleEl = document.getElementById('fb-suggest-unit-title');
+    if (titleEl) {
+      titleEl.textContent = code + ' · Unit ' + unit + (data.unit_title ? ' (' + data.unit_title + ')' : '');
+    }
+
+    // 根据当前 textarea 的值，同步已选的词
+    syncSelectedFromInputs();
+    renderVocabPills();
+    renderPatternPills();
+
+  } catch(e) {
+    console.warn('Failed to load textbook suggestions:', e);
+    box.classList.add('hidden');
+  }
+}
+
+function syncSelectedFromInputs() {
+  selectedVocabSet.clear();
+  var curVocab = (document.getElementById('fb-vocab').value || '').toLowerCase();
+  if (currentUnitContent && currentUnitContent.vocab) {
+    currentUnitContent.vocab.forEach(function(v) {
+      if (curVocab.includes(v.word.toLowerCase())) {
+        selectedVocabSet.add(v.word);
+      }
+    });
+  }
+
+  selectedPatternsSet.clear();
+  var curPatterns = (document.getElementById('fb-patterns').value || '').toLowerCase();
+  if (currentUnitContent && currentUnitContent.patterns) {
+    currentUnitContent.patterns.forEach(function(p) {
+      if (curPatterns.includes(p.pattern.toLowerCase())) {
+        selectedPatternsSet.add(p.pattern);
+      }
+    });
+  }
+}
+
+function renderVocabPills() {
+  var container = document.getElementById('fb-vocab-pills');
+  if (!container || !currentUnitContent || !currentUnitContent.vocab) return;
+
+  var html = '';
+  currentUnitContent.vocab.forEach(function(v, idx) {
+    var isSel = selectedVocabSet.has(v.word);
+    var activeClass = isSel 
+      ? 'bg-purple-600 text-white font-medium shadow-sm' 
+      : 'bg-white text-gray-700 hover:bg-purple-50 border border-gray-200';
+    var star = v.is_core ? '⭐ ' : '';
+    var trans = v.translation ? ' <span class="opacity-80 text-[11px]">(' + escapeHtml(v.translation) + ')</span>' : '';
+
+    html += '<button type="button" onclick="toggleVocabPill(' + idx + ')" class="px-2.5 py-1 rounded-full text-xs transition-all duration-150 flex items-center gap-1 ' + activeClass + '">';
+    html += isSel ? '✓ ' : '+ ';
+    html += star + escapeHtml(v.word) + trans;
+    html += '</button>';
+  });
+
+  container.innerHTML = html;
+}
+
+function renderPatternPills() {
+  var box = document.getElementById('fb-patterns-box');
+  var container = document.getElementById('fb-patterns-pills');
+  if (!box || !container) return;
+
+  if (!currentUnitContent || !currentUnitContent.patterns || currentUnitContent.patterns.length === 0) {
+    box.classList.add('hidden');
+    return;
+  }
+
+  box.classList.remove('hidden');
+  var html = '';
+  currentUnitContent.patterns.forEach(function(p, idx) {
+    var isSel = selectedPatternsSet.has(p.pattern);
+    var activeClass = isSel 
+      ? 'bg-indigo-600 text-white font-medium shadow-sm' 
+      : 'bg-white text-gray-700 hover:bg-indigo-50 border border-gray-200';
+    var trans = p.translation ? ' <span class="opacity-80 text-[11px]">' + escapeHtml(p.translation) + '</span>' : '';
+
+    html += '<button type="button" onclick="togglePatternPill(' + idx + ')" class="px-2.5 py-1 rounded-full text-xs transition-all duration-150 text-left ' + activeClass + '">';
+    html += (isSel ? '✓ ' : '+ ') + escapeHtml(p.pattern) + (trans ? ' · ' + trans : '');
+    html += '</button>';
+  });
+
+  container.innerHTML = html;
+}
+
+function toggleVocabPill(idx) {
+  if (!currentUnitContent || !currentUnitContent.vocab) return;
+  var item = currentUnitContent.vocab[idx];
+  if (!item) return;
+
+  if (selectedVocabSet.has(item.word)) {
+    selectedVocabSet.delete(item.word);
+  } else {
+    selectedVocabSet.add(item.word);
+  }
+
+  updateVocabTextarea();
+  renderVocabPills();
+}
+
+function togglePatternPill(idx) {
+  if (!currentUnitContent || !currentUnitContent.patterns) return;
+  var item = currentUnitContent.patterns[idx];
+  if (!item) return;
+
+  if (selectedPatternsSet.has(item.pattern)) {
+    selectedPatternsSet.delete(item.pattern);
+  } else {
+    selectedPatternsSet.add(item.pattern);
+  }
+
+  updatePatternsTextarea();
+  renderPatternPills();
+}
+
+function selectAllCoreVocab() {
+  if (!currentUnitContent || !currentUnitContent.vocab) return;
+  currentUnitContent.vocab.forEach(function(v) {
+    if (v.is_core || currentUnitContent.vocab.length <= 12) {
+      selectedVocabSet.add(v.word);
+    }
+  });
+  updateVocabTextarea();
+  renderVocabPills();
+}
+
+function clearVocabSelection() {
+  selectedVocabSet.clear();
+  document.getElementById('fb-vocab').value = '';
+  renderVocabPills();
+}
+
+function updateVocabTextarea() {
+  var list = Array.from(selectedVocabSet);
+  document.getElementById('fb-vocab').value = list.join(', ');
+}
+
+function updatePatternsTextarea() {
+  var list = Array.from(selectedPatternsSet);
+  document.getElementById('fb-patterns').value = list.join('\n');
 }
 
 // Render PDF pages preview (4 inputs → 缩略图 grid)
@@ -998,12 +1239,25 @@ function renderPagesPreview() {
   box.innerHTML = html;
 }
 
-// 监听 4 个输入字段变化,刷新预览
-['fb-textbook-code', 'fb-unit-num', 'fb-page-from', 'fb-page-to'].forEach(function(id) {
+// 监听输入变化,刷新预览与建议
+['fb-textbook-code', 'fb-unit-num'].forEach(function(id) {
   var el = document.getElementById(id);
   if (el) {
-    var ev = (id === 'fb-textbook-code') ? 'change' : 'input';
-    el.addEventListener(ev, renderPagesPreview);
+    el.addEventListener('change', function() {
+      refreshTextbookSuggestions();
+      renderPagesPreview();
+    });
+    el.addEventListener('input', function() {
+      refreshTextbookSuggestions();
+      renderPagesPreview();
+    });
+  }
+});
+
+['fb-page-from', 'fb-page-to'].forEach(function(id) {
+  var el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', renderPagesPreview);
   }
 });
 

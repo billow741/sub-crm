@@ -38,10 +38,51 @@ export default function TeacherPortal() {
   const [feedbackForm, setFeedbackForm] = useState({});
   const [pronErrors, setPronErrors] = useState([]);
   const [gramErrors, setGramErrors] = useState([]);
+  const [textbooksList, setTextbooksList] = useState([]);
+  const [suggestData, setSuggestData] = useState(null);
+  const [loadingSuggest, setLoadingSuggest] = useState(false);
 
   useEffect(() => {
     loadTeacherData();
+    loadTextbooks();
   }, [teacherId]);
+
+  const loadTextbooks = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/textbooks`, { headers: { 'X-API-Key': API_KEY } });
+      const json = await res.json();
+      if (json.data) setTextbooksList(json.data);
+    } catch (e) {
+      console.warn('Failed to load textbooks in TeacherPortal:', e);
+    }
+  };
+
+  // 监听教材或单元变动，自动拉取推荐词汇/句型
+  useEffect(() => {
+    if (feedbackForm.textbook_code && feedbackForm.unit_number) {
+      fetchSuggestions(feedbackForm.textbook_code, feedbackForm.unit_number);
+    } else {
+      setSuggestData(null);
+    }
+  }, [feedbackForm.textbook_code, feedbackForm.unit_number]);
+
+  const fetchSuggestions = async (code, unit) => {
+    setLoadingSuggest(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/textbooks/suggest?textbook_code=${encodeURIComponent(code)}&unit_number=${encodeURIComponent(unit)}`, {
+        headers: { 'X-API-Key': API_KEY }
+      });
+      const json = await res.json();
+      if (json.data && json.data.has_content) {
+        setSuggestData(json.data);
+      } else {
+        setSuggestData(null);
+      }
+    } catch (e) {
+      setSuggestData(null);
+    }
+    setLoadingSuggest(false);
+  };
 
   const loadTeacherData = async () => {
     setLoading(true);
@@ -381,10 +422,18 @@ export default function TeacherPortal() {
                         className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
                       >
                         <option value="">不指定</option>
-                        <option value="EU-S">EU Starter</option>
-                        <option value="EU-L1">EU Level 1</option>
-                        <option value="EU-L2">EU Level 2</option>
-                        <option value="EU-L3">EU Level 3</option>
+                        {textbooksList.length > 0 ? (
+                          textbooksList.map(b => (
+                            <option key={b.code} value={b.code}>{b.name || b.code}</option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="EU-S">EU Starter</option>
+                            <option value="EU-L1">EU Level 1</option>
+                            <option value="EU-L2">EU Level 2</option>
+                            <option value="EU-L3">EU Level 3</option>
+                          </>
+                        )}
                       </select>
                     </div>
                     <div>
@@ -452,13 +501,111 @@ export default function TeacherPortal() {
                     </div>
                   )}
                 </div>
+
+                {/* 智能教材库词汇/句型推荐面板 */}
+                {suggestData && (
+                  <div className="border border-purple-200 bg-purple-50/70 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-semibold text-purple-900 flex items-center gap-1.5">
+                        <span>✨ 教材库联动:</span>
+                        <span>{feedbackForm.textbook_code} · Unit {feedbackForm.unit_number} {suggestData.unit_title ? `(${suggestData.unit_title})` : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const coreWords = (suggestData.vocab || []).filter(v => v.is_core || suggestData.vocab.length <= 10).map(v => v.word);
+                            setFeedbackForm(prev => ({
+                              ...prev,
+                              fb_vocab: coreWords.join(', ')
+                            }));
+                          }}
+                          className="text-xs px-2 py-0.5 bg-purple-200 text-purple-800 rounded font-medium hover:bg-purple-300"
+                        >
+                          ⚡ 全选核心词
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFeedbackForm(prev => ({ ...prev, fb_vocab: '' }))}
+                          className="text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          清空
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 词汇 Pills */}
+                    {suggestData.vocab && suggestData.vocab.length > 0 && (
+                      <div>
+                        <div className="text-[11px] font-medium text-gray-600 mb-1">点击快速勾选词汇:</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {suggestData.vocab.map((v, i) => {
+                            const curWords = (feedbackForm.fb_vocab || '').split(/[,，\n]/).map(s => s.trim().toLowerCase());
+                            const isSel = curWords.includes(v.word.toLowerCase());
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => {
+                                  let list = (feedbackForm.fb_vocab || '').split(/[,，\n]/).map(s => s.trim()).filter(Boolean);
+                                  if (isSel) {
+                                    list = list.filter(w => w.toLowerCase() !== v.word.toLowerCase());
+                                  } else {
+                                    list.push(v.word);
+                                  }
+                                  setFeedbackForm(prev => ({ ...prev, fb_vocab: list.join(', ') }));
+                                }}
+                                className={`px-2.5 py-0.5 rounded-full text-xs transition-all flex items-center gap-1 ${
+                                  isSel ? 'bg-purple-600 text-white font-medium shadow-sm' : 'bg-white text-gray-700 hover:bg-purple-50 border border-gray-200'
+                                }`}
+                              >
+                                {isSel ? '✓ ' : '+ '}
+                                {v.is_core && '⭐ '}
+                                {v.word}
+                                {v.translation && <span className="opacity-80 text-[11px]">({v.translation})</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 句型 Pills */}
+                    {suggestData.patterns && suggestData.patterns.length > 0 && (
+                      <div className="pt-1 border-t border-purple-100">
+                        <div className="text-[11px] font-medium text-gray-600 mb-1">点击快速添加句型:</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {suggestData.patterns.map((p, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => {
+                                const cur = feedbackForm.fb_patterns || '';
+                                if (!cur.includes(p.pattern)) {
+                                  setFeedbackForm(prev => ({
+                                    ...prev,
+                                    fb_patterns: cur ? cur + '\n' + p.pattern : p.pattern
+                                  }));
+                                }
+                              }}
+                              className="px-2.5 py-0.5 rounded-full text-xs bg-white text-gray-700 hover:bg-indigo-50 border border-gray-200 text-left"
+                            >
+                              + {p.pattern} {p.translation && <span className="opacity-80 text-[11px]">· {p.translation}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">今日词汇</label>
                   <textarea
                     value={feedbackForm.fb_vocab || ''}
                     onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_vocab: e.target.value })}
                     rows={2}
-                    placeholder="apple, banana, cat..."
+                    placeholder="apple, banana, cat (或点击上方药丸快速勾选)..."
                     className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
