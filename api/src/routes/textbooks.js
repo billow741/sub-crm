@@ -696,47 +696,35 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     });
   }
 
-  // 单元模式 vs 整本书模式
-  const prompt = opts.bookMode
-    ? `You are given ${imageFiles.length} pages from a language textbook. Identify which unit each page belongs to, then extract vocabulary, patterns, and grammar PER UNIT.
+  const SINGLE_UNIT_PROMPT = `You are an expert English language educator analyzing textbook pages.
+Your job is to extract all teaching content from the provided textbook page image.
 
-IMPORTANT — Unit identification rules:
-- "Welcome" / "Intro" / "Starter" pages (greetings, alphabet, numbers 1-10, classroom objects intro) belong to unit_number = 0 (NOT Unit 1)
-- "Review" / "Show What You Know" / "Checkpoints" pages belong to the LAST unit_number in the book (e.g., Unit 10)
-- Cover page, Table of Contents, title page → SKIP (don't create a unit)
-- Pages explicitly labeled "Unit 1", "Unit 2" etc. → use that unit_number
-
-Return ONLY valid JSON array (no fences, no preamble). Each element is one unit:
-
-[
-  {
-    "unit_number": 0,
-    "unit_title": "Welcome",
-    "vocab": [{"word":"hello","translation":"你好","is_core":true,"difficulty":1}],
-    "patterns": [{"pattern":"Hi, I'm Tom.","translation":"你好,我是 Tom。","is_core":true}],
-    "grammar": []
-  },
-  {
-    "unit_number": 1,
-    "unit_title": "Hello!",
-    "vocab": [{"word":"paper","translation":"纸","is_core":true,"difficulty":1}],
-    "patterns": [...],
-    "grammar": [...]
-  },
-  ...
-]
+Return ONLY valid JSON in this exact structure (no markdown fences, no extra text):
+{
+  "unit_title": "Unit Topic",
+  "vocab": [
+    { "word": "pen", "translation": "钢笔", "is_core": true, "difficulty": 1 },
+    { "word": "pencil", "translation": "铅笔", "is_core": true, "difficulty": 1 }
+  ],
+  "patterns": [
+    { "pattern": "What's this? - It's a pen.", "translation": "这是什么？- 这是一支钢笔。", "is_core": true }
+  ],
+  "grammar": [
+    { "topic": "Indefinite article a/an", "explanation": "使用 a 修饰辅音开头的单数可数名词" }
+  ]
+}
 
 Rules:
-- Merge all pages of the same unit into ONE entry (not one per page)
-- unit_number=0 for Welcome/Intro, 1-10 for real units, ~99 for end-of-book review if not labeled
-- is_core=true for items prominently in the unit's target vocabulary list
-- difficulty: 1 (basic/critical), 2 (intermediate), 3 (advanced)
-- Clean up bullet artifacts (cid:127, •, -) from words/patterns
-- Return ONLY the JSON array. No fences, no explanation.`
-    : EXTRACTION_PROMPT;
+1. Extract ALL core target vocabulary words clearly printed on the lessons.
+2. Provide accurate, natural Simplified Chinese translations for every word and sentence pattern.
+3. Extract core dialogue and sentence patterns.
+4. Return ONLY the raw JSON string.`;
 
   // 单元模式 vs 整本书模式
-  let promptText = opts.bookMode ? `You are given pages from a language textbook. Extract vocabulary, patterns, and grammar PER UNIT.` : EXTRACTION_PROMPT;
+  let promptText = opts.bookMode
+    ? `You are given pages from a language textbook. Extract vocabulary, patterns, and grammar PER UNIT. Return ONLY a JSON array of units.`
+    : SINGLE_UNIT_PROMPT;
+
   if (opts.unitText) {
     promptText += `\n\n=== TEXT LAYER CONTENT FROM THESE PAGES ===\n${opts.unitText}\n===========================================`;
   }

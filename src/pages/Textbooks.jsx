@@ -632,11 +632,11 @@ export default function Textbooks() {
                     type="button"
                     onClick={handleAiExtract}
                     disabled={extracting || (renderedImages.length === 0 && r2Pages.length === 0)}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 hover:shadow-md transition disabled:opacity-50 cursor-pointer shadow-xs"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition disabled:opacity-50 cursor-pointer border border-purple-500"
                     title="根据左侧已存切图，调用 AI 视觉大模型重新提取并翻译词汇与句型"
                   >
-                    {extracting ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                    <span>{extracting ? '正在 AI 视觉提取...' : '✨ 重新 AI 提取本单元'}</span>
+                    {extracting ? <Loader className="w-4 h-4 animate-spin text-white" /> : <Sparkles className="w-4 h-4 text-yellow-300" />}
+                    <span className="text-white font-bold">{extracting ? '正在 AI 视觉提取...' : '✨ 重新 AI 提取本单元'}</span>
                   </button>
 
                   <button
