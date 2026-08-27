@@ -735,27 +735,36 @@ Rules:
 - Return ONLY the JSON array. No fences, no explanation.`
     : EXTRACTION_PROMPT;
 
-  const userContent = opts.bookMode
-    ? imageContents  // book mode: just images are enough
-    : [
-        { type: 'text', text: `Please extract vocabulary, sentence patterns, and grammar from these textbook page images (${imageFiles.length} pages).` },
-        ...imageContents
-      ];
+  const userContent = [
+    { type: 'text', text: `${prompt}\n\nPlease extract vocabulary, sentence patterns, and grammar from the textbook page images.` },
+    ...imageContents
+  ];
 
   async function tryCall(m) {
     const resp = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: m, messages: [{ role: 'system', content: prompt }, { role: 'user', content: userContent }], temperature: 0, max_tokens: opts.bookMode ? 4096 : 2048 })
+      body: JSON.stringify({
+        model: m,
+        messages: [{ role: 'user', content: userContent }],
+        temperature: 0.1,
+        max_tokens: opts.bookMode ? 4096 : 2048
+      })
     });
     return resp;
   }
+
   // 按优先级尝试所有模型,429 限流就 fallback
   const modelsToTry = [model, ...fallbackModels.filter(m => m !== model)];
   let lastError = '';
   for (const m of modelsToTry) {
     let resp;
-    try { resp = await tryCall(m); } catch (err) { lastError = err.message; continue; }
+    try { 
+      resp = await tryCall(m); 
+    } catch (err) { 
+      lastError = err.message; 
+      continue; 
+    }
 
     if (resp.ok) {
       const data = await resp.json();
@@ -765,31 +774,28 @@ Rules:
       return { vocab: [], patterns: [], grammar: [], _raw: raw.substring(0, 500), _model: m };
     }
 
+    const errText = await resp.text();
+    lastError = `[${m}] 报错 (${resp.status}): ${errText.substring(0, 200)}`;
+
     if (resp.status === 429) {
-      // 限流 → 重试 + fallback
-      await new Promise(r => setTimeout(r, 3000));
-      try { resp = await tryCall(m); } catch (err) { lastError = err.message; continue; }
-      if (resp.ok) {
-        const data = await resp.json();
-        let raw = data.choices?.[0]?.message?.content || '';
-        const parsed = cleanAndParseJson(raw);
-        if (parsed) return parsed;
-        return { vocab: [], patterns: [], grammar: [], _raw: raw.substring(0, 500), _model: m };
-      }
-      if (resp.status === 429) {
-        // 当前模型限流,换下一个
-        lastError = `${m} 限流(429)`;
-        continue;
+      // 限流 → 重试一次
+      await new Promise(r => setTimeout(r, 2000));
+      try { 
+        resp = await tryCall(m); 
+        if (resp.ok) {
+          const data = await resp.json();
+          let raw = data.choices?.[0]?.message?.content || '';
+          const parsed = cleanAndParseJson(raw);
+          if (parsed) return parsed;
+          return { vocab: [], patterns: [], grammar: [], _raw: raw.substring(0, 500), _model: m };
+        }
+      } catch (err) {
+        lastError = err.message;
       }
     }
-
-    // 非限流错误 → 报告并 fallback
-    const errText = await resp.text();
-    lastError = `LLM API ${resp.status} ${m}: ${errText.substring(0, 100)}`;
-    // 但模型不存在之类的错误(404) 就跳到 fallback
   }
 
-  throw new Error(`所有模型都失败: ${lastError}`);
+  throw new Error(lastError || '未知大模型错误');
 }
 
 // ============================================================

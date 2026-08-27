@@ -1179,12 +1179,20 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
           });
         } else {
           const errMsg = json.error?.message || '提取失败';
-          updateOutlineItem(idx, 'status', 'error');
+          setOutline(prev => {
+            const list = [...prev];
+            list[idx] = { ...list[idx], status: 'error', errorMsg: errMsg };
+            return list;
+          });
           setStatusMsg(`⚠️ Unit ${item.unit_number} 提取失败: ${errMsg}`);
         }
       } catch (err) {
         console.error(err);
-        updateOutlineItem(idx, 'status', 'error');
+        setOutline(prev => {
+          const list = [...prev];
+          list[idx] = { ...list[idx], status: 'error', errorMsg: err.message };
+          return list;
+        });
         setStatusMsg(`⚠️ Unit ${item.unit_number} 请求异常: ${err.message}`);
       }
     }
@@ -1421,7 +1429,10 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
                                   <Check className="w-3.5 h-3.5" /> 已就绪
                                 </span>
                               ) : u.status === 'error' ? (
-                                <span className="text-red-500 font-medium">❌ 失败</span>
+                                <div className="text-red-500 font-medium flex flex-col items-center">
+                                  <span>❌ 失败</span>
+                                  {u.errorMsg && <span className="text-[9px] text-red-600 max-w-[120px] truncate" title={u.errorMsg}>{u.errorMsg}</span>}
+                                </div>
                               ) : (
                                 <span className="text-gray-400">待处理</span>
                               )}
@@ -1430,6 +1441,10 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
                               {u.status === 'success' ? (
                                 <span className="text-purple-700 font-medium">
                                   {u.vocabCount} 词汇 · {u.patternCount} 句型
+                                </span>
+                              ) : u.errorMsg ? (
+                                <span className="text-red-500 text-[10px]" title={u.errorMsg}>
+                                  {u.errorMsg.substring(0, 30)}...
                                 </span>
                               ) : '-'}
                             </td>
