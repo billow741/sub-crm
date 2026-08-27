@@ -1567,9 +1567,6 @@ function renderStudyProfile(student, allClasses) {
   // === Tab: 上课记录 (replaces old History section + feedback) ===
   var pastClasses = myClasses.filter(function(c) {
     return c.date < getLocalDate() || c.status !== 'scheduled';
-  // === Tab: 上课记录 (replaces old History section + feedback) ===
-  var pastClasses = myClasses.filter(function(c) {
-    return c.date < getLocalDate() || c.status !== 'scheduled';
   });
   pastClasses.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
 
