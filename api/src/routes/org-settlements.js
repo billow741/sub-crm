@@ -98,7 +98,7 @@ orgSettlements.get('/preview', async (c) => {
   const unitPrice25 = org.unit_price_25_cny || 50;
 
   try {
-    // 查询该周期内已完成的课程（排除已结算的）— 按次数区分
+    // 查询该周期内已完成的课程（排除已结算的，且只包含机构真正分配过课时的学生）— 按次数区分
     let classList = [];
     try {
       const classesResult = await DB.prepare(`
@@ -108,6 +108,7 @@ orgSettlements.get('/preview', async (c) => {
         WHERE c.organization_id = ?
           AND c.status = 'completed'
           AND (c.is_self_paid = 0 OR c.is_self_paid IS NULL)
+          AND c.student_id IN (SELECT DISTINCT student_id FROM org_hour_allocations WHERE org_id = ?)
           AND c.date >= ? AND c.date <= ?
           AND c.id NOT IN (
             SELECT class_id FROM org_settlement_items
@@ -116,7 +117,7 @@ orgSettlements.get('/preview', async (c) => {
               WHERE org_id = ? AND status != 'void'
             )
           )
-      `).bind(orgId, periodStart, periodEnd, orgId).all();
+      `).bind(orgId, orgId, periodStart, periodEnd, orgId).all();
       classList = classesResult.results || [];
     } catch (queryErr) {
       const classesResult = await DB.prepare(`
@@ -125,6 +126,7 @@ orgSettlements.get('/preview', async (c) => {
         FROM classes c
         WHERE c.organization_id = ?
           AND c.status = 'completed'
+          AND c.student_id IN (SELECT DISTINCT student_id FROM org_hour_allocations WHERE org_id = ?)
           AND c.date >= ? AND c.date <= ?
           AND c.id NOT IN (
             SELECT class_id FROM org_settlement_items
@@ -133,7 +135,7 @@ orgSettlements.get('/preview', async (c) => {
               WHERE org_id = ? AND status != 'void'
             )
           )
-      `).bind(orgId, periodStart, periodEnd, orgId).all();
+      `).bind(orgId, orgId, periodStart, periodEnd, orgId).all();
       classList = classesResult.results || [];
     }
 
@@ -228,7 +230,7 @@ orgSettlements.post('/generate', async (c) => {
     const unitPrice50 = org.unit_price_cny || 0;
     const unitPrice25 = org.unit_price_25_cny || 50;
 
-    // 查询该周期内已完成的课程（排除已结算的）
+    // 查询该周期内已完成的课程（排除已结算的，且只包含机构真正分配过课时的学生）
     let classList = [];
     try {
       const classesResult = await DB.prepare(`
@@ -240,6 +242,7 @@ orgSettlements.post('/generate', async (c) => {
         WHERE c.organization_id = ?
           AND c.status = 'completed'
           AND (c.is_self_paid = 0 OR c.is_self_paid IS NULL)
+          AND c.student_id IN (SELECT DISTINCT student_id FROM org_hour_allocations WHERE org_id = ?)
           AND c.date >= ? AND c.date <= ?
           AND c.id NOT IN (
             SELECT class_id FROM org_settlement_items
@@ -249,7 +252,7 @@ orgSettlements.post('/generate', async (c) => {
             )
           )
         ORDER BY c.date DESC
-      `).bind(org_id, period_start, period_end, org_id).all();
+      `).bind(org_id, org_id, period_start, period_end, org_id).all();
       classList = classesResult.results || [];
     } catch (queryErr) {
       // 降级查询（若 is_self_paid 列不存在）
@@ -261,6 +264,7 @@ orgSettlements.post('/generate', async (c) => {
         LEFT JOIN teachers t ON c.teacher_id = t.id
         WHERE c.organization_id = ?
           AND c.status = 'completed'
+          AND c.student_id IN (SELECT DISTINCT student_id FROM org_hour_allocations WHERE org_id = ?)
           AND c.date >= ? AND c.date <= ?
           AND c.id NOT IN (
             SELECT class_id FROM org_settlement_items
@@ -270,7 +274,7 @@ orgSettlements.post('/generate', async (c) => {
             )
           )
         ORDER BY c.date DESC
-      `).bind(org_id, period_start, period_end, org_id).all();
+      `).bind(org_id, org_id, period_start, period_end, org_id).all();
       classList = classesResult.results || [];
     }
 

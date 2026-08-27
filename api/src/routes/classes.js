@@ -233,12 +233,23 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
     organizationId = (userRole !== 'super_admin' && userOrgId) ? parseInt(userOrgId) : 1;
   }
 
+  let isSelfPaid = data.is_self_paid;
+  if (isSelfPaid === undefined) {
+    // 自动判定：如果该学生在该机构从未分配过机构课时包，自动标记为自费买课
+    try {
+      const orgAlloc = await DB.prepare('SELECT SUM(hours) as total FROM org_hour_allocations WHERE student_id = ? AND org_id = ?').bind(studentId, organizationId).first();
+      isSelfPaid = (!orgAlloc || !orgAlloc.total || orgAlloc.total <= 0) ? 1 : 0;
+    } catch (_) {
+      isSelfPaid = 0;
+    }
+  }
+
   const result = await DB.prepare(`
-    INSERT INTO classes (student_id, package_id, teacher, teacher_id, subject, hours, date, start_time, end_time, duration, content, homework, notes, status, organization_id, is_trial,
+    INSERT INTO classes (student_id, package_id, teacher, teacher_id, subject, hours, date, start_time, end_time, duration, content, homework, notes, status, organization_id, is_trial, is_self_paid,
                         textbook_code, unit_number, page_from, page_to,
                         fb_unit, fb_lesson, fb_lesson_level, fb_vocab, fb_patterns, fb_grammar,
                         fb_pronunciation_errors, fb_grammar_errors, fb_teacher_message, fb_homework, fb_next_preview)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     studentId,
     data.package_id || null,
@@ -256,6 +267,7 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
     data.status || 'completed',
     organizationId,
     data.is_trial || 0,
+    isSelfPaid || 0,
     data.textbook_code || null,
     data.unit_number || null,
     data.page_from || null,
