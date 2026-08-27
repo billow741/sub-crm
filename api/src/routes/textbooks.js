@@ -803,7 +803,11 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
 
   const formData = await c.req.formData();
   const images = formData.getAll('images').filter(f => f && f.name);
-  if (images.length === 0) return c.json({ error: { code: 'BAD_REQUEST', message: '未收到图片数据 (Missing images[])' } }, 400);
+  const aiVision = formData.get('ai_vision'); // 优先使用合成单图
+
+  if (images.length === 0 && !aiVision) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '未收到图片数据 (Missing images[])' } }, 400);
+  }
 
   // 查询 DB 中是否已有此 unit
   let dbUnitTitle = '';
@@ -817,8 +821,9 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
   }
 
   try {
-    // 单 Unit prompt 提取 (返回 vocab/patterns/grammar 对象)
-    const content = await callLLMWithImages(c, images, { bookMode: false, maxPages: 8 });
+    // 单 Unit prompt 提取 (若有 ai_vision 单图则用单图，保证 100% 兼容 Llama 等多模态模型)
+    const imagesToLLM = aiVision ? [aiVision] : images;
+    const content = await callLLMWithImages(c, imagesToLLM, { bookMode: false, maxPages: 4 });
 
     // 把这次上传的 PDF 页面图保存到 R2 (path: `${code}/Unit${num}/page-${i}.png`)
     const R2 = c.env.TEXTBOOKS_R2;

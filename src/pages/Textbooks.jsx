@@ -1094,20 +1094,53 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
 
       try {
         const fd = new FormData();
-        // 逐页切片
+        const pageBlobs = [];
+
+        // 1. 逐页高清切片 (用于 R2 存储与教师/家长端精确展示)
         for (let p = pdfStart; p <= realPdfEnd; p++) {
           const bookPageNum = p - pageOffset; // 对应的真实课本页码
           const page = await pdfDoc.getPage(p);
-          const viewport = page.getViewport({ scale: 1.5 });
+          const viewport = page.getViewport({ scale: 1.2 });
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const ctx = canvas.getContext('2d');
           await page.render({ canvasContext: ctx, viewport }).promise;
-          const blob = await new Promise(res => canvas.toBlob(res, 'image/png', 0.85));
-          
-          // 关键：以真实课本印刷页码命名存储！例如 page-04.png
-          fd.append('images', blob, `page-${String(bookPageNum).padStart(2, '0')}.png`);
+          const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.8));
+          pageBlobs.push({ blob, pageNum: bookPageNum });
+          fd.append('images', blob, `page-${String(bookPageNum).padStart(2, '0')}.jpg`);
+        }
+
+        // 2. 核心：为 AI 视觉模型合成单张全景拼图 (彻底解决 Llama 等模型单图限制)
+        if (pageBlobs.length > 0) {
+          const coreBlobs = pageBlobs.slice(0, Math.min(4, pageBlobs.length));
+          const loadedImgs = await Promise.all(coreBlobs.map(b => new Promise(res => {
+            const img = new Image();
+            img.onload = () => res(img);
+            img.src = URL.createObjectURL(b.blob);
+          })));
+
+          const cols = loadedImgs.length === 1 ? 1 : 2;
+          const rows = Math.ceil(loadedImgs.length / cols);
+          const singleW = 800;
+          const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
+
+          const collageCanvas = document.createElement('canvas');
+          collageCanvas.width = singleW * cols;
+          collageCanvas.height = singleH * rows;
+          const cCtx = collageCanvas.getContext('2d');
+          cCtx.fillStyle = '#ffffff';
+          cCtx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
+
+          loadedImgs.forEach((img, i) => {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
+          });
+
+          const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
+          // 把拼图作为 ai_vision.jpg 传给后端
+          fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
         }
 
         setStatusMsg(`正在调用 AI 视觉模型提取 Unit ${item.unit_number} 词汇与句型...`);
