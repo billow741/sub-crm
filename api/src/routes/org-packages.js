@@ -50,10 +50,9 @@ orgPackages.get('/', async (c) => {
   const total = countResult?.total || 0;
   const pagination = calculatePagination(page, pageSize, total);
 
-  // 查询数据 + 总可用课时
+  // 查询数据
   const results = await DB.prepare(`
-    SELECT op.*, o.name as org_name,
-           (op.total_hours - op.used_hours) as remaining_hours
+    SELECT op.*, o.name as org_name
     FROM org_packages op
     LEFT JOIN organizations o ON op.org_id = o.id
     ${whereClause}
@@ -61,7 +60,39 @@ orgPackages.get('/', async (c) => {
     LIMIT ? OFFSET ?
   `).bind(...params, pagination.page_size, pagination.offset).all();
 
-  const data = results.results || [];
+  // 动态校准真实消耗课时
+  const rawData = results.results || [];
+  const data = await Promise.all(rawData.map(async (p) => {
+    try {
+      const realUsed = await DB.prepare(`
+        SELECT COALESCE(SUM(c.hours), 0) as total
+        FROM classes c
+        WHERE c.organization_id = ?
+          AND c.status = 'completed'
+          AND (c.is_self_paid = 0 OR c.is_self_paid IS NULL)
+          AND c.student_id IN (SELECT DISTINCT student_id FROM org_hour_allocations WHERE org_id = ?)
+      `).bind(p.org_id, p.org_id).first();
+
+      const actualUsedHours = realUsed?.total !== undefined ? realUsed.total : (p.used_hours || 0);
+      const remain = Math.max(0, Math.round(((p.total_hours || 0) - actualUsedHours) * 100) / 100);
+
+      // 如果数据有偏差，同步纠正数据库
+      if (p.used_hours !== actualUsedHours) {
+        await DB.prepare('UPDATE org_packages SET used_hours = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(actualUsedHours, p.id).run();
+      }
+
+      return {
+        ...p,
+        used_hours: actualUsedHours,
+        remaining_hours: remain
+      };
+    } catch (_) {
+      return {
+        ...p,
+        remaining_hours: Math.max(0, (p.total_hours || 0) - (p.used_hours || 0))
+      };
+    }
+  }));
 
   // 汇总总可用课时
   const totalAvailable = data.reduce((sum, p) => sum + (p.remaining_hours || 0), 0);

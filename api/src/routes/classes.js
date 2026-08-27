@@ -304,17 +304,25 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
   // 体验课免费，不扣课时（机构课时包 + 学生课时都不扣）
   if (!isTrial) {
     // ── 同步机构课时包 ──
-    if (organizationId && classStatus === 'completed') {
-      const targetPkg = await DB.prepare(
-        `SELECT id FROM org_packages
-         WHERE org_id = ? AND status IN ('pending', 'partial_paid')
-         ORDER BY created_at DESC LIMIT 1`
-      ).bind(organizationId).first();
+    if (organizationId && classStatus === 'completed' && !isSelfPaid) {
+      let isOrgAlloc = false;
+      try {
+        const allocCheck = await DB.prepare('SELECT id FROM org_hour_allocations WHERE org_id = ? AND student_id = ? LIMIT 1').bind(organizationId, studentId).first();
+        isOrgAlloc = !!allocCheck;
+      } catch (_) {}
 
-      if (targetPkg) {
-        await DB.prepare(
-          `UPDATE org_packages SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
-        ).bind(classHours, targetPkg.id).run();
+      if (isOrgAlloc) {
+        const targetPkg = await DB.prepare(
+          `SELECT id FROM org_packages
+           WHERE org_id = ? AND status IN ('pending', 'partial_paid')
+           ORDER BY created_at DESC LIMIT 1`
+        ).bind(organizationId).first();
+
+        if (targetPkg) {
+          await DB.prepare(
+            `UPDATE org_packages SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
+          ).bind(classHours, targetPkg.id).run();
+        }
       }
     }
 
@@ -474,7 +482,14 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
     // 体验课免费，不扣课时
     if (!isTrialUpdate) {
       try {
-        if (clsOrgId && oldStatus !== newStatus) {
+        const isSelfPaidClass = data.is_self_paid !== undefined ? data.is_self_paid : (existing.is_self_paid || 0);
+        let isOrgAllocStudent = false;
+        if (clsOrgId && !isSelfPaidClass) {
+          const allocCheck = await DB.prepare('SELECT id FROM org_hour_allocations WHERE org_id = ? AND student_id = ? LIMIT 1').bind(clsOrgId, existing.student_id).first();
+          isOrgAllocStudent = !!allocCheck;
+        }
+
+        if (clsOrgId && oldStatus !== newStatus && !isSelfPaidClass && isOrgAllocStudent) {
           let delta = 0;
           if (newStatus === 'completed' && oldStatus !== 'completed') {
             delta = clsHours;
