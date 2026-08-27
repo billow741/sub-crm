@@ -1712,6 +1712,144 @@ function renderStudyProfile(student, allClasses) {
 
   var rpHtml = '';
 
+  // 0. 少儿英语能力进阶体系标准图谱（CEFR & 剑桥 YLE 对标）
+  var currentGrade = (student.grade || 'Pre-A1').trim();
+  var RUBRIC_LEVELS = [
+    {
+      code: 'Pre-A1',
+      title: 'Pre-A1 启蒙起点级',
+      age: '4-6 岁',
+      yle: 'Starters 预备',
+      color: '#10B981',
+      bg: 'rgba(16,185,129,0.06)',
+      border: 'rgba(16,185,129,0.2)',
+      listening: '能听懂日常简单课堂指令 (Sit down, Open book)，辨别字母发音与简单日常问候',
+      speaking: '能说出单个词汇及 2-3 词短语 (A red apple)，模仿发音并回答名字/年龄',
+      reading: '掌握 26 个字母名与常见首字母发音，能看图识词，跟读简单绘本短句',
+      vocab: '100-200 词 (颜色/数字/动物/五官；句型: This is a... / I like...)',
+      standards: '敢于开口、指令反应灵敏',
+      textbook: 'Everybody Up Starter / Reach Starter'
+    },
+    {
+      code: 'A1',
+      title: 'A1 基础进阶级',
+      age: '6-8 岁',
+      yle: 'YLE Starters',
+      color: '#3B82F6',
+      bg: 'rgba(59,130,246,0.06)',
+      border: 'rgba(59,130,246,0.2)',
+      listening: '能听懂简短故事与日常对话关键信息，对一般疑问句做出准确反应',
+      speaking: '能用完整单句自我介绍与描述事物 (There is a cat)，进行日常日常问答',
+      reading: '掌握自然拼读 CVC 规则与常见高频词 (Sight Words)，自主朗读 30-50 词分级绘本',
+      vocab: '300-500 词 (基础名词/动词/日常动作；句型: I have... / He can... / Where is...?)',
+      standards: '完整句输出，可拼读常规单音节词',
+      textbook: 'Everybody Up 1-2 / Reach Level 1'
+    },
+    {
+      code: 'A2',
+      title: 'A2 初级应用级',
+      age: '8-10 岁',
+      yle: 'YLE Movers',
+      color: '#6366F1',
+      bg: 'rgba(99,102,241,0.06)',
+      border: 'rgba(99,102,241,0.2)',
+      listening: '能听懂较长日常对话及教学说明，捕捉过去时态与不同场景核心细节',
+      speaking: '围绕熟悉主题进行 3-5 句连贯表达，简单描述个人经历与日常活动计划',
+      reading: '掌握复合元音拼读规律 (ea, ou, igh 等)，阅读 100-200 词短文并回答推断问题',
+      vocab: '600-1000 词 (常见时态: 一般现在/过去/现在进行；句型: Why...? Because...)',
+      standards: '能用简单时态连贯叙事，阅读基础篇章',
+      textbook: 'Everybody Up 3-4 / Reach Level 2-3'
+    },
+    {
+      code: 'B1',
+      title: 'B1 中级流利级',
+      age: '10-12 岁',
+      yle: 'YLE Flyers / KET',
+      color: '#E26B31',
+      bg: 'rgba(226,107,49,0.06)',
+      border: 'rgba(226,107,49,0.2)',
+      listening: '能听懂外教全英文深度讨论与学术短篇，理解观点态度与因果转折关系',
+      speaking: '就兴趣、旅行等话题表达个人观点并阐述理由，能进行角色扮演与开放式问答',
+      reading: '独立阅读中长篇故事与科普短文，提取段落主旨大意与上下文推断生词',
+      vocab: '1200-1800 词 (包含比较级/最高级/被动语态；句型: If... I will... / Although...)',
+      standards: '具备全英文思考习惯与独立阅读能力',
+      textbook: 'Everybody Up 5-6 / Reach Level 4-5'
+    },
+    {
+      code: 'B2',
+      title: 'B2 拓展精通级',
+      age: '12 岁以上',
+      yle: 'PET 卓越',
+      color: '#8B5CF6',
+      bg: 'rgba(139,92,246,0.06)',
+      border: 'rgba(139,92,246,0.2)',
+      listening: '听懂复杂学术讲座、新闻及多口音语段，准确提炼隐含意图与论证逻辑',
+      speaking: '进行深度主题辩论、演讲与即兴陈述，表达流利地道，语音语调自然',
+      reading: '流畅阅读原版章节书 (Chapter Books)，理解复杂修辞、逻辑推理与批判性思考',
+      vocab: '2000-3000+ 词 (复杂从句、学术词汇与地道习语表达)',
+      standards: '接近母语者应用水平，具备跨学科阅读力',
+      textbook: 'Wonders G4-G6 / Reach Higher'
+    }
+  ];
+
+  rpHtml += '<div class="sp-card" style="border:1px solid #E2E8F0;border-radius:16px;box-shadow:0 4px 20px rgba(28,36,75,0.05);margin-bottom:20px;padding:18px 20px;background:linear-gradient(180deg,#FFFFFF 0%,#F9FBFE 100%);">';
+  rpHtml += '<div class="sp-card-summary" onclick="toggleCollapse(\'rubric-matrix-body\')">';
+  rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
+  rpHtml += '<div>';
+  rpHtml += '<div style="font-size:15px;font-weight:700;color:var(--sb-dark);display:flex;align-items:center;gap:6px;">';
+  rpHtml += '<span>🎯 少儿英语能力进阶体系图谱</span>';
+  rpHtml += '<span style="font-size:11px;padding:2px 8px;background:rgba(75,159,224,0.1);color:var(--sb-blue);border-radius:10px;font-weight:600;">CEFR & 剑桥对标</span>';
+  rpHtml += '</div>';
+  rpHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:3px;">';
+  rpHtml += '当前级别: <b style="color:var(--sb-orange);font-size:13px;">' + spEsc(currentGrade) + '</b> · 了解孩子听说读写各阶段进阶考核标准';
+  rpHtml += '</div>';
+  rpHtml += '</div>';
+  rpHtml += '<button class="sp-toggle-btn" type="button" onclick="toggleCollapse(\'rubric-matrix-body\')">';
+  rpHtml += '<span id="rubric-matrix-body-txt">展开进阶图谱 ▼</span>';
+  rpHtml += '</button>';
+  rpHtml += '</div>';
+  rpHtml += '</div>'; // End summary
+
+  // Collapsible Rubric Matrix Body
+  rpHtml += '<div id="rubric-matrix-body" class="sp-collapse-body collapsed" style="margin-top:14px;padding-top:14px;border-top:1px dashed #E2E8F0;">';
+  rpHtml += '<div style="display:flex;flex-direction:column;gap:12px;">';
+  
+  RUBRIC_LEVELS.forEach(function(lvl) {
+    var isCurrent = (currentGrade === lvl.code);
+    rpHtml += '<div style="border:1px solid ' + (isCurrent ? lvl.color : lvl.border) + ';background:' + (isCurrent ? '#FFFDF9' : '#FFFFFF') + ';border-radius:12px;padding:14px 16px;position:relative;' + (isCurrent ? 'box-shadow:0 2px 12px rgba(245,166,35,0.15);' : '') + '">';
+    
+    // Level Header
+    rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">';
+    rpHtml += '<div style="display:flex;align-items:center;gap:8px;">';
+    rpHtml += '<span style="font-size:14px;font-weight:800;color:' + lvl.color + ';">' + lvl.title + '</span>';
+    rpHtml += '<span style="font-size:11px;color:var(--sb-muted);background:' + lvl.bg + ';padding:2px 8px;border-radius:6px;">' + lvl.age + ' · 对标 ' + lvl.yle + '</span>';
+    rpHtml += '</div>';
+    if (isCurrent) {
+      rpHtml += '<span style="font-size:11px;font-weight:700;color:#fff;background:linear-gradient(135deg,#F5A623,#E26B31);padding:2px 10px;border-radius:12px;">👑 学员当前级别</span>';
+    }
+    rpHtml += '</div>';
+
+    // Criteria Grid
+    rpHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:12px;color:#334155;line-height:1.5;margin-bottom:8px;">';
+    rpHtml += '<div><span style="font-weight:700;color:var(--sb-dark);">🗣️ 听力理解: </span>' + lvl.listening + '</div>';
+    rpHtml += '<div><span style="font-weight:700;color:var(--sb-dark);">💬 口语表达: </span>' + lvl.speaking + '</div>';
+    rpHtml += '<div><span style="font-weight:700;color:var(--sb-dark);">📖 阅读拼读: </span>' + lvl.reading + '</div>';
+    rpHtml += '<div><span style="font-weight:700;color:var(--sb-dark);">📚 核心词汇: </span>' + lvl.vocab + '</div>';
+    rpHtml += '</div>';
+
+    // Footer standards & textbook
+    rpHtml += '<div style="padding-top:8px;border-top:1px dashed #F1F5F9;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px;">';
+    rpHtml += '<div style="color:#059669;"><span style="font-weight:700;">🎯 进阶达标: </span>' + lvl.standards + '</div>';
+    rpHtml += '<div style="color:#475569;"><span style="font-weight:700;">📖 推荐教材: </span>' + lvl.textbook + '</div>';
+    rpHtml += '</div>';
+
+    rpHtml += '</div>';
+  });
+
+  rpHtml += '</div>';
+  rpHtml += '</div>'; // End rubric body
+  rpHtml += '</div>'; // End rubric card
+
   // 1. 阶段性成长报告区域
   rpHtml += '<div style="margin-bottom:24px;">';
   rpHtml += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
@@ -1959,6 +2097,7 @@ function toggleCollapse(id) {
     if (txt) {
       if (txt.textContent.includes('反馈')) txt.textContent = '收起反馈 ▲';
       else if (txt.textContent.includes('报告')) txt.textContent = '收起报告 ▲';
+      else if (txt.textContent.includes('图谱')) txt.textContent = '收起图谱 ▲';
       else txt.textContent = '收起详情 ▲';
     }
   } else {
@@ -1966,6 +2105,7 @@ function toggleCollapse(id) {
     if (txt) {
       if (txt.textContent.includes('反馈')) txt.textContent = '查看反馈 ▼';
       else if (txt.textContent.includes('报告')) txt.textContent = '查看报告 ▼';
+      else if (txt.textContent.includes('图谱')) txt.textContent = '展开进阶图谱 ▼';
       else txt.textContent = '查看详情 ▼';
     }
   }
