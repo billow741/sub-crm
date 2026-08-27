@@ -1212,8 +1212,11 @@ async function loadStudentData() {
 
   try {
     var studentResp = await apiGet('/students/' + studentId);
+    var student = (studentResp && studentResp.data) ? studentResp.data : studentResp;
+    if (!student) throw new Error('未找到学员信息');
+
     var sNameEl = document.getElementById('student-name');
-    if (sNameEl) sNameEl.textContent = student.name + ' 的学习情况';
+    if (sNameEl) sNameEl.textContent = (student.name || '') + ' 的学习情况';
     var sInfoEl = document.getElementById('student-info');
     if (sInfoEl) sInfoEl.textContent = (student.english_name ? '英文名: ' + student.english_name : (student.grade ? '等级: ' + student.grade : ''));
 
