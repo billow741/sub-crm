@@ -311,15 +311,47 @@ payments.delete('/:id', validateParams(idParamSchema), async (c) => {
   const DB = c.env.DB;
   const { id } = c.req.validatedParams;
 
-  // 检查付款记录是否存在
-  const existing = await DB.prepare('SELECT id FROM payments WHERE id = ?').bind(id).first();
-  if (!existing) {
-    return c.json(error('NOT_FOUND', '付款记录不存在'), 404);
+  try {
+    // 检查付款记录是否存在
+    const existing = await DB.prepare('SELECT * FROM payments WHERE id = ?').bind(id).first();
+    if (!existing) {
+      return c.json(error('NOT_FOUND', '付款记录不存在'), 404);
+    }
+
+    // 如果原收款包含课时，同步回退/扣除学生总课时
+    if (existing.hours && existing.hours > 0 && existing.student_id) {
+      try {
+        const student = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(existing.student_id).first();
+        if (student) {
+          const newTotal = Math.max(0, (student.total_hours || 0) - existing.hours);
+          const balanceAfter = Math.round((newTotal - (student.used_hours || 0)) * 100) / 100;
+
+          await DB.prepare('UPDATE students SET total_hours = ? WHERE id = ?').bind(newTotal, existing.student_id).run();
+
+          try {
+            await DB.prepare(`
+              INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
+              VALUES (?, 'adjust', ?, ?, ?, ?)
+            `).bind(existing.student_id, -existing.hours, balanceAfter, id, `删除收款记录 扣除 ${existing.hours} 课时 (payment ${id})`).run();
+          } catch (hcErr) {
+            await DB.prepare(`
+              INSERT INTO hour_changes (student_id, type, amount, related_id, description)
+              VALUES (?, 'adjust', ?, ?, ?)
+            `).bind(existing.student_id, -existing.hours, id, `删除收款记录 扣除 ${existing.hours} 课时 (payment ${id})`).run();
+          }
+        }
+      } catch (err) {
+        console.warn('删除收款回退学生课时警告:', err.message);
+      }
+    }
+
+    await DB.prepare('DELETE FROM payments WHERE id = ?').bind(id).run();
+
+    return c.body(null, 204);
+  } catch (err) {
+    console.error('DELETE /payments/:id 失败:', err);
+    return c.json(error('DATABASE_ERROR', '删除付款记录失败: ' + err.message), 500);
   }
-
-  await DB.prepare('DELETE FROM payments WHERE id = ?').bind(id).run();
-
-  return c.body(null, 204);
 });
 
 export default payments;
