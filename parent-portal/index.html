@@ -1212,13 +1212,16 @@ async function loadStudentData() {
 
   try {
     var studentResp = await apiGet('/students/' + studentId);
-    var student = studentResp.data || studentResp;
-    document.getElementById('student-name').textContent = student.name + ' 的学习情况';
-    document.getElementById('student-info').textContent = (student.english_name ? '英文名: ' + student.english_name : (student.grade ? '等级: ' + student.grade : ''));
+    var sNameEl = document.getElementById('student-name');
+    if (sNameEl) sNameEl.textContent = student.name + ' 的学习情况';
+    var sInfoEl = document.getElementById('student-info');
+    if (sInfoEl) sInfoEl.textContent = (student.english_name ? '英文名: ' + student.english_name : (student.grade ? '等级: ' + student.grade : ''));
 
-    // Header avatar initials
-    var initials = (student.name || 'SB').substring(0, 2);
-    document.getElementById('header-avatar').textContent = initials;
+    var hAvEl = document.getElementById('header-avatar');
+    if (hAvEl && !hAvEl.querySelector('img')) {
+      var initials = (student.name || 'SB').substring(0, 2);
+      hAvEl.textContent = initials;
+    }
 
     // 获取课程
     var classesResp = await apiGet('/classes?page_size=200');
@@ -1552,13 +1555,16 @@ function renderStudyProfile(student, allClasses) {
   // === Info Card ===
   var currentGrade = (student.grade || 'Pre-A1').trim();
   var initials = (student.name || 'SB').substring(0, 2);
-  document.getElementById('sp-avatar').textContent = initials;
-  document.getElementById('sp-name').textContent = student.name || '-';
+  var avEl = document.getElementById('sp-avatar');
+  if (avEl) avEl.textContent = initials;
+  var nameEl = document.getElementById('sp-name');
+  if (nameEl) nameEl.textContent = student.name || '-';
   var subInfo = [];
   if (student.english_name) subInfo.push('英文名: ' + student.english_name);
   if (student.age) subInfo.push('年龄: ' + student.age);
   if (student.grade) subInfo.push('等级: ' + student.grade);
-  document.getElementById('sp-subinfo').textContent = subInfo.join(' · ');
+  var subEl = document.getElementById('sp-subinfo');
+  if (subEl) subEl.textContent = subInfo.join(' · ');
 
   // 渲染顶部进阶标准图谱内容
   var RUBRIC_LEVELS = [
@@ -1678,23 +1684,27 @@ function renderStudyProfile(student, allClasses) {
   } else if (completed.length > 0 && completed[0].teacher) {
     recentTeacher = completed[0].teacher;
   }
-  document.getElementById('sp-teacher').textContent = recentTeacher || '-';
+  var teacherEl = document.getElementById('sp-teacher');
+  if (teacherEl) teacherEl.textContent = recentTeacher || '-';
 
   // Level
-  document.getElementById('sp-level').textContent = student.grade || '-';
+  var lvlEl = document.getElementById('sp-level');
+  if (lvlEl) lvlEl.textContent = student.grade || '-';
 
   // Balance
-  // 优先使用后端返回的已四舍五入 remaining_hours，避免前端浮点数精度问题
   var remaining = (student.remaining_hours !== undefined && student.remaining_hours !== null)
     ? student.remaining_hours
     : Math.round(((student.total_hours || 0) - (student.used_hours || 0)) * 100) / 100;
   var balEl = document.getElementById('sp-balance');
-  balEl.textContent = remaining.toFixed(2);
-  if (remaining < 3) balEl.classList.add('warn');
+  if (balEl) {
+    balEl.textContent = remaining.toFixed(2);
+    if (remaining < 3) balEl.classList.add('warn');
+  }
 
   // 正式课程节数（阶段性评估与里程碑仅计算正式课，体验课不计入）
   var regularLessons = myClasses.filter(function(c) { return c.status === 'completed' && c.is_trial !== 1; }).length;
-  document.getElementById('sp-total-lessons').textContent = regularLessons;
+  var totalLsnEl = document.getElementById('sp-total-lessons');
+  if (totalLsnEl) totalLsnEl.textContent = regularLessons;
 
   // Vocab count
   var vocabCount = spCountVocab(myClasses);
@@ -1834,7 +1844,8 @@ function renderStudyProfile(student, allClasses) {
       histHtml += '</div>'; // End sp-card
     });
   });
-  document.getElementById('sp-history-list').innerHTML = histHtml;
+  var hListEl = document.getElementById('sp-history-list');
+  if (hListEl) hListEl.innerHTML = histHtml;
 
   // === Tab: 成长报告 ===
   var assessments = window_allAssessments || [];
@@ -2001,7 +2012,8 @@ function renderStudyProfile(student, allClasses) {
   }
   rpHtml += '</div>';
 
-  document.getElementById('sp-reports-list').innerHTML = rpHtml;
+  var repListEl = document.getElementById('sp-reports-list');
+  if (repListEl) repListEl.innerHTML = rpHtml;
 
   // === 目标里程碑进度计算（严格基于正式课，体验课不计入） ===
   var nextMilestone = 10;
@@ -2077,12 +2089,15 @@ function renderStudyProfile(student, allClasses) {
     tlHtml += '<div class="sp-tl-desc">' + spEsc(m.desc) + '</div>';
     tlHtml += '</div>';
   });
-  document.getElementById('sp-timeline-list').innerHTML = tlHtml;
+  var tlListEl = document.getElementById('sp-timeline-list');
+  if (tlListEl) tlListEl.innerHTML = tlHtml;
 
   // === Renew CTA ===
   var lessonsLeft = Math.floor(remaining);
-  document.getElementById('renew-lessons').textContent = lessonsLeft;
-  document.getElementById('renew-target').textContent = leftLessons;
+  var rnLsnEl = document.getElementById('renew-lessons');
+  if (rnLsnEl) rnLsnEl.textContent = lessonsLeft;
+  var rnTgtEl = document.getElementById('renew-target');
+  if (rnTgtEl) rnTgtEl.textContent = leftLessons;
 }
 
 // ===== Toggle Collapse Helper =====
