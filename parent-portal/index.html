@@ -990,7 +990,18 @@
         <div class="sp-info-item"><div class="sp-info-item__label">专属老师</div><div class="sp-info-item__value blue" id="sp-teacher">-</div></div>
         <div class="sp-info-item"><div class="sp-info-item__label">当前级别</div><div class="sp-info-item__value accent" id="sp-level">-</div></div>
         <div class="sp-info-item"><div class="sp-info-item__label">课时余额</div><div class="sp-info-item__value" id="sp-balance">-</div></div>
-        <div class="sp-info-item"><div class="sp-info-item__label">总节数</div><div class="sp-info-item__value" id="sp-total-lessons">-</div></div>
+        <div class="sp-info-item"><div class="sp-info-item__label">已完课程</div><div class="sp-info-item__value" id="sp-total-lessons">-</div></div>
+      </div>
+      <!-- Milestone Progress Banner -->
+      <div id="sp-milestone-banner" style="margin-top:14px;padding:12px 14px;background:rgba(75,159,224,0.06);border-radius:12px;border:1px solid rgba(75,159,224,0.12);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;font-weight:600;">
+          <span style="color:var(--sb-dark);" id="sp-milestone-title">🎯 进阶里程碑目标</span>
+          <span style="color:var(--sb-blue);" id="sp-milestone-pct">0%</span>
+        </div>
+        <div style="height:6px;background:rgba(28,36,75,0.08);border-radius:3px;overflow:hidden;">
+          <div id="sp-milestone-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--sb-accent),var(--sb-orange));border-radius:3px;transition:width 0.5s ease;"></div>
+        </div>
+        <div style="margin-top:6px;font-size:11px;color:var(--sb-muted);" id="sp-milestone-desc">正在加载成长进度...</div>
       </div>
     </div>
 
@@ -1651,61 +1662,168 @@ function renderStudyProfile(student, allClasses) {
   var progressReports = window_progressReports || [];
 
   var REPORT_TYPE_INFO = {
-    milestone_10: { icon: '🎉', label: '入门阶段报告', color: '#10B981' },
-    milestone_30: { icon: '🌟', label: '阶段成长报告', color: '#6366F1' },
-    milestone_60: { icon: '🏆', label: '学期总结报告', color: '#E26B31' },
-    level_up: { icon: '🎓', label: '升级恭喜报告', color: '#F5A623' }
+    milestone_10: { icon: '🥉', label: '第 10 课时 · 入门适应期评估', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
+    milestone_30: { icon: '🥈', label: '第 30 课时 · 进阶强化期评估', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' },
+    milestone_60: { icon: '🥇', label: '第 60 课时 · 学期大纲总评估', color: '#E26B31', bg: 'rgba(226,107,49,0.08)' },
+    level_up: { icon: '🚀', label: '能力进阶 · 等级跃迁报告', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' }
   };
 
   var rpHtml = '';
-  if (assessments.length === 0 && progressReports.length === 0) {
-    rpHtml = '<div class="sp-card" style="text-align:center;color:var(--sb-muted);">暂无成长报告</div>';
-  }
 
-  // 先显示阶段报告（更重要的放前面）
-  progressReports.forEach(function(r) {
-    var typeInfo = REPORT_TYPE_INFO[r.report_type] || { icon: '📋', label: '阶段报告', color: '#6366F1' };
-    rpHtml += '<div class="sp-card" style="border-left:3px solid ' + typeInfo.color + ';">';
-    rpHtml += '<button class="sp-share-btn" onclick="spShareCard(this)">📸分享</button>';
-    rpHtml += '<div style="margin-bottom:8px;"><span style="font-size:16px;">' + typeInfo.icon + '</span> <span style="font-size:13px;font-weight:700;color:' + typeInfo.color + ';">' + typeInfo.label + '</span></div>';
-    rpHtml += '<div class="sp-card-header"><span class="sp-card-date">' + ((r.created_at || '').substring(0, 10)) + '</span>';
-    rpHtml += '<span class="sp-card-teacher">' + (r.teacher_name || '-') + '</span></div>';
-    if (r.report_type === 'level_up' && r.from_level && r.to_level) {
-      rpHtml += '<div style="margin:6px 0;"><span class="sp-level-badge">🎓 等级提升: ' + spEsc(r.from_level) + ' → ' + spEsc(r.to_level) + '</span></div>';
-    }
-    if (r.summary) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📝 老师总评</div><div class="sp-feedback-text">' + spEsc(r.summary) + '</div></div>';
-    if (r.strengths) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💪 亮点</div><div class="sp-feedback-text">' + spEsc(r.strengths) + '</div></div>';
-    if (r.improvements) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📈 需提升</div><div class="sp-feedback-text">' + spEsc(r.improvements) + '</div></div>';
-    if (r.recommendation) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">🎯 下阶段建议</div><div class="sp-feedback-text">' + spEsc(r.recommendation) + '</div></div>';
-    if (r.teacher_message) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师寄语</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:8px 10px;border-radius:8px;">' + spEsc(r.teacher_message) + '</div></div>';
-    rpHtml += '</div>';
-  });
+  // 1. 阶段性成长报告区域
+  rpHtml += '<div style="margin-bottom:24px;">';
+  rpHtml += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
+  rpHtml += '<h3 style="font-size:16px;font-weight:700;color:var(--sb-dark);display:flex;align-items:center;gap:6px;"><span>🏆 阶段性进阶成长报告</span><span style="font-size:12px;padding:2px 8px;background:rgba(99,102,241,0.1);color:#6366F1;border-radius:12px;font-weight:600;">共 ' + progressReports.length + ' 份</span></h3>';
+  rpHtml += '</div>';
 
-  // 再显示体验课评估
-  assessments.forEach(function(a) {
-    rpHtml += '<div class="sp-card">';
-    rpHtml += '<button class="sp-share-btn" onclick="spShareCard(this)">📸分享</button>';
-    var cls = myClasses.find(function(c) { return parseInt(c.id) === parseInt(a.class_id); });
-    rpHtml += '<div class="sp-card-header"><span class="sp-card-date">' + (cls ? cls.date : (a.created_at || '').substring(0, 10)) + '</span>';
-    rpHtml += '<span class="sp-card-teacher">' + (cls ? (cls.teacher_name || '-') : '-') + '</span></div>';
-    var dims = [
-      ['speaking_pronunciation', '发音清晰度'],
-      ['speaking_communication', '开口主动性'],
-      ['listening_conversation', '理解与反应'],
-      ['classroom_interaction', '参与度与互动']
-    ];
-    dims.forEach(function(d) {
-      if (a[d[0]]) {
-        rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">' + d[1] + '</div>' + spStarsHtml(a[d[0]]) + '</div>';
+  if (progressReports.length === 0) {
+    rpHtml += '<div class="sp-card" style="text-align:center;padding:24px;color:var(--sb-muted);font-size:13px;background:#FAFCFF;border:1px dashed #D3E2F2;border-radius:14px;">🌱 学习进行中，完成第 10、30、60 节课或晋升等级时将自动生成阶段进阶大考报告</div>';
+  } else {
+    progressReports.forEach(function(r) {
+      var typeInfo = REPORT_TYPE_INFO[r.report_type] || { icon: '📋', label: '阶段成长报告', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' };
+      rpHtml += '<div class="sp-card" style="border-left:4px solid ' + typeInfo.color + ';border-radius:14px;box-shadow:0 4px 20px rgba(28,36,75,0.05);margin-bottom:16px;padding:20px 22px;">';
+      
+      // Header
+      rpHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
+      rpHtml += '<div>';
+      rpHtml += '<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:' + typeInfo.bg + ';border-radius:20px;margin-bottom:6px;">';
+      rpHtml += '<span style="font-size:15px;">' + typeInfo.icon + '</span>';
+      rpHtml += '<span style="font-size:13px;font-weight:700;color:' + typeInfo.color + ';">' + typeInfo.label + '</span>';
+      rpHtml += '</div>';
+      rpHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:2px;">执教外教: <b style="color:var(--sb-dark);">' + spEsc(r.teacher_name || '-') + '</b> · 生成日期: ' + ((r.created_at || '').substring(0, 10)) + '</div>';
+      rpHtml += '</div>';
+
+      // Actions
+      rpHtml += '<div style="display:flex;gap:8px;">';
+      rpHtml += '<button class="sp-share-btn" style="position:static;padding:6px 12px;font-size:12px;" onclick="viewProgressReport(' + r.id + ')">📄 查看完整报告</button>';
+      rpHtml += '<button class="sp-share-btn" style="position:static;padding:6px 12px;font-size:12px;background:linear-gradient(135deg,#F5A623,#E26B31);color:#fff;border:none;" onclick="spShareCard(this)">📸 分享海报</button>';
+      rpHtml += '</div>';
+      rpHtml += '</div>';
+
+      // Level jump badge
+      if ((r.from_level || r.to_level)) {
+        rpHtml += '<div style="margin:8px 0 12px;padding:8px 12px;background:rgba(139,92,246,0.06);border-radius:8px;font-size:13px;color:#6D28D9;font-weight:600;display:inline-block;">';
+        rpHtml += '🎓 级别晋升: ' + spEsc(r.from_level || '入学') + ' <span style="color:#A78BFA;">➔</span> <b style="color:#4C1D95;">' + spEsc(r.to_level) + '</b>';
+        rpHtml += '</div>';
       }
+
+      // Summary
+      if (r.summary) {
+        rpHtml += '<div style="margin-bottom:12px;padding:12px 14px;background:#F8FAFC;border-radius:10px;font-size:13px;color:#334155;line-height:1.6;">';
+        rpHtml += '<span style="font-weight:700;color:var(--sb-dark);display:block;margin-bottom:4px;">📋 阶段总结 (Summary):</span>' + spEsc(r.summary);
+        rpHtml += '</div>';
+      }
+
+      // 2-Column Strengths & Improvements
+      if (r.strengths || r.improvements) {
+        rpHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">';
+        if (r.strengths) {
+          rpHtml += '<div style="padding:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;font-size:12px;color:#065F46;line-height:1.5;">';
+          rpHtml += '<b style="display:block;color:#047857;margin-bottom:4px;font-size:13px;">💪 亮点优势 (Strengths)</b>' + spEsc(r.strengths);
+          rpHtml += '</div>';
+        }
+        if (r.improvements) {
+          rpHtml += '<div style="padding:12px;background:rgba(226,107,49,0.06);border:1px solid rgba(226,107,49,0.15);border-radius:10px;font-size:12px;color:#9A3412;line-height:1.5;">';
+          rpHtml += '<b style="display:block;color:#C2410C;margin-bottom:4px;font-size:13px;">📈 建议提升 (Areas to Improve)</b>' + spEsc(r.improvements);
+          rpHtml += '</div>';
+        }
+        rpHtml += '</div>';
+      }
+
+      // Recommendation
+      if (r.recommendation) {
+        rpHtml += '<div style="margin-bottom:10px;padding:10px 12px;background:rgba(75,159,224,0.06);border-radius:8px;font-size:12px;color:#1E40AF;line-height:1.5;">';
+        rpHtml += '<b style="color:#1D4ED8;">🎯 下阶段规划: </b>' + spEsc(r.recommendation);
+        rpHtml += '</div>';
+      }
+
+      // Teacher message
+      if (r.teacher_message) {
+        rpHtml += '<div style="padding:12px 14px;background:linear-gradient(135deg,rgba(75,159,224,0.08),rgba(245,166,35,0.08));border-radius:10px;font-size:13px;color:#1E293B;line-height:1.6;border-left:3px solid var(--sb-orange);">';
+        rpHtml += '<b style="color:var(--sb-orange);display:block;margin-bottom:4px;">💌 老师寄语 (Teacher Message):</b>' + spEsc(r.teacher_message);
+        rpHtml += '</div>';
+      }
+
+      rpHtml += '</div>';
     });
-    if (a.recommended_level) rpHtml += '<div style="margin:6px 0;"><span class="sp-level-badge">🎓 建议级别: ' + spEsc(a.recommended_level) + '</span></div>';
-    if (a.strengths) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💪 亮点</div><div class="sp-feedback-text">' + spEsc(a.strengths) + '</div></div>';
-    if (a.improvements) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📈 建议提升</div><div class="sp-feedback-text">' + spEsc(a.improvements) + '</div></div>';
-    if (a.teacher_message) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师寄语</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:8px 10px;border-radius:8px;">' + spEsc(a.teacher_message) + '</div></div>';
-    rpHtml += '</div>';
-  });
+  }
+  rpHtml += '</div>';
+
+  // 2. 体验课评估报告区域
+  rpHtml += '<div>';
+  rpHtml += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
+  rpHtml += '<h3 style="font-size:16px;font-weight:700;color:var(--sb-dark);display:flex;align-items:center;gap:6px;"><span>📝 体验课入学评估报告</span><span style="font-size:12px;padding:2px 8px;background:rgba(245,166,35,0.1);color:var(--sb-orange);border-radius:12px;font-weight:600;">共 ' + assessments.length + ' 份</span></h3>';
+  rpHtml += '</div>';
+
+  if (assessments.length === 0) {
+    rpHtml += '<div class="sp-card" style="text-align:center;padding:20px;color:var(--sb-muted);font-size:13px;">暂无体验课评估报告</div>';
+  } else {
+    assessments.forEach(function(a) {
+      var cls = myClasses.find(function(c) { return parseInt(c.id) === parseInt(a.class_id); });
+      rpHtml += '<div class="sp-card" style="border-radius:14px;box-shadow:0 4px 20px rgba(28,36,75,0.05);padding:20px 22px;margin-bottom:16px;">';
+      
+      rpHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
+      rpHtml += '<div>';
+      rpHtml += '<div style="font-size:14px;font-weight:700;color:var(--sb-dark);">🎁 体验课综合评估报告</div>';
+      rpHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:2px;">上课日期: ' + (cls ? cls.date : (a.created_at || '').substring(0, 10)) + ' · 执教老师: <b style="color:var(--sb-dark);">' + (cls ? (cls.teacher_name || '-') : (a.teacher_name || '-')) + '</b></div>';
+      rpHtml += '</div>';
+      rpHtml += '<div style="display:flex;gap:8px;">';
+      rpHtml += '<button class="sp-share-btn" style="position:static;padding:6px 12px;font-size:12px;" onclick="viewAssessmentReport(' + a.id + ')">📄 查阅 / 打印PDF</button>';
+      rpHtml += '<button class="sp-share-btn" style="position:static;padding:6px 12px;font-size:12px;background:linear-gradient(135deg,#F5A623,#E26B31);color:#fff;border:none;" onclick="spShareCard(this)">📸 分享海报</button>';
+      rpHtml += '</div>';
+      rpHtml += '</div>';
+
+      if (a.recommended_level) {
+        rpHtml += '<div style="margin:6px 0 10px;"><span class="sp-level-badge">🎓 建议入学级别: ' + spEsc(a.recommended_level) + '</span></div>';
+      }
+
+      var dims = [
+        ['speaking_pronunciation', '发音清晰度'],
+        ['speaking_communication', '开口主动性'],
+        ['listening_conversation', '理解与反应'],
+        ['classroom_interaction', '参与度与互动']
+      ];
+      rpHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin-bottom:12px;padding:12px;background:#F8FAFC;border-radius:10px;">';
+      dims.forEach(function(d) {
+        if (a[d[0]]) {
+          rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;"><span style="color:#475569;">' + d[1] + '</span>' + spStarsHtml(a[d[0]]) + '</div>';
+        }
+      });
+      rpHtml += '</div>';
+
+      if (a.strengths) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💪 强项亮点</div><div class="sp-feedback-text">' + spEsc(a.strengths) + '</div></div>';
+      if (a.improvements) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📈 建议提升</div><div class="sp-feedback-text">' + spEsc(a.improvements) + '</div></div>';
+      if (a.teacher_message) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师寄语</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:8px 10px;border-radius:8px;">' + spEsc(a.teacher_message) + '</div></div>';
+      rpHtml += '</div>';
+    });
+  }
+  rpHtml += '</div>';
+
   document.getElementById('sp-reports-list').innerHTML = rpHtml;
+
+  // === 目标里程碑进度计算 ===
+  var nextMilestone = 10;
+  if (totalLessons >= 10 && totalLessons < 30) nextMilestone = 30;
+  else if (totalLessons >= 30 && totalLessons < 60) nextMilestone = 60;
+  else if (totalLessons >= 60) nextMilestone = Math.ceil((totalLessons + 1) / 10) * 10;
+
+  var prevMilestone = nextMilestone === 10 ? 0 : (nextMilestone === 30 ? 10 : 30);
+  var diffTotal = nextMilestone - prevMilestone;
+  var diffDone = totalLessons - prevMilestone;
+  var pct = Math.min(100, Math.max(0, Math.round((diffDone / diffTotal) * 100)));
+  var leftLessons = Math.max(0, nextMilestone - totalLessons);
+
+  var mTitleEl = document.getElementById('sp-milestone-title');
+  var mPctEl = document.getElementById('sp-milestone-pct');
+  var mBarEl = document.getElementById('sp-milestone-bar');
+  var mDescEl = document.getElementById('sp-milestone-desc');
+
+  if (mTitleEl && mPctEl && mBarEl && mDescEl) {
+    mTitleEl.textContent = '🎯 目标: 第 ' + nextMilestone + ' 课时阶段进阶评估';
+    mPctEl.textContent = pct + '% (' + totalLessons + '/' + nextMilestone + ' 节)';
+    mBarEl.style.width = pct + '%';
+    mDescEl.textContent = '已完成 ' + totalLessons + ' 节课，还需 ' + leftLessons + ' 节课即可达成下一进阶里程碑，生成专属能力大考评估！';
+  }
 
   // === Tab: 学习轨迹 (only milestones) ===
   var milestones = [];
@@ -1716,13 +1834,13 @@ function renderStudyProfile(student, allClasses) {
   // 1. First trial class
   var firstTrial = sortedClasses.find(function(c) { return c.is_trial === 1; });
   if (firstTrial) {
-    milestones.push({ date: firstTrial.date, icon: '🎁', title: '首次体验课', desc: '开启英语学习之旅 · ' + (firstTrial.teacher_name || '未知老师'), level: 'milestone' });
+    milestones.push({ date: firstTrial.date, icon: '🎁', title: '首次体验课', desc: '开启英语学习之旅 · ' + (firstTrial.teacher_name || '专属外教'), level: 'milestone' });
   }
 
   // 2. First regular lesson
   var firstLesson = sortedClasses.find(function(c) { return c.is_trial !== 1 && c.status === 'completed'; });
   if (firstLesson) {
-    milestones.push({ date: firstLesson.date, icon: '📖', title: '首次正式课', desc: '正式开始系统学习 · ' + (firstLesson.teacher_name || '未知老师'), level: 'milestone' });
+    milestones.push({ date: firstLesson.date, icon: '📖', title: '首次正式课', desc: '正式开启系统化课程 · ' + (firstLesson.teacher_name || '专属外教'), level: 'milestone' });
   }
 
   // 3. Every 10 completed lessons
@@ -1731,32 +1849,19 @@ function renderStudyProfile(student, allClasses) {
     if (c.is_trial !== 1 && c.status === 'completed') {
       completedCount++;
       if (completedCount % 10 === 0) {
-        milestones.push({ date: c.date, icon: '🎒', title: '完成第 ' + completedCount + ' 节课', desc: '坚持学习，稳步进步！', level: 'milestone' });
+        milestones.push({ date: c.date, icon: '🎒', title: '达成第 ' + completedCount + ' 节课', desc: '坚持不懈，稳步进阶！', level: 'milestone' });
       }
     }
   });
 
-  // 4. Level changes from assessments
-  (window_allAssessments || []).forEach(function(a) {
-    if (a.recommended_level) {
-      var cls = myClasses.find(function(c) { return parseInt(c.id) === parseInt(a.class_id); });
-      var date = cls ? cls.date : (a.created_at || '').substring(0, 10);
-      milestones.push({ date: date, icon: '🎓', title: '级别评估', desc: '建议级别: ' + a.recommended_level, level: 'milestone' });
-    }
+  // 4. Progress Reports into timeline
+  progressReports.forEach(function(pr) {
+    var icon = pr.report_type === 'level_up' ? '🎓' : (pr.report_type === 'milestone_60' ? '🥇' : (pr.report_type === 'milestone_30' ? '🥈' : '🥉'));
+    var title = pr.report_type === 'level_up' ? ('晋升等级: ' + (pr.to_level || '')) : (REPORT_TYPE_INFO[pr.report_type]?.label || '阶段成长报告');
+    milestones.push({ date: (pr.created_at || '').substring(0, 10), icon: icon, title: title, desc: pr.summary ? pr.summary.substring(0, 40) + '...' : '获得执教外教阶段评估报告', level: 'milestone' });
   });
 
-  // 5. Level changes from feedback (fb_lesson_level)
-  var seenLevels = {};
-  sortedClasses.forEach(function(c) {
-    if (c.fb_lesson_level) {
-      if (!seenLevels[c.fb_lesson_level]) {
-        seenLevels[c.fb_lesson_level] = true;
-        milestones.push({ date: c.date, icon: '⬆️', title: '等级记录: ' + c.fb_lesson_level, desc: '老师反馈当前等级', level: 'milestone' });
-      }
-    }
-  });
-
-  // Sort by date
+  // 5. Sort by date
   milestones.sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
 
   var tlHtml = '';
@@ -1774,11 +1879,8 @@ function renderStudyProfile(student, allClasses) {
 
   // === Renew CTA ===
   var lessonsLeft = Math.floor(remaining);
-  var targetMod = totalLessons % 10;
-  var lessonsToTarget = 10 - targetMod;
-  if (totalLessons === 0) lessonsToTarget = 10;
   document.getElementById('renew-lessons').textContent = lessonsLeft;
-  document.getElementById('renew-target').textContent = lessonsToTarget;
+  document.getElementById('renew-target').textContent = leftLessons;
 }
 
 function closeFeedbackModal() {
@@ -1798,7 +1900,7 @@ document.getElementById('today-date').textContent = new Date().toLocaleDateStrin
 // ===== 初始化 =====
 loadStudentData();
 
-// ===== Assessment Reports (体验课评估报告) =====
+// ===== Assessment & Progress Reports =====
 async function loadAssessments(studentId) {
   try {
     var resp = await apiGet('/assessments?student_id=' + studentId + '&status=published&page_size=50');
@@ -1806,7 +1908,7 @@ async function loadAssessments(studentId) {
     window_allAssessments = data;
 
     // 同时加载阶段报告
-    var prResp = await apiGet('/progress-reports?student_id=' + studentId);
+    var prResp = await apiGet('/progress-reports?student_id=' + studentId + '&page_size=50');
     var prData = prResp.data && prResp.data.data ? prResp.data.data : (prResp.data || []);
     window_progressReports = prData;
   } catch(e) { console.error('Assessments load error:', e); }
@@ -1814,6 +1916,93 @@ async function loadAssessments(studentId) {
 
 function renderAssessments(list) {
   // 已整合到成长报告Tab,保留空函数兼容
+}
+
+function viewProgressReport(reportId) {
+  var w = window.open('', '_blank', 'width=800,height=900');
+  w.document.write('<html><head><meta charset="UTF-8"><title>阶段成长评估报告</title><style>' + getReportPrintCSS() + '</style></head><body><div style="text-align:center;padding:60px;color:#94a3b8;">加载中...</div></body></html>');
+  w.document.close();
+
+  apiGet('/progress-reports/' + reportId).then(function(resp) {
+    var r = resp.data || resp;
+    if (!r || !r.id) { w.document.body.innerHTML = '<div style="text-align:center;padding:60px;color:#94a3b8;">暂无报告</div>'; return; }
+    w.document.body.innerHTML = buildProgressReportHTML(r);
+  }).catch(function() {
+    w.document.body.innerHTML = '<div style="text-align:center;padding:60px;color:#c00;">加载失败</div>';
+  });
+}
+
+function buildProgressReportHTML(r) {
+  var typeLabels = {
+    milestone_10: '第 10 课时 · 入门适应期评估报告',
+    milestone_30: '第 30 课时 · 进阶强化期评估报告',
+    milestone_60: '第 60 课时 · 学期大纲总评估报告',
+    level_up: '能力进阶 · 等级跃迁报告'
+  };
+  var reportTitle = typeLabels[r.report_type] || '阶段成长评估报告';
+
+  var h = '<div class="report-page">';
+  h += '<div class="report-header">';
+  h += '<div class="header-top">';
+  h += '<div class="brand"><img src="sunblogo.webp" class="brand-logo" alt="SunnyBridge"></div>';
+  h += '<div class="header-website">www.sunnybridge.qzz.io</div>';
+  h += '</div>';
+  h += '<div class="report-title"><h1>' + reportTitle + '</h1>';
+  h += '<div class="subtitle">Student Milestone Progress Report</div></div>';
+  h += '</div>';
+
+  // Info
+  h += '<div class="info-section">';
+  h += '<div class="info-item"><div class="info-label">学生姓名 / Student Name</div><div class="info-value">' + escapeHtml(r.student_name || '') + (r.student_english_name ? ' (' + escapeHtml(r.student_english_name) + ')' : '') + '</div></div>';
+  h += '<div class="info-item"><div class="info-label">执教外教 / Teacher</div><div class="info-value">' + escapeHtml(r.teacher_name || '-') + '</div></div>';
+  h += '<div class="info-item"><div class="info-label">报告日期 / Date</div><div class="info-value">' + ((r.created_at || '').substring(0,10)) + '</div></div>';
+  h += '<div class="info-item"><div class="info-label">当前阶段 / Level</div><div class="info-value">' + escapeHtml(r.to_level || r.from_level || '英语进阶') + '</div></div>';
+  h += '</div>';
+
+  // Summary
+  if (r.summary) {
+    h += '<div class="overall-section">';
+    h += '<div class="overall-title">📋 阶段学习总评 Overall Summary</div>';
+    h += '<div class="overall-text">' + escapeHtml(r.summary) + '</div>';
+    h += '</div>';
+  }
+
+  // Strengths & Improvements
+  if (r.strengths || r.improvements) {
+    h += '<div class="overall-section">';
+    if (r.strengths) {
+      h += '<div class="overall-item"><span class="overall-label">💪 亮点优势 Strengths</span><div class="overall-text">' + escapeHtml(r.strengths) + '</div></div>';
+    }
+    if (r.improvements) {
+      h += '<div class="overall-item" style="margin-top:14px;"><span class="overall-label">📈 建议提升 Areas to Improve</span><div class="overall-text">' + escapeHtml(r.improvements) + '</div></div>';
+    }
+    h += '</div>';
+  }
+
+  // Recommendation
+  if (r.recommendation) {
+    h += '<div class="overall-section">';
+    h += '<div class="overall-title">🎯 后续规划建议 Recommendations</div>';
+    h += '<div class="overall-text">' + escapeHtml(r.recommendation) + '</div>';
+    h += '</div>';
+  }
+
+  // Teacher Message
+  if (r.teacher_message) {
+    h += '<div class="message-section"><div class="message-header">💌 教师寄语 Teacher\'s Message</div><div class="message-text">' + escapeHtml(r.teacher_message) + '</div></div>';
+  }
+
+  // Footer
+  h += '<div class="report-footer">';
+  h += '<div class="footer-brand">SunnyBridge 少儿英语</div>';
+  h += '<div class="footer-slogan">Bridging Smiles, Building Futures</div>';
+  h += '<div class="footer-website">www.sunnybridge.qzz.io</div>';
+  h += '<div class="footer-date">' + new Date().toLocaleDateString('zh-CN') + '</div>';
+  h += '</div>';
+
+  h += '<div class="print-btn-area"><button class="print-btn" onclick="window.print()">🖨️ 导出 / 打印 PDF</button></div>';
+  h += '</div>';
+  return h;
 }
 
 function viewAssessmentReport(assessmentId) {
