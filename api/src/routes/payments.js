@@ -176,72 +176,89 @@ payments.post('/student/:student_id', validate(paymentSchema), async (c) => {
   const studentId = c.req.param('student_id');
   const data = c.req.validated;
 
-  // 检查学生是否存在
-  const student = await DB.prepare('SELECT id FROM students WHERE id = ?').bind(studentId).first();
-  if (!student) {
-    return c.json(error('NOT_FOUND', '学生不存在'), 404);
-  }
-
-  // 如果有关联课时包，检查是否存在
-  if (data.package_id) {
-    const pkg = await DB.prepare('SELECT id FROM packages WHERE id = ?').bind(data.package_id).first();
-    if (!pkg) {
-      return c.json(error('NOT_FOUND', '课时包不存在'), 404);
+  try {
+    // 检查学生是否存在
+    const student = await DB.prepare('SELECT id FROM students WHERE id = ?').bind(studentId).first();
+    if (!student) {
+      return c.json(error('NOT_FOUND', '学生不存在'), 404);
     }
-  }
 
-  // 数据隔离：获取所属机构
-  const userRole = c.req.header('X-User-Role') || 'org_admin';
-  const userOrgId = c.req.header('X-Organization-Id');
-  const organizationId = (userRole !== 'super_admin' && userOrgId) ? parseInt(userOrgId) : 1;
-
-  // 获取今天日期
-  const today = new Date().toISOString().split('T')[0];
-
-  const result = await DB.prepare(`
-    INSERT INTO payments (student_id, amount, payment_method, package_id, description, date, receipt_number, notes, hours, organization_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    studentId,
-    data.amount,
-    data.payment_method || null,
-    data.package_id || null,
-    data.description || null,
-    data.date || today,
-    data.receipt_number || null,
-    data.notes || null,
-    data.hours || 0,
-    organizationId
-  ).run();
-
-  const paymentId = result.meta.last_row_id;
-
-  // 如果付款包含课时，增加课时并记录变动
-  if (data.hours && data.hours > 0) {
-    const student = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(studentId).first();
-    const newTotal = (student.total_hours || 0) + data.hours;
-    const balanceAfter = Math.round((newTotal - (student.used_hours || 0)) * 100) / 100;
-
-    await DB.prepare('UPDATE students SET total_hours = ? WHERE id = ?').bind(newTotal, studentId).run();
-
-    await DB.prepare(`
-      INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
-      VALUES (?, 'payment', ?, ?, ?, ?)
-    `).bind(studentId, data.hours, balanceAfter, paymentId, data.description || '购买课时').run();
-  }
-
-  return c.json(success({
-    id: paymentId,
-    student_id: studentId,
-    amount: data.amount,
-    hours: data.hours || 0,
-    date: data.date || today,
-    created_at: new Date().toISOString(),
-    _links: {
-      self: `/api/v1/payments/${paymentId}`,
-      student: `/api/v1/students/${studentId}`
+    // 如果有关联课时包，检查是否存在
+    if (data.package_id) {
+      const pkg = await DB.prepare('SELECT id FROM packages WHERE id = ?').bind(data.package_id).first();
+      if (!pkg) {
+        return c.json(error('NOT_FOUND', '课时包不存在'), 404);
+      }
     }
-  }), 201);
+
+    // 数据隔离：获取所属机构
+    const userRole = c.req.header('X-User-Role') || 'org_admin';
+    const userOrgId = c.req.header('X-Organization-Id');
+    const organizationId = (userRole !== 'super_admin' && userOrgId) ? parseInt(userOrgId) : 1;
+
+    // 获取今天日期
+    const today = new Date().toISOString().split('T')[0];
+
+    const result = await DB.prepare(`
+      INSERT INTO payments (student_id, amount, payment_method, package_id, description, date, receipt_number, notes, hours, organization_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      studentId,
+      data.amount,
+      data.payment_method || null,
+      data.package_id || null,
+      data.description || null,
+      data.date || today,
+      data.receipt_number || null,
+      data.notes || null,
+      data.hours || 0,
+      organizationId
+    ).run();
+
+    const paymentId = result.meta.last_row_id;
+
+    // 如果付款包含课时，增加课时并记录变动
+    if (data.hours && data.hours > 0) {
+      try {
+        const student = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(studentId).first();
+        const newTotal = (student?.total_hours || 0) + data.hours;
+        const balanceAfter = Math.round((newTotal - (student?.used_hours || 0)) * 100) / 100;
+
+        await DB.prepare('UPDATE students SET total_hours = ? WHERE id = ?').bind(newTotal, studentId).run();
+
+        try {
+          await DB.prepare(`
+            INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
+            VALUES (?, 'payment', ?, ?, ?, ?)
+          `).bind(studentId, data.hours, balanceAfter, paymentId, data.description || '购买课时').run();
+        } catch (hcErr) {
+          // 降级兼容：如果数据库未包含 balance_after 字段
+          await DB.prepare(`
+            INSERT INTO hour_changes (student_id, type, amount, related_id, description)
+            VALUES (?, 'payment', ?, ?, ?)
+          `).bind(studentId, data.hours, paymentId, data.description || '购买课时').run();
+        }
+      } catch (err) {
+        console.warn('增加课时流水警告:', err.message);
+      }
+    }
+
+    return c.json(success({
+      id: paymentId,
+      student_id: studentId,
+      amount: data.amount,
+      hours: data.hours || 0,
+      date: data.date || today,
+      created_at: new Date().toISOString(),
+      _links: {
+        self: `/api/v1/payments/${paymentId}`,
+        student: `/api/v1/students/${studentId}`
+      }
+    }), 201);
+  } catch (err) {
+    console.error('POST /payments/student/:student_id 失败:', err);
+    return c.json(error('DATABASE_ERROR', '添加收款记录失败: ' + err.message), 500);
+  }
 });
 
 // 更新付款记录

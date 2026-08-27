@@ -315,10 +315,17 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
         `UPDATE students SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
       ).bind(classHours, studentId).run();
 
-      await DB.prepare(
-        `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
-         VALUES (?, 'class', ?, ?, ?, ?)`
-      ).bind(studentId, -classHours, balanceAfter, classId, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
+      try {
+        await DB.prepare(
+          `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
+           VALUES (?, 'class', ?, ?, ?, ?)`
+        ).bind(studentId, -classHours, balanceAfter, classId, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
+      } catch (hcErr) {
+        await DB.prepare(
+          `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
+           VALUES (?, 'class', ?, ?, ?)`
+        ).bind(studentId, -classHours, classId, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
+      }
     }
   }
 
@@ -505,10 +512,17 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
             const studentNow = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(existing.student_id).first();
             const balanceAfter = studentNow ? Math.round(((studentNow.total_hours || 0) - (studentNow.used_hours || 0)) * 100) / 100 : null;
 
-            await DB.prepare(
-              `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
-               VALUES (?, 'adjust', ?, ?, ?, ?)`
-            ).bind(existing.student_id, changeAmount, balanceAfter, id, note).run();
+            try {
+              await DB.prepare(
+                `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
+                 VALUES (?, 'adjust', ?, ?, ?, ?)`
+              ).bind(existing.student_id, changeAmount, balanceAfter, id, note).run();
+            } catch (hcErr) {
+              await DB.prepare(
+                `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
+                 VALUES (?, 'adjust', ?, ?, ?)`
+              ).bind(existing.student_id, changeAmount, id, note).run();
+            }
           }
         }
       } catch (e) {
