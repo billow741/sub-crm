@@ -32,7 +32,29 @@ export default function Textbooks() {
   // 弹窗状态
   const [showBooksManage, setShowBooksManage] = useState(false);
   const [showBatchBookModal, setShowBatchBookModal] = useState(false);
+  const [showLlmSettingsModal, setShowLlmSettingsModal] = useState(false);
   const [previewImageModal, setPreviewImageModal] = useState(null);
+
+  // AI 视觉模型设置 (支持 localStorage 持久化)
+  const [llmConfig, setLlmConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sb_llm_config');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      provider: 'nvidia',
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      apiKey: '',
+      model: 'google/gemma-3n-e4b-it'
+    };
+  });
+
+  const saveLlmConfig = (newCfg) => {
+    setLlmConfig(newCfg);
+    try {
+      localStorage.setItem('sb_llm_config', JSON.stringify(newCfg));
+    } catch {}
+  };
 
   // 加载教材列表
   useEffect(() => {
@@ -195,9 +217,14 @@ export default function Textbooks() {
         }
       }
 
+      const headers = { 'X-API-Key': API_KEY };
+      if (llmConfig.baseUrl) headers['X-LLM-Base-Url'] = llmConfig.baseUrl;
+      if (llmConfig.apiKey) headers['X-LLM-Api-Key'] = llmConfig.apiKey;
+      if (llmConfig.model) headers['X-LLM-Model'] = llmConfig.model;
+
       const res = await fetch(`${API_BASE_URL}/textbooks/preview-unit/${selectedBookCode}/${selectedUnitNum}`, {
         method: 'POST',
-        headers: { 'X-API-Key': API_KEY },
+        headers,
         body: fd
       });
       const json = await res.json();
@@ -369,13 +396,24 @@ export default function Textbooks() {
         </div>
 
         <div className="flex items-center gap-2.5">
+          {/* AI 视觉模型设置 */}
+          <button
+            type="button"
+            onClick={() => setShowLlmSettingsModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition shadow-2xs cursor-pointer"
+            title="配置视觉大模型 (OpenAI / 智谱 GLM / Qwen / NVIDIA)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+            <span>⚙️ AI 模型设置</span>
+          </button>
+
           {/* 整本 PDF 批量导入按钮 */}
           <button
             type="button"
             onClick={() => setShowBatchBookModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition shadow-2xs cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+            <Book className="w-3.5 h-3.5 text-purple-600" />
             <span>📖 整本 PDF 批量导入</span>
           </button>
 
@@ -860,10 +898,20 @@ export default function Textbooks() {
         <BatchBookImportModal
           bookCode={selectedBookCode}
           bookName={selectedBook?.name || selectedBookCode}
+          llmConfig={llmConfig}
           onClose={() => {
             setShowBatchBookModal(false);
             selectBook(selectedBookCode);
           }}
+        />
+      )}
+
+      {/* AI 视觉模型设置 Modal */}
+      {showLlmSettingsModal && (
+        <LlmSettingsModal
+          config={llmConfig}
+          onSave={saveLlmConfig}
+          onClose={() => setShowLlmSettingsModal(false)}
         />
       )}
 
@@ -909,7 +957,7 @@ const DEFAULT_OUTLINES = {
   ]
 };
 
-function BatchBookImportModal({ bookCode, bookName, onClose }) {
+function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   
@@ -1063,9 +1111,14 @@ function BatchBookImportModal({ bookCode, bookName, onClose }) {
         }
 
         setStatusMsg(`正在调用 AI 视觉模型提取 Unit ${item.unit_number} 词汇与句型...`);
+        const reqHeaders = { 'X-API-Key': API_KEY };
+        if (llmConfig?.baseUrl) reqHeaders['X-LLM-Base-Url'] = llmConfig.baseUrl;
+        if (llmConfig?.apiKey) reqHeaders['X-LLM-Api-Key'] = llmConfig.apiKey;
+        if (llmConfig?.model) reqHeaders['X-LLM-Model'] = llmConfig.model;
+
         const res = await fetch(`${API_BASE_URL}/textbooks/preview-unit/${bookCode}/${item.unit_number}`, {
           method: 'POST',
-          headers: { 'X-API-Key': API_KEY },
+          headers: reqHeaders,
           body: fd
         });
         const json = await res.json();
@@ -1517,6 +1570,260 @@ function BooksManageModal({ books, onClose }) {
             ))}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// ⚙️ AI 视觉大模型设置 Modal (支持常用预设与连通性测试)
+// ============================================================
+const LLM_PRESETS = [
+  {
+    id: 'nvidia',
+    name: 'NVIDIA NIM (推荐, 免费多模态)',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    model: 'google/gemma-3n-e4b-it',
+    desc: '免费提供 1000 次调用额度，高清晰度视觉提取'
+  },
+  {
+    id: 'zhipu',
+    name: '智谱 GLM-4V',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    model: 'glm-4v-flash',
+    desc: 'glm-4v-flash 免费提供，中文理解极其地道'
+  },
+  {
+    id: 'qwen',
+    name: '阿里通义千问 Qwen-VL',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    model: 'qwen-vl-plus',
+    desc: '阿里云通义千问视觉大模型，识别速度快'
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI (GPT-4o)',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    desc: '业界顶级视觉多模态大模型 (支持 gpt-4o / gpt-4o-mini)'
+  },
+  {
+    id: 'custom',
+    name: '自定义 OpenAI 兼容接口',
+    baseUrl: '',
+    model: '',
+    desc: '支持任何兼容 OpenAI 协议的自建或第三方中转服务'
+  }
+];
+
+function LlmSettingsModal({ config, onSave, onClose }) {
+  const [form, setForm] = useState({ ...config });
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null); // { success: bool, msg: string }
+
+  // 切换预设
+  const handleSelectPreset = (preset) => {
+    if (preset.id === 'custom') {
+      setForm(prev => ({ ...prev, provider: 'custom' }));
+    } else {
+      setForm(prev => ({
+        ...prev,
+        provider: preset.id,
+        baseUrl: preset.baseUrl,
+        model: preset.model
+      }));
+    }
+    setTestResult(null);
+  };
+
+  // 测试连接性
+  const handleTestConnection = async () => {
+    if (!form.apiKey) {
+      alert('请先输入 API Key');
+      return;
+    }
+    setTesting(true);
+    setTestResult(null);
+
+    try {
+      const resp = await fetch(`${API_BASE_URL}/textbooks/test-llm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY
+        },
+        body: JSON.stringify({
+          base_url: form.baseUrl,
+          api_key: form.apiKey,
+          model: form.model
+        })
+      });
+      const json = await resp.json();
+
+      if (json.data?.success) {
+        setTestResult({
+          success: true,
+          msg: `✅ 连接成功！响应耗时: ${json.data.elapsed_ms}ms\n模型回复: "${json.data.reply}"`
+        });
+      } else {
+        setTestResult({
+          success: false,
+          msg: `❌ 测试失败: ${json.error?.message || '未知错误'}`
+        });
+      }
+    } catch (e) {
+      setTestResult({
+        success: false,
+        msg: `❌ 网络异常: ${e.message}`
+      });
+    }
+    setTesting(false);
+  };
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    if (!form.apiKey) {
+      if (!confirm('您尚未填写 API Key，确定保存吗？(未配置 Key 将无法使用 AI 识别)')) return;
+    }
+    onSave(form);
+    alert('✅ AI 视觉模型配置已保存并生效！');
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="px-6 py-4 border-b bg-indigo-50/70 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600 font-bold">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-gray-900">AI 视觉大模型配置中心</h2>
+              <p className="text-xs text-gray-500">自由切换 OpenAI、智谱 GLM、通义千问、NVIDIA NIM 或自定义接口</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 flex-1">
+          {/* 预设平台快速切换 */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-gray-700">1. 选择模型服务商</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {LLM_PRESETS.map(p => {
+                const isSelected = form.provider === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleSelectPreset(p)}
+                    className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-indigo-50 border-indigo-500 shadow-2xs ring-1 ring-indigo-400/30'
+                        : 'bg-white border-gray-200 hover:border-indigo-200 hover:bg-gray-50/50'
+                    }`}
+                  >
+                    <div>
+                      <div className={`text-xs font-bold ${isSelected ? 'text-indigo-900' : 'text-gray-800'}`}>
+                        {p.name}
+                      </div>
+                      <div className="text-[10px] text-gray-500 mt-1 line-clamp-2">{p.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 详细参数配置 */}
+          <div className="space-y-3.5 p-4 bg-gray-50/80 rounded-xl border">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                API Base URL (接口地址)
+              </label>
+              <input
+                type="text"
+                value={form.baseUrl || ''}
+                onChange={e => setForm({ ...form, baseUrl: e.target.value })}
+                placeholder="如 https://integrate.api.nvidia.com/v1"
+                className="w-full px-3 py-2 text-xs border rounded-lg bg-white font-mono"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Model Name (模型名称)
+              </label>
+              <input
+                type="text"
+                value={form.model || ''}
+                onChange={e => setForm({ ...form, model: e.target.value })}
+                placeholder="如 google/gemma-3n-e4b-it / glm-4v-flash / gpt-4o-mini"
+                className="w-full px-3 py-2 text-xs border rounded-lg bg-white font-mono"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center justify-between">
+                <span>API Key (密钥)</span>
+                <span className="text-[10px] text-gray-400 font-normal">保存在本地浏览器中，调用时直接传输</span>
+              </label>
+              <input
+                type="password"
+                value={form.apiKey || ''}
+                onChange={e => setForm({ ...form, apiKey: e.target.value })}
+                placeholder="粘贴对应的 API Key (如 nvapi-... / sk-...)"
+                className="w-full px-3 py-2 text-xs border rounded-lg bg-white font-mono"
+              />
+            </div>
+          </div>
+
+          {/* 连通性测试结果 */}
+          {testResult && (
+            <div className={`p-3 rounded-xl text-xs font-mono whitespace-pre-wrap border ${
+              testResult.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+            }`}>
+              {testResult.msg}
+            </div>
+          )}
+
+          {/* Footer Buttons */}
+          <div className="flex items-center justify-between pt-2 border-t">
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={testing || !form.apiKey}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-xl hover:bg-indigo-100 disabled:opacity-50 transition border border-indigo-200"
+            >
+              {testing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+              <span>{testing ? '正在测试连接...' : '🧪 测试连接'}</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs text-gray-600 hover:text-gray-800"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 shadow-sm"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>保存配置并生效</span>
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
   );

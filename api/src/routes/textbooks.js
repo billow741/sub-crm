@@ -611,21 +611,55 @@ textbooks.post('/extract/:code/:num', async (c) => {
 });
 
 // ============================================================
-// Vision LLM: 用图片直接读
-// 默认 glm-4.6v-flash (免费视觉模型,有限流)
-// 限流时自动 fallback 到 glm-4v (付费,但稳定)
+// POST /test-llm — 测试 AI 视觉大模型连接性
+// Body: { base_url, api_key, model }
+// ============================================================
+textbooks.post('/test-llm', async (c) => {
+  let body = {};
+  try { body = await c.req.json(); } catch {}
+  
+  const baseUrl = body.base_url || c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
+  const apiKey = body.api_key || c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
+  const model = body.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'google/gemma-3n-e4b-it';
+
+  if (!apiKey) {
+    return c.json({ error: { code: 'NO_API_KEY', message: '未提供 API Key' } }, 400);
+  }
+
+  try {
+    const t0 = Date.now();
+    const resp = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: 'Say "Hello, vision model is ready!"' }],
+        max_tokens: 30
+      })
+    });
+
+    const elapsed = Date.now() - t0;
+    if (!resp.ok) {
+      const errText = await resp.text();
+      return c.json({ error: { code: `HTTP_${resp.status}`, message: `API 报错 (${resp.status}): ${errText.substring(0, 300)}` } }, 400);
+    }
+
+    const data = await resp.json();
+    const reply = data.choices?.[0]?.message?.content || '';
+    return c.json({ data: { success: true, elapsed_ms: elapsed, model, reply } });
+  } catch (err) {
+    return c.json({ error: { code: 'NETWORK_ERROR', message: `连接异常: ${err.message}` } }, 500);
+  }
+});
+
+// ============================================================
+// Vision LLM: 用图片直接读 (优先使用 Header 传入的动态配置)
 // ============================================================
 async function callLLMWithImages(c, imageFiles, opts = {}) {
-  const baseUrl = c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
-  const apiKey = c.env.LLM_API_KEY;
-  const model = c.env.LLM_MODEL || 'google/gemma-3n-e4b-it';
-  // Fallback 模型列表 (NVIDIA NIM 上可用的视觉模型)
-  // 主模型 gemma-3n-e4b-it: 8 页稳定,~50s/批, 输出 JSON 准确
-  // fallback 1) nemotron-3-nano-omni-30b-a3b-reasoning: Omni 原生多模态,慢但准
-  // fallback 2) llama-3.2-11b-vision-instruct: 视觉模型(单图,8 页不行,最后兜底)
-  // 注: deepseek-v4-flash / nemotron-3-ultra-550b-a55b 不是视觉模型,不能读图片
-  // 注: llama-3.2-*-vision 限制 1 张图,无法处理 8 页
-  const fallbackModels = ['google/gemma-3n-e4b-it', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'meta/llama-3.2-11b-vision-instruct'];
+  const baseUrl = c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
+  const apiKey = c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
+  const model = c.req.header('x-llm-model') || c.env.LLM_MODEL || 'google/gemma-3n-e4b-it';
+  const fallbackModels = [model, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'meta/llama-3.2-11b-vision-instruct'];
 
   if (!apiKey) {
     throw new Error('LLM_API_KEY not configured. Run: wrangler secret put LLM_API_KEY');
