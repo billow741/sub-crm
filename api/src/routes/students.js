@@ -249,10 +249,15 @@ students.patch('/:id', validateParams(idParamSchema), validate(studentUpdateSche
   }));
 });
 
-// 删除学生
+// 删除学生（仅限超管）
 students.delete('/:id', validateParams(idParamSchema), async (c) => {
   const DB = c.env.DB;
   const { id } = c.req.validatedParams;
+  const userRole = c.req.header('X-User-Role') || 'org_admin';
+
+  if (userRole !== 'super_admin') {
+    return c.json(error('FORBIDDEN', '机构端无权删除学生，请联系系统总管理员处理'), 403);
+  }
 
   // 检查学生是否存在
   const existing = await DB.prepare('SELECT id FROM students WHERE id = ?').bind(id).first();

@@ -451,8 +451,7 @@ async function renderStudents(main) {
         <td class="px-6 py-4"><span class="status-label ${s.status==='active'?'bg-green-100 text-green-700':s.status==='graduated'?'bg-blue-100 text-blue-700':'bg-gray-100 text-gray-700'}">${s.status==='active'?'学习中':s.status==='graduated'?'已结课':'已暂停'}</span></td>
         <td class="px-6 py-4"><div class="flex gap-2">
           <button onclick="viewStudentDetail(${s.id})" class="p-2 text-gray-400 hover:text-blue-600" title="详情"><i class="ri-eye-line"></i></button>
-          <button onclick='editStudent(${JSON.stringify(s).replace(/'/g,"&#39;")})' class="p-2 text-gray-400 hover:text-orange-600"><i class="ri-edit-line"></i></button>
-          <button onclick="deleteStudent(${s.id},'${esc(s.name)}')" class="p-2 text-gray-400 hover:text-red-600"><i class="ri-delete-bin-line"></i></button>
+          <button onclick='editStudent(${JSON.stringify(s).replace(/'/g,"&#39;")})' class="p-2 text-gray-400 hover:text-orange-600" title="编辑"><i class="ri-edit-line"></i></button>
         </div></td>
       </tr>`;
     });
@@ -525,21 +524,6 @@ async function handleStudentSubmit(e) {
     closeStudentModal();
     renderStudents(document.getElementById('main-content'));
   } catch(e) { alert('保存失败: '+e.message); }
-}
-
-async function deleteStudent(id, name) {
-  const pwd = window.prompt(`【高危操作】确定要删除学生「${name}」吗？\n删除学生将导致其所有的关联记录被移除！\n请输入授权确认密码 "DELETE" 进行删除：`);
-  if (pwd === null) return;
-  if (pwd.trim() !== 'DELETE') {
-    alert('密码错误，已取消删除。');
-    return;
-  }
-  try {
-    await api(`/students/${id}`, { method: 'DELETE' });
-    renderStudents(document.getElementById('main-content'));
-  } catch(e) {
-    alert('删除失败: ' + e.message);
-  }
 }
 
 function editStudent(s) { showStudentModal(s); }
