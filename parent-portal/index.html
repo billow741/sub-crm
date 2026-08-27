@@ -916,10 +916,10 @@
       /* Collapsible Cards */
       .sp-card-summary { cursor: pointer; user-select: none; transition: opacity 0.15s ease; }
       .sp-card-summary:hover { opacity: 0.88; }
-      .sp-collapse-body { overflow: hidden; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); opacity: 1; max-height: 2000px; }
-      .sp-collapse-body.collapsed { max-height: 0 !important; opacity: 0; margin-top: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; pointer-events: none; }
-      .sp-toggle-btn { font-size: 12px; font-weight: 600; color: var(--sb-blue); display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; background: rgba(75,159,224,0.08); border: none; cursor: pointer; }
-      .sp-toggle-btn:hover { background: rgba(75,159,224,0.15); color: var(--sb-blue-dark); }
+      .sp-collapse-body { display: block; animation: spFadeIn 0.25s ease; }
+      .sp-collapse-body.collapsed { display: none !important; }
+      @keyframes spFadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+      .sp-toggle-btn { font-size: 12px; font-weight: 600; color: var(--sb-blue); display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; background: rgba(75,159,224,0.08); border: none; pointer-events: none; }
       .sp-arrow-icon { transition: transform 0.25s ease; display: inline-block; font-size: 10px; }
       .sp-arrow-icon.open { transform: rotate(180deg); }
       /* Responsive */
@@ -1749,7 +1749,7 @@ function renderStudyProfile(student, allClasses) {
       code: 'A2',
       title: 'A2 初级应用级',
       age: '8-10 岁',
-      yle: 'YLE Movers',
+      yle: 'YLE Movers - Flyers',
       color: '#6366F1',
       bg: 'rgba(99,102,241,0.06)',
       border: 'rgba(99,102,241,0.2)',
@@ -1758,13 +1758,13 @@ function renderStudyProfile(student, allClasses) {
       reading: '掌握复合元音拼读规律 (ea, ou, igh 等)，阅读 100-200 词短文并回答推断问题',
       vocab: '600-1000 词 (常见时态: 一般现在/过去/现在进行；句型: Why...? Because...)',
       standards: '能用简单时态连贯叙事，阅读基础篇章',
-      textbook: 'Everybody Up 3-4 / Reach Level 2-3'
+      textbook: 'Everybody Up 3-6 / Reach Level 2-3'
     },
     {
       code: 'B1',
       title: 'B1 中级流利级',
       age: '10-12 岁',
-      yle: 'YLE Flyers / KET',
+      yle: 'KET / PET 启航',
       color: '#E26B31',
       bg: 'rgba(226,107,49,0.06)',
       border: 'rgba(226,107,49,0.2)',
@@ -1773,13 +1773,13 @@ function renderStudyProfile(student, allClasses) {
       reading: '独立阅读中长篇故事与科普短文，提取段落主旨大意与上下文推断生词',
       vocab: '1200-1800 词 (包含比较级/最高级/被动语态；句型: If... I will... / Although...)',
       standards: '具备全英文思考习惯与独立阅读能力',
-      textbook: 'Everybody Up 5-6 / Reach Level 4-5'
+      textbook: 'Reach Higher 3-4 / Reading Explorer F-1 / Wonders G3-4'
     },
     {
       code: 'B2',
       title: 'B2 拓展精通级',
       age: '12 岁以上',
-      yle: 'PET 卓越',
+      yle: 'PET 卓越 / FCE 进阶',
       color: '#8B5CF6',
       bg: 'rgba(139,92,246,0.06)',
       border: 'rgba(139,92,246,0.2)',
@@ -1788,7 +1788,7 @@ function renderStudyProfile(student, allClasses) {
       reading: '流畅阅读原版章节书 (Chapter Books)，理解复杂修辞、逻辑推理与批判性思考',
       vocab: '2000-3000+ 词 (复杂从句、学术词汇与地道习语表达)',
       standards: '接近母语者应用水平，具备跨学科阅读力',
-      textbook: 'Wonders G4-G6 / Reach Higher'
+      textbook: 'Reading Explorer 2-3 / Reach Higher 5-6 / Wonders G5-6'
     }
   ];
 
@@ -2095,17 +2095,17 @@ function toggleCollapse(id) {
   if (isCollapsed) {
     el.classList.remove('collapsed');
     if (txt) {
-      if (txt.textContent.includes('反馈')) txt.textContent = '收起反馈 ▲';
-      else if (txt.textContent.includes('报告')) txt.textContent = '收起报告 ▲';
-      else if (txt.textContent.includes('图谱')) txt.textContent = '收起图谱 ▲';
+      if (txt.textContent.indexOf('图谱') !== -1) txt.textContent = '收起进阶图谱 ▲';
+      else if (txt.textContent.indexOf('反馈') !== -1) txt.textContent = '收起反馈 ▲';
+      else if (txt.textContent.indexOf('报告') !== -1) txt.textContent = '收起报告 ▲';
       else txt.textContent = '收起详情 ▲';
     }
   } else {
     el.classList.add('collapsed');
     if (txt) {
-      if (txt.textContent.includes('反馈')) txt.textContent = '查看反馈 ▼';
-      else if (txt.textContent.includes('报告')) txt.textContent = '查看报告 ▼';
-      else if (txt.textContent.includes('图谱')) txt.textContent = '展开进阶图谱 ▼';
+      if (txt.textContent.indexOf('图谱') !== -1) txt.textContent = '展开进阶图谱 ▼';
+      else if (txt.textContent.indexOf('反馈') !== -1) txt.textContent = '查看反馈 ▼';
+      else if (txt.textContent.indexOf('报告') !== -1) txt.textContent = '查看报告 ▼';
       else txt.textContent = '查看详情 ▼';
     }
   }
