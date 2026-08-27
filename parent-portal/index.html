@@ -2496,14 +2496,16 @@ function spShareCard(btn) {
     if (downloadBtn) downloadBtn.style.display = 'none';
   }
 
-  if (typeof html2canvas !== 'undefined') {
+  var isFileProtocol = window.location.protocol === 'file:';
+
+  if (!isFileProtocol && typeof html2canvas !== 'undefined') {
     html2canvas(posterNode, {
       scale: 2,
       useCORS: true,
       backgroundColor: '#FFF9F2',
       logging: false
     }).then(function(canvas) {
-      document.body.removeChild(posterNode);
+      if (posterNode.parentNode) posterNode.parentNode.removeChild(posterNode);
       try {
         var imgUrl = canvas.toDataURL('image/png');
         preview.innerHTML = '<img src="' + imgUrl + '" style="width:100%;height:auto;display:block;border-radius:8px;" alt="海报">';
@@ -2515,11 +2517,12 @@ function spShareCard(btn) {
         fallbackDOM(posterNode);
       }
     }).catch(function(err) {
-      document.body.removeChild(posterNode);
+      if (posterNode.parentNode) posterNode.parentNode.removeChild(posterNode);
       fallbackDOM(posterNode);
     });
   } else {
-    document.body.removeChild(posterNode);
+    // 本地 file:// 协议直接展示原生 DOM 渲染卡片，避免触发浏览器的 iframe 安全策略
+    if (posterNode.parentNode) posterNode.parentNode.removeChild(posterNode);
     fallbackDOM(posterNode);
   }
 }
