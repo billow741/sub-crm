@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <style>
     :root {
       --sb-blue: #4B9FE0;
@@ -1074,10 +1075,16 @@
 </div>
 
 <!-- Share Result Modal -->
-<div class="sp-share-result" id="sp-share-result">
-  <p>长按图片保存，分享给好友 📸</p>
-  <img id="sp-share-img" src="">
-  <button class="close" onclick="document.getElementById('sp-share-result').classList.remove('show')">关闭</button>
+<div class="sp-share-result" id="sp-share-result" onclick="if(event.target===this)closeShareModal()">
+  <div style="background:#fff;border-radius:20px;padding:22px 20px;max-width:400px;width:92%;max-height:90vh;overflow-y:auto;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;">
+    <div style="font-size:16px;font-weight:700;color:var(--sb-dark);margin-bottom:12px;">📸 学员成长打卡海报</div>
+    <div id="sp-poster-preview" style="border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);margin-bottom:14px;background:#FFF8EE;"></div>
+    <div style="font-size:12px;color:var(--sb-muted);margin-bottom:14px;">💡 长按或右键上方图片可直接保存 / 转发至微信朋友圈</div>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <a id="sp-poster-download-btn" href="#" download="SunnyBridge_Student_Report.png" style="display:none;padding:9px 22px;background:linear-gradient(135deg,#F5A623,#E26B31);color:#fff;border-radius:100px;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 2px 8px rgba(226,107,49,0.25);">⬇️ 保存海报图片</a>
+      <button type="button" onclick="closeShareModal()" style="padding:9px 20px;background:#F1F5F9;color:#475569;border:none;border-radius:100px;font-size:13px;font-weight:600;cursor:pointer;">关闭</button>
+    </div>
+  </div>
 </div>
 <div id="feedback-modal" class="modal-overlay">
   <div class="modal-card">
@@ -2382,6 +2389,121 @@ function getReportPrintCSS() {
   css += '@page{margin:1.5cm;}';
   css += '}';
   return css;
+}
+
+// ===== Poster Generation & Share Modal =====
+function closeShareModal() {
+  var m = document.getElementById('sp-share-result');
+  if (m) m.classList.remove('show');
+}
+
+function spShareCard(btn) {
+  var card = btn ? btn.closest('.sp-card') : null;
+  if (!card) return;
+
+  var modal = document.getElementById('sp-share-result');
+  var preview = document.getElementById('sp-poster-preview');
+  var downloadBtn = document.getElementById('sp-poster-download-btn');
+  if (!modal || !preview) return;
+
+  modal.classList.add('show');
+  preview.innerHTML = '<div style="padding:40px;color:#94a3b8;font-size:13px;">🎨 正在为您生成专属成长海报...</div>';
+
+  // 创建海报容器
+  var posterNode = document.createElement('div');
+  posterNode.style.width = '375px';
+  posterNode.style.padding = '22px 18px';
+  posterNode.style.background = 'linear-gradient(180deg, #FFF9F2 0%, #FFFFFF 20%, #F5F9FF 100%)';
+  posterNode.style.borderRadius = '16px';
+  posterNode.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  posterNode.style.color = '#1E293B';
+  posterNode.style.boxSizing = 'border-box';
+  posterNode.style.border = '2px solid rgba(245,166,35,0.35)';
+  posterNode.style.textAlign = 'left';
+
+  // 顶部 SunnyBridge 品牌
+  var sName = document.getElementById('sp-name') ? document.getElementById('sp-name').textContent : '学员';
+  var sGrade = document.getElementById('sp-level') ? document.getElementById('sp-level').textContent : 'Pre-A1';
+  var topHtml = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid rgba(245,166,35,0.25);">';
+  topHtml += '<div style="display:flex;align-items:center;gap:8px;">';
+  topHtml += '<div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#F5A623,#E26B31);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:15px;">SB</div>';
+  topHtml += '<div><div style="font-size:13px;font-weight:800;color:#1C244B;">SunnyBridge 阳光桥英语</div><div style="font-size:10px;color:#64748B;">少儿英语进阶成长档案</div></div>';
+  topHtml += '</div>';
+  topHtml += '<div style="font-size:11px;padding:3px 8px;background:rgba(245,166,35,0.12);color:#D97706;border-radius:100px;font-weight:700;">' + spEsc(sGrade) + '</div>';
+  topHtml += '</div>';
+
+  // 学员与日期摘要
+  var subInfo = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;background:rgba(255,255,255,0.9);padding:8px 12px;border-radius:10px;border:1px solid #E2E8F0;">';
+  subInfo += '<div><span style="font-size:11px;color:#64748B;">学员姓名: </span><b style="font-size:13px;color:#0F172A;">' + spEsc(sName) + '</b></div>';
+  subInfo += '<div style="font-size:11px;color:#94A3B8;">' + new Date().toLocaleDateString('zh-CN') + '</div>';
+  subInfo += '</div>';
+
+  // 提取卡片的核心内容（克隆并净化）
+  var clone = card.cloneNode(true);
+  var btns = clone.querySelectorAll('button, .sp-share-btn, .sp-toggle-btn');
+  btns.forEach(function(b) { b.style.display = 'none'; });
+  var collapses = clone.querySelectorAll('.sp-collapse-body');
+  collapses.forEach(function(c) {
+    c.classList.remove('collapsed');
+    c.style.display = 'block';
+  });
+  clone.style.boxShadow = 'none';
+  clone.style.border = '1px solid #E2E8F0';
+  clone.style.margin = '0 0 12px 0';
+  clone.style.padding = '14px 14px';
+  clone.style.background = '#FFFFFF';
+  clone.style.borderRadius = '12px';
+
+  // 底部寄语
+  var footerHtml = '<div style="margin-top:12px;padding-top:10px;border-top:1px dashed #CBD5E1;display:flex;align-items:center;justify-content:space-between;">';
+  footerHtml += '<div><div style="font-size:11px;font-weight:700;color:#1E293B;">🌈 每一堂课，都在悄悄蜕变！</div><div style="font-size:9px;color:#94A3B8;margin-top:2px;">1对1 纯正外教 · 进阶能力体系</div></div>';
+  footerHtml += '<div style="font-size:10px;color:#3B82F6;font-weight:700;">SunnyBridge</div>';
+  footerHtml += '</div>';
+
+  posterNode.innerHTML = topHtml + subInfo + clone.outerHTML + footerHtml;
+
+  // 挂载用于渲染
+  posterNode.style.position = 'fixed';
+  posterNode.style.left = '-9999px';
+  posterNode.style.top = '0';
+  document.body.appendChild(posterNode);
+
+  function fallbackDOM(node) {
+    node.style.position = 'static';
+    node.style.left = 'auto';
+    node.style.top = 'auto';
+    node.style.width = '100%';
+    preview.innerHTML = '';
+    preview.appendChild(node);
+    if (downloadBtn) downloadBtn.style.display = 'none';
+  }
+
+  if (typeof html2canvas !== 'undefined') {
+    html2canvas(posterNode, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#FFF9F2',
+      logging: false
+    }).then(function(canvas) {
+      document.body.removeChild(posterNode);
+      try {
+        var imgUrl = canvas.toDataURL('image/png');
+        preview.innerHTML = '<img src="' + imgUrl + '" style="width:100%;height:auto;display:block;border-radius:8px;" alt="海报">';
+        if (downloadBtn) {
+          downloadBtn.href = imgUrl;
+          downloadBtn.style.display = 'inline-block';
+        }
+      } catch(err) {
+        fallbackDOM(posterNode);
+      }
+    }).catch(function(err) {
+      document.body.removeChild(posterNode);
+      fallbackDOM(posterNode);
+    });
+  } else {
+    document.body.removeChild(posterNode);
+    fallbackDOM(posterNode);
+  }
 }
 </script>
 
