@@ -528,9 +528,18 @@ async function handleStudentSubmit(e) {
 }
 
 async function deleteStudent(id, name) {
-  if (!confirm(`确定删除「${name}」？`)) return;
-  try { await api(`/students/${id}`, { method: 'DELETE' }); renderStudents(document.getElementById('main-content')); }
-  catch(e) { alert('删除失败: '+e.message); }
+  const pwd = window.prompt(`【高危操作】确定要删除学生「${name}」吗？\n删除学生将导致其所有的关联记录被移除！\n请输入授权确认密码 "DELETE" 进行删除：`);
+  if (pwd === null) return;
+  if (pwd.trim() !== 'DELETE') {
+    alert('密码错误，已取消删除。');
+    return;
+  }
+  try {
+    await api(`/students/${id}`, { method: 'DELETE' });
+    renderStudents(document.getElementById('main-content'));
+  } catch(e) {
+    alert('删除失败: ' + e.message);
+  }
 }
 
 function editStudent(s) { showStudentModal(s); }
