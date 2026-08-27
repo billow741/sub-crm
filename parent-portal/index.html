@@ -1198,8 +1198,29 @@ function getLocalDate() {
 
 // ===== API 请求 =====
 async function apiGet(endpoint) {
-  var res = await fetch(API_BASE + endpoint, { headers: { 'X-API-Key': API_KEY } });
-  return res.json();
+  var urls = [
+    API_BASE + endpoint,
+    'http://localhost:8787/api/v1' + endpoint
+  ];
+
+  for (var i = 0; i < urls.length; i++) {
+    var url = urls[i];
+    try {
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function() { controller.abort(); }, 8000);
+      var res = await fetch(url, {
+        headers: { 'X-API-Key': API_KEY },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch(err) {
+      console.warn('API route failed:', url, err.message);
+    }
+  }
+  throw new Error('网络请求超时，请检查网络连接或稍后重试');
 }
 
 // ===== 主流程 =====
@@ -1260,7 +1281,15 @@ async function loadStudentData() {
 
   } catch (err) {
     console.error('加载失败:', err);
-    document.getElementById('today-classes').innerHTML = '<div class="error-state">加载失败: ' + err.message + '</div>';
+    var errBox = document.getElementById('today-classes');
+    if (errBox) {
+      errBox.innerHTML = '<div class="error-state" style="padding:24px;text-align:center;">' +
+        '<div style="font-size:28px;margin-bottom:8px;">📡</div>' +
+        '<div style="font-weight:600;margin-bottom:6px;color:#1E293B;">数据连接失败</div>' +
+        '<div style="font-size:12px;color:#64748B;margin-bottom:14px;">' + spEsc(err.message || '网络连接超时') + '</div>' +
+        '<button type="button" onclick="loadStudentData()" style="padding:8px 20px;background:#4B9FE0;color:#fff;border:none;border-radius:100px;font-size:13px;font-weight:600;cursor:pointer;">🔄 重新加载</button>' +
+        '</div>';
+    }
   }
 }
 
