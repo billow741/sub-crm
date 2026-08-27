@@ -12,7 +12,7 @@ export const cors = async (c, next) => {
 
   // 预先设置所有 CORS 头 (即使后续路由报错,响应也会带 CORS)
   c.res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  c.res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, x-api-key, X-User-Role, X-Organization-Id');
+  c.res.headers.set('Access-Control-Allow-Headers', '*');
   c.res.headers.set('Access-Control-Max-Age', '86400');
   if (allowHeaderValue) {
     c.res.headers.set('Access-Control-Allow-Origin', allowHeaderValue);

@@ -656,13 +656,13 @@ textbooks.post('/test-llm', async (c) => {
 // Vision LLM: 用图片直接读 (优先使用 Header 传入的动态配置)
 // ============================================================
 async function callLLMWithImages(c, imageFiles, opts = {}) {
-  const baseUrl = c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
-  const apiKey = c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
-  const model = c.req.header('x-llm-model') || c.env.LLM_MODEL || 'meta/llama-3.2-11b-vision-instruct';
+  const baseUrl = opts.baseUrl || c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
+  const apiKey = opts.apiKey || c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
+  const model = opts.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'meta/llama-3.2-11b-vision-instruct';
   const fallbackModels = [model, 'qwen/qwen2.5-vl-72b-instruct', 'meta/llama-3.2-11b-vision-instruct'];
 
   if (!apiKey) {
-    throw new Error('LLM_API_KEY not configured. Run: wrangler secret put LLM_API_KEY');
+    throw new Error('LLM_API_KEY not configured. Please set API Key in Model Settings.');
   }
 
   // 把所有图片转 base64 (用 FileReader-like 方式)
@@ -827,9 +827,20 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
   }
 
   try {
+    // 从 Header 或 FormData 读取动态模型配置
+    const llmBaseUrl = formData.get('llm_base_url') || c.req.header('x-llm-base-url');
+    const llmApiKey = formData.get('llm_api_key') || c.req.header('x-llm-api-key');
+    const llmModel = formData.get('llm_model') || c.req.header('x-llm-model');
+
     // 单 Unit prompt 提取 (若有 ai_vision 单图则用单图，保证 100% 兼容 Llama 等多模态模型)
     const imagesToLLM = aiVision ? [aiVision] : images;
-    const content = await callLLMWithImages(c, imagesToLLM, { bookMode: false, maxPages: 4 });
+    const content = await callLLMWithImages(c, imagesToLLM, {
+      bookMode: false,
+      maxPages: 4,
+      baseUrl: llmBaseUrl,
+      apiKey: llmApiKey,
+      model: llmModel
+    });
 
     // 把这次上传的 PDF 页面图保存到 R2 (path: `${code}/Unit${num}/page-${i}.png`)
     const R2 = c.env.TEXTBOOKS_R2;

@@ -217,6 +217,10 @@ export default function Textbooks() {
         }
       }
 
+      if (llmConfig.baseUrl) fd.append('llm_base_url', llmConfig.baseUrl);
+      if (llmConfig.apiKey) fd.append('llm_api_key', llmConfig.apiKey);
+      if (llmConfig.model) fd.append('llm_model', llmConfig.model);
+
       const headers = { 'X-API-Key': API_KEY };
       if (llmConfig.baseUrl) headers['X-LLM-Base-Url'] = llmConfig.baseUrl;
       if (llmConfig.apiKey) headers['X-LLM-Api-Key'] = llmConfig.apiKey;
@@ -1142,6 +1146,11 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
           // 把拼图作为 ai_vision.jpg 传给后端
           fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
         }
+
+        // 同时在 FormData 和 Header 中携带配置 (双重保障避免被拦截)
+        if (llmConfig?.baseUrl) fd.append('llm_base_url', llmConfig.baseUrl);
+        if (llmConfig?.apiKey) fd.append('llm_api_key', llmConfig.apiKey);
+        if (llmConfig?.model) fd.append('llm_model', llmConfig.model);
 
         setStatusMsg(`正在调用 AI 视觉模型提取 Unit ${item.unit_number} 词汇与句型...`);
         const reqHeaders = { 'X-API-Key': API_KEY };
