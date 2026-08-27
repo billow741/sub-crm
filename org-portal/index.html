@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SunnyBridge - 机构管理端</title>
+  <link rel="icon" type="image/webp" href="sunblogo.webp">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css" rel="stylesheet">
   <style>
@@ -22,8 +23,8 @@
 <div id="login-screen" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
   <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full mx-4">
     <div class="text-center mb-8">
-      <div class="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <i class="ri-government-line text-3xl text-orange-500"></i>
+      <div class="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+        <img src="sunblogo.webp" alt="SunnyBridge" class="w-16 h-16 object-contain">
       </div>
       <h1 class="text-2xl font-bold text-gray-800">SunnyBridge 机构端</h1>
       <p class="text-gray-500 mt-2">请输入机构代码和密码登录</p>
@@ -54,10 +55,8 @@
     <!-- Sidebar -->
     <div id="sidebar" class="w-60 bg-white border-r border-gray-200 flex flex-col shrink-0">
       <div class="p-5 border-b border-gray-200">
-        <div class="flex items-center gap-2">
-          <div class="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center">
-            <i class="ri-government-line text-orange-500 text-lg"></i>
-          </div>
+        <div class="flex items-center gap-3">
+          <img src="sunblogo.webp" alt="SunnyBridge" class="w-9 h-9 object-contain flex-shrink-0">
           <div>
             <h1 class="font-bold text-gray-800 text-sm" id="sidebar-org-name">加载中...</h1>
             <p class="text-xs text-gray-400">机构管理端</p>
