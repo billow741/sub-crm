@@ -843,7 +843,7 @@ textbooks.delete('/books-manage/:code', async (c) => {
 
 // ---- 单元管理 (Admin 直接增删改 textbook_units 列表,无须经 AI) ----
 
-// GET /unit-pages/:code/:num — 列出某 unit 在 R2 的所有页面图 (用于家长端 feedback 显示)
+// GET /unit-pages/:code/:num — 列出某 unit 在 R2 的所有页面图 (用于家长端 feedback 与后台工作台显示)
 // 返回 [{ key, url, page_num, size, uploaded }]
 textbooks.get('/unit-pages/:code/:num', async (c) => {
   const R2 = c.env.TEXTBOOKS_R2;
@@ -851,17 +851,36 @@ textbooks.get('/unit-pages/:code/:num', async (c) => {
   const num = parseInt(c.req.param('num'));
   if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'TEXTBOOKS_R2 未配置' } }, 500);
 
-  const prefix = `${code}/Unit${num}/`;
-  const listed = await R2.list({ prefix, limit: 100 });
-  const items = (listed.objects || []).map(o => ({
-    key: o.key,
-    page_num: parseInt((o.key.match(/page-(\d+)\.png$/) || [])[1] || 0),
-    size: o.size,
-    uploaded: o.uploaded?.toISOString?.() || null
-  })).sort((a, b) => a.page_num - b.page_num);
+  // 扫描两种可能的前缀: 标准目录前缀 `${code}/Unit${num}/` 与扁平前缀 `${code}/Unit${num}_`
+  const prefix1 = `${code}/Unit${num}/`;
+  const prefix2 = `${code}/Unit${num}_`;
+  
+  const [res1, res2] = await Promise.all([
+    R2.list({ prefix: prefix1, limit: 100 }),
+    R2.list({ prefix: prefix2, limit: 100 })
+  ]);
 
-  // 给前端一个 R2 public URL 或直接 base path
+  const allObjs = [...(res1.objects || []), ...(res2.objects || [])];
+  // 过滤出图片文件 (.png, .jpg, .webp)
+  const imgObjs = allObjs.filter(o => /\.(png|jpg|jpeg|webp)$/i.test(o.key));
+
+  const pageMap = new Map();
+  imgObjs.forEach(o => {
+    const m = o.key.match(/page[_-](\d+)\.(png|jpg|jpeg|webp)$/i);
+    const pageNum = m ? parseInt(m[1]) : 0;
+    if (pageNum > 0 && !pageMap.has(pageNum)) {
+      pageMap.set(pageNum, {
+        key: o.key,
+        page_num: pageNum,
+        size: o.size,
+        uploaded: o.uploaded?.toISOString?.() || null
+      });
+    }
+  });
+
+  const items = Array.from(pageMap.values()).sort((a, b) => a.page_num - b.page_num);
   const baseUrl = `https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${code}/${num}`;
+  
   return c.json({ data: {
     textbook_code: code,
     unit_number: num,
@@ -872,7 +891,7 @@ textbooks.get('/unit-pages/:code/:num', async (c) => {
   }});
 });
 
-// GET /page-img/:code/:num/:page — 获取 R2 里某 unit 的指定页面图 (公开访问, 无需 API Key)
+// GET /page-img/:code/:num/:page — 获取 R2 里某 unit 的指定页面图 (公开访问, 多重 Fallback 兼容)
 textbooks.get('/page-img/:code/:num/:page', async (c) => {
   const R2 = c.env.TEXTBOOKS_R2;
   const code = c.req.param('code');
@@ -880,9 +899,33 @@ textbooks.get('/page-img/:code/:num/:page', async (c) => {
   const page = parseInt(c.req.param('page'));
   if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 未配置' } }, 500);
 
-  const key = `${code}/Unit${num}/page-${String(page).padStart(2,'0')}.png`;
-  const obj = await R2.get(key);
-  if (!obj) return c.json({ error: { code: 'NOT_FOUND', message: `图片不存在: ${key}` } }, 404);
+  // 优先级检索路径:
+  // 1. 标准两位数补零: EU-S/Unit1/page-01.png
+  // 2. 单数字不补零: EU-S/Unit1/page-1.png
+  // 3. 历史下划线补零: EU-S/Unit1_page-01.png
+  // 4. 历史下划线不补零: EU-S/Unit1_page-1.png
+  const candidateKeys = [
+    `${code}/Unit${num}/page-${String(page).padStart(2, '0')}.png`,
+    `${code}/Unit${num}/page-${page}.png`,
+    `${code}/Unit${num}_page-${String(page).padStart(2, '0')}.png`,
+    `${code}/Unit${num}_page-${page}.png`,
+    `${code}/Unit${num}/page_${page}.png`,
+    `${code}/Unit${num}/page_${String(page).padStart(2, '0')}.png`
+  ];
+
+  let obj = null;
+  let foundKey = '';
+  for (const k of candidateKeys) {
+    obj = await R2.get(k);
+    if (obj) {
+      foundKey = k;
+      break;
+    }
+  }
+
+  if (!obj) {
+    return c.json({ error: { code: 'NOT_FOUND', message: `图片不存在 (已检索 ${candidateKeys.join(', ')})` } }, 404);
+  }
 
   const ct = obj.httpMetadata?.contentType || 'image/png';
   return new Response(obj.body, {
@@ -892,6 +935,28 @@ textbooks.get('/page-img/:code/:num/:page', async (c) => {
       'Access-Control-Allow-Origin': '*'
     }
   });
+});
+
+// DELETE /page-img/:code/:num/:page — 删除单张切图 (工作台管理)
+textbooks.delete('/page-img/:code/:num/:page', async (c) => {
+  const R2 = c.env.TEXTBOOKS_R2;
+  const code = c.req.param('code');
+  const num = parseInt(c.req.param('num'));
+  const page = parseInt(c.req.param('page'));
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 未配置' } }, 500);
+
+  const candidateKeys = [
+    `${code}/Unit${num}/page-${String(page).padStart(2, '0')}.png`,
+    `${code}/Unit${num}/page-${page}.png`,
+    `${code}/Unit${num}_page-${String(page).padStart(2, '0')}.png`,
+    `${code}/Unit${num}_page-${page}.png`
+  ];
+
+  for (const k of candidateKeys) {
+    try { await R2.delete(k); } catch(e) {}
+  }
+
+  return c.json({ data: { deleted: true, textbook_code: code, unit_number: num, page } });
 });
 
 // GET /units-manage/:code — 列出该书所有 unit

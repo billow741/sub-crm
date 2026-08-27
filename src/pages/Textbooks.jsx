@@ -1,74 +1,143 @@
 import { useState, useEffect, useRef } from 'react';
-import { Book, FileText, Upload, Sparkles, Loader, CheckCircle, XCircle, Trash2, ChevronRight, ArrowLeft, Image as ImageIcon } from 'lucide-react';
+import { 
+  Book, FileText, Upload, Sparkles, Loader, CheckCircle, XCircle, 
+  Trash2, Plus, Edit3, Save, Eye, RefreshCw, AlertCircle, 
+  ExternalLink, Layers, ChevronRight, Check, X
+} from 'lucide-react';
 import { request, API_BASE_URL, API_KEY } from '../store/api';
 
 export default function Textbooks() {
+  // 核心数据状态
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [selectedUnit, setSelectedUnit] = useState(null);
+  const [selectedBookCode, setSelectedBookCode] = useState(null);
+  const [bookUnits, setBookUnits] = useState([]);
+  const [loadingUnits, setLoadingUnits] = useState(false);
+  const [selectedUnitNum, setSelectedUnitNum] = useState(null);
+  const [unitDetail, setUnitDetail] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
-  useEffect(() => { loadBooks(); }, []);
+  // R2 切图列表与本地渲染
+  const [r2Pages, setR2Pages] = useState([]);
+  const [loadingPages, setLoadingPages] = useState(false);
+  const [renderedImages, setRenderedImages] = useState([]); // [{blob, url}]
+  const [rendering, setRendering] = useState(false);
+  const [renderProgress, setRenderProgress] = useState('');
 
-  const loadBooks = async () => {
+  // AI 提取与保存状态
+  const [extracting, setExtracting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('vocab'); // 'vocab' | 'patterns' | 'grammar'
+
+  // 弹窗状态
+  const [showBooksManage, setShowBooksManage] = useState(false);
+  const [previewImageModal, setPreviewImageModal] = useState(null);
+
+  // 加载教材列表
+  useEffect(() => {
+    loadBooks();
+  }, []);
+
+  const loadBooks = async (keepSelection = true) => {
     setLoading(true);
     try {
       const resp = await request('/textbooks');
-      setBooks(resp.data || []);
-    } catch (e) { console.error(e); }
+      const list = resp.data || [];
+      setBooks(list);
+      if (list.length > 0 && (!selectedBookCode || !keepSelection)) {
+        selectBook(list[0].code);
+      }
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
   };
 
-  // 打开单个教材
-  const openBook = async (code) => {
-    try {
-      const resp = await request(`/textbooks/book/${code}`);
-      setSelectedBook(resp.data);
-      setSelectedUnit(null);
-    } catch (e) { alert('加载教材失败'); }
-  };
+  // 切换选中教材
+  const selectBook = async (code) => {
+    setSelectedBookCode(code);
+    setSelectedUnitNum(null);
+    setUnitDetail(null);
+    setR2Pages([]);
+    setRenderedImages([]);
+    setLoadingUnits(true);
 
-  // 打开单元 (显示内容 + 上传 + 提取区)
-  const openUnit = async (unit) => {
-    setSelectedUnit(unit);
-    // 拉内容
     try {
-      const resp = await request(`/textbooks/content/${selectedBook.code}/${unit.unit_number}`);
-      // 文件头有 404 时 resp 没有 data,就当成空
-      if (resp.data) setUnitContent(resp.data);
-      else setUnitContent(null);
-    } catch {
-      setUnitContent(null);
+      const resp = await request(`/textbooks/units-manage/${code}`);
+      const units = resp.data?.units || [];
+      setBookUnits(units);
+      if (units.length > 0) {
+        selectUnit(code, units[0].unit_number);
+      }
+    } catch (e) {
+      console.error(e);
+      setBookUnits([]);
     }
+    setLoadingUnits(false);
   };
 
-  const [unitContent, setUnitContent] = useState(null);
-  const [extracting, setExtracting] = useState(false);
-  const [extractResult, setExtractResult] = useState(null);
-  const [extractError, setExtractError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef(null);
+  // 切换选中单元
+  const selectUnit = async (code, unitNum) => {
+    setSelectedUnitNum(unitNum);
+    setLoadingDetail(true);
+    setRenderedImages([]);
 
-  // 浏览器端 PDF 转图片 (PDF.js render 到 canvas,导出 PNG blob)
-  const [renderedImages, setRenderedImages] = useState([]);  // [{blob, url}]
-  const [rendering, setRendering] = useState(false);
-  const [renderError, setRenderError] = useState('');
-  const [bookMode, setBookMode] = useState(false);  // false=单unit, true=整本书
+    // 1. 获取单元内容
+    try {
+      const resp = await request(`/textbooks/content/${code}/${unitNum}`);
+      if (resp.data) {
+        setUnitDetail({
+          unit_number: unitNum,
+          unit_title: resp.data.unit_title || '',
+          vocab: resp.data.vocab || [],
+          patterns: resp.data.patterns || [],
+          grammar: resp.data.grammar || []
+        });
+      } else {
+        // 查找单元默认标题
+        const u = bookUnits.find(item => item.unit_number === unitNum);
+        setUnitDetail({
+          unit_number: unitNum,
+          unit_title: u?.unit_title || `Unit ${unitNum}`,
+          vocab: [],
+          patterns: [],
+          grammar: []
+        });
+      }
+    } catch (e) {
+      const u = bookUnits.find(item => item.unit_number === unitNum);
+      setUnitDetail({
+        unit_number: unitNum,
+        unit_title: u?.unit_title || `Unit ${unitNum}`,
+        vocab: [],
+        patterns: [],
+        grammar: []
+      });
+    }
 
-  const handleFileChange = async (e) => {
+    // 2. 获取该单元在 R2 的切图列表
+    loadUnitPages(code, unitNum);
+    setLoadingDetail(false);
+  };
+
+  const loadUnitPages = async (code, unitNum) => {
+    setLoadingPages(true);
+    try {
+      const resp = await request(`/textbooks/unit-pages/${code}/${unitNum}`);
+      setR2Pages(resp.data?.pages || []);
+    } catch (e) {
+      setR2Pages([]);
+    }
+    setLoadingPages(false);
+  };
+
+  // 处理 PDF 上传与浏览器端切片
+  const handlePdfUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setRenderedImages([]); setRenderError(''); setRenderError('');
-    setExtractResult(null); setExtractError('');
 
-    if (!file.type.includes('pdf')) {
-      // 非PDF,直接当图片用
-      setRenderedImages([{ blob: file, url: URL.createObjectURL(file) }]);
-      return;
-    }
-
-    // PDF → 用 pdfjs 渲染每页为 PNG (动态加载,避免顶层 PDF worker 未初始化)
     setRendering(true);
+    setRenderProgress('正在加载 PDF 解析引擎...');
     try {
       const pdfjsLib = await import('pdfjs-dist');
       const workerMod = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
@@ -76,17 +145,13 @@ export default function Textbooks() {
 
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      setTotalPages(pdf.numPages);
-      pdfDocRef.current = pdf;  // 保存 pdf 文档,后续切批不用重新解析
-      setPdfFileRef(file);  // 保留 file 引用
+      const numPages = pdf.numPages;
+      const maxPages = Math.min(numPages, 12); // 单单元切图最多支持 12 页
 
-      // 整本书模式按批次渲染 (batchStart..batchStart+BATCH_SIZE),单 unit 模式渲染前 8 页
-      const startPage = bookMode ? (batchStart + 1) : 1;
-      const maxPages = bookMode ? Math.min(BATCH_SIZE, pdf.numPages - batchStart) : Math.min(BATCH_SIZE, pdf.numPages);
       const images = [];
-      for (let i = 0; i < maxPages; i++) {
-        const pageNum = startPage + i;
-        const page = await pdf.getPage(pageNum);
+      for (let i = 1; i <= maxPages; i++) {
+        setRenderProgress(`正在切片渲染第 ${i} / ${maxPages} 页...`);
+        const page = await pdf.getPage(i);
         const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
@@ -94,1102 +159,851 @@ export default function Textbooks() {
         const ctx = canvas.getContext('2d');
         await page.render({ canvasContext: ctx, viewport }).promise;
         const blob = await new Promise(res => canvas.toBlob(res, 'image/png', 0.85));
-        images.push({ blob, url: URL.createObjectURL(blob) });
+        images.push({ blob, url: URL.createObjectURL(blob), pageNum: i });
       }
+
       setRenderedImages(images);
-      if (bookMode && pdf.numPages > batchStart + BATCH_SIZE) {
-        setRenderError(`当前批次: 第 ${batchStart+1}-${batchStart + images.length} 页 (共 ${pdf.numPages} 页). 还剩 ${pdf.numPages - batchStart - images.length} 页未处理`);
-      }
+      setRenderProgress('');
     } catch (err) {
-      setRenderError('PDF 渲染失败: ' + err.message);
-      console.error('PDF render error:', err);
+      alert('PDF 切片失败: ' + err.message);
+      setRenderProgress('');
     }
     setRendering(false);
+    e.target.value = '';
   };
 
-  // 触发上传图片 + LLM 提取 (单 Unit 模式: 不写库,先弹校对 Modal)
-  const handleExtractPreview = async () => {
-    if (renderedImages.length === 0) { alert('请先选择 PDF 文件并等待转换为图片'); return; }
-    setExtracting(true); setExtractError(''); setPreviewUnits(null);
+  // 触发 AI 视觉多模态识别 (同时保存切图至 R2)
+  const handleAiExtract = async () => {
+    if (!selectedBookCode || selectedUnitNum === null) return;
+    if (renderedImages.length === 0 && r2Pages.length === 0) {
+      alert('请先上传该单元的 PDF 文件进行切片');
+      return;
+    }
+
+    setExtracting(true);
     try {
       const fd = new FormData();
-      renderedImages.forEach((img, i) => fd.append('images', img.blob, `page-${i+1}.png`));
-      const url = `/textbooks/preview-unit/${selectedBook.code}/${selectedUnit.unit_number}`;
-      const r = await fetch(`${API_BASE_URL}${url}`, {
+      if (renderedImages.length > 0) {
+        renderedImages.forEach((img, i) => {
+          fd.append('images', img.blob, `page-${String(i + 1).padStart(2, '0')}.png`);
+        });
+      } else {
+        // 如果本地没有刚切的，但 R2 上有切图，拉取切图 blob
+        for (const p of r2Pages) {
+          const res = await fetch(p.url, { headers: { 'X-API-Key': API_KEY } });
+          const blob = await res.blob();
+          fd.append('images', blob, `page-${String(p.page_num).padStart(2, '0')}.png`);
+        }
+      }
+
+      const res = await fetch(`${API_BASE_URL}/textbooks/preview-unit/${selectedBookCode}/${selectedUnitNum}`, {
         method: 'POST',
         headers: { 'X-API-Key': API_KEY },
         body: fd
       });
-      const resp = await r.json();
-      if (resp.data) {
-        // /preview-unit 返回单个 unit 对象,放进 array 复用整本书的校对 Modal
-        setPreviewUnits([resp.data]);
-        setShowReviewModal(true);
+      const json = await res.json();
+
+      if (json.data) {
+        const d = json.data;
+        setUnitDetail(prev => ({
+          ...prev,
+          unit_title: d.unit_title || prev.unit_title,
+          vocab: d.vocab || [],
+          patterns: d.patterns || [],
+          grammar: d.grammar || []
+        }));
+        // 刷新 R2 列表
+        loadUnitPages(selectedBookCode, selectedUnitNum);
+        alert('🎉 AI 视觉识别完成！内容已加载至下方，请校对后点击【保存入库】');
       } else {
-        setExtractError(resp.error?.message || '提取失败');
-      }
-    } catch (e) { setExtractError(e.message); }
-    setExtracting(false);
-  };
-
-  // 单元管理 Modal (直接增删改 textbook_units 列表)
-  const [showUnitsManage, setShowUnitsManage] = useState(false);
-  const [manageUnits, setManageUnits] = useState([]);  // 从 /units-manage 返回的 unit 列表
-  const [manageLoading, setManageLoading] = useState(false);
-  const [newUnitNum, setNewUnitNum] = useState('');
-  const [newUnitTitle, setNewUnitTitle] = useState('');
-
-  // ====== 教材库管理 Modal (直接增删改 textbooks 表) ======
-  const [showBooksManage, setShowBooksManage] = useState(false);
-  const [manageBooks, setManageBooks] = useState([]);
-  const [booksManageLoading, setBooksManageLoading] = useState(false);
-  const [newBook, setNewBook] = useState({ code: '', name: '', level: '', publisher: '', total_units: 8, description: '' });
-
-  const openBooksManage = async () => {
-    setShowBooksManage(true);
-    setBooksManageLoading(true);
-    try {
-      // 复用 GET / 返回的 books 列表
-      setManageBooks(books);
-    } catch (e) { alert('加载教材列表失败: ' + e.message); }
-    setBooksManageLoading(false);
-  };
-
-  const updateManageBook = async (code, field, value) => {
-    setManageBooks(prev => prev.map(b => b.code === code ? { ...b, [field]: value } : b));
-    try {
-      await fetch(`${API_BASE_URL}/textbooks/books-manage/${code}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-        body: JSON.stringify({ [field]: field === 'total_units' || field === 'is_active' ? (field === 'is_active' ? Boolean(value) : parseInt(value)) : value })
-      });
-    } catch (e) {
-      alert('保存失败: ' + e.message);
-      loadBooks();  // 回滚
-    }
-  };
-
-  const addManageBook = async () => {
-    if (!newBook.code || !newBook.name) { alert('code 和 name 必填'); return; }
-    try {
-      const r = await fetch(`${API_BASE_URL}/textbooks/books-manage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-        body: JSON.stringify(newBook)
-      });
-      const resp = await r.json();
-      if (resp.data) {
-        setNewBook({ code: '', name: '', level: '', publisher: '', total_units: 8, description: '' });
-        loadBooks();
-        setManageBooks(books);
-        alert(`✅ 新教材 ${newBook.code} 已创建\n下一步: 进入这本教材 → 点 "管理单元列表" 新增单元`);
-      } else {
-        alert(resp.error?.message || '新增失败');
-      }
-    } catch (e) { alert('新增失败: ' + e.message); }
-  };
-
-  const deleteManageBook = async (code, name) => {
-    if (!confirm(`删除整本教材 ${name} (${code})?\n\n这本教材的所有 unit 和 AI 提取内容都会一并删除!\n\n此操作不可恢复,确认吗?`)) return;
-    try {
-      await fetch(`${API_BASE_URL}/textbooks/books-manage/${code}`, {
-        method: 'DELETE',
-        headers: { 'X-API-Key': API_KEY }
-      });
-      loadBooks();
-      setManageBooks(books);
-      alert(`已删除 ${name} (${code})`);
-    } catch (e) { alert('删除失败: ' + e.message); }
-  };
-
-  const openUnitsManage = async () => {
-    if (!selectedBook) return;
-    setShowUnitsManage(true);
-    setManageLoading(true);
-    try {
-      const r = await fetch(`${API_BASE_URL}/textbooks/units-manage/${selectedBook.code}`,
-        { headers: { 'X-API-Key': API_KEY } });
-      const resp = await r.json();
-      setManageUnits(resp.data?.units || []);
-    } catch (e) { alert('加载单元列表失败: ' + e.message); }
-    setManageLoading(false);
-  };
-
-  const refreshUnitsManage = async () => {
-    const r = await fetch(`${API_BASE_URL}/textbooks/units-manage/${selectedBook.code}`,
-      { headers: { 'X-API-Key': API_KEY } });
-    const resp = await r.json();
-    setManageUnits(resp.data?.units || []);
-  };
-
-  const updateManageUnit = async (idx, field, value) => {
-    const u = manageUnits[idx];
-    const oldNum = u.unit_number;
-    // 本地立即更新 (乐观)
-    setManageUnits(prev => prev.map((m, i) => i === idx ? { ...m, [field]: value } : m));
-    try {
-      // 改 unit_number 是单独路径
-      if (field === 'unit_number' && value !== oldNum) {
-        await fetch(`${API_BASE_URL}/textbooks/units-manage/${selectedBook.code}/${oldNum}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-          body: JSON.stringify({ new_unit_number: parseInt(value) || 0 })
-        });
-      } else if (field !== 'unit_number') {
-        await fetch(`${API_BASE_URL}/textbooks/units-manage/${selectedBook.code}/${oldNum}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-          body: JSON.stringify({ [field]: field === 'is_active' ? Boolean(value) : (field === 'lesson_count' ? parseInt(value) : value) })
-        });
-      }
-    } catch (e) {
-      alert('保存失败: ' + e.message);
-      refreshUnitsManage();
-    }
-  };
-
-  const deleteManageUnit = async (num) => {
-    if (!confirm(`删除 Unit ${num}?\n该单元的 AI 提取内容也会一并删除`)) return;
-    try {
-      await fetch(`${API_BASE_URL}/textbooks/units-manage/${selectedBook.code}/${num}`, {
-        method: 'DELETE',
-        headers: { 'X-API-Key': API_KEY }
-      });
-      refreshUnitsManage();
-    } catch (e) { alert('删除失败: ' + e.message); }
-  };
-
-  const addManageUnit = async () => {
-    if (!newUnitNum) { alert('请填 unit 编号'); return; }
-    try {
-      await fetch(`${API_BASE_URL}/textbooks/units-manage/${selectedBook.code}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-        body: JSON.stringify({ unit_number: parseInt(newUnitNum), unit_title: newUnitTitle, lesson_count: 1, is_active: true })
-      });
-      setNewUnitNum(''); setNewUnitTitle('');
-      refreshUnitsManage();
-    } catch (e) { alert('新增失败: ' + e.message); }
-  };
-
-  // 单元管理 Modal 完成 — 接上述 addManageUnit/etc
-  // ========================================
-  // 整本书模式批量提取 state
-  // ========================================
-  // 整本书模式: 上传 8 页 → AI 自动分单元 → 先返回预览 (不写库)
-  // 用户校对完点 "确认保存" 调 commit-units 才写库
-  // 支持分批: 每批 8 页,AI 识别后追加到 accumulatedUnits
-  const [previewUnits, setPreviewUnits] = useState(null);
-  const [accumulatedUnits, setAccumulatedUnits] = useState([]);
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [committing, setCommitting] = useState(false);
-  const [batchStart, setBatchStart] = useState(0);
-  const BATCH_SIZE = 8;  // NIM gemma-3n 实测稳定 8 页
-  const [totalPages, setTotalPages] = useState(0);
-
-  // 当前批次的图片 (computed from renderedImages + batchStart)
-  // 我们让 PDF.js 渲染当前 batch 的 20 页,而不是整本一次性
-
-  const handleExtractBook = async () => {
-    if (renderedImages.length === 0) { alert('请先选择 PDF 并等待渲染'); return; }
-    setExtracting(true); setExtractError(''); setPreviewUnits(null);
-    try {
-      // 发到后端的图片最多 8 页 (z.ai GLM-4.6V 上限)
-      // BATCH_SIZE=8, 渲染也是 8,所以这里直接全部发
-      // 注: 用 batch_start 参数告知后端这是第几页起 (用于 R2 保存图片名使用真实页码)
-      const fd = new FormData();
-      renderedImages.forEach((img, i) => fd.append('images', img.blob, `page-${batchStart + i + 1}.png`));
-      const r = await fetch(`${API_BASE_URL}/textbooks/preview-book/${selectedBook.code}?batch_start=${batchStart}`, {
-        method: 'POST',
-        headers: { 'X-API-Key': API_KEY },
-        body: fd
-      });
-      const resp = await r.json();
-      if (resp.data?.units) {
-        setPreviewUnits(resp.data.units);
-        setShowReviewModal(true);
-      } else {
-        setExtractError(resp.error?.message || '整本书识别失败');
-      }
-    } catch (e) { setExtractError(e.message); }
-    setExtracting(false);
-  };
-
-  // 把当前批次的 previewUnits 追加到 accumulatedUnits (校对完点"确认这批,处理下一批")
-  const handleAppendBatch = () => {
-    if (!previewUnits || previewUnits.length === 0) {
-      alert('本批没有任何识别结果,直接跳到下一批');
-      setShowReviewModal(false);
-      setPreviewUnits(null);
-      // 自动切到下一批
-      handleNextBatch();
-      return;
-    }
-    setAccumulatedUnits(prev => [...prev, ...previewUnits]);
-    setShowReviewModal(false);
-    setPreviewUnits(null);
-    // 自动切到下一批
-    setTimeout(() => handleNextBatch(), 100);
-  };
-
-  // 翻到下一批 (重新渲染页 batchStart+8 ~ batchStart+16 ...) — 直接调 pdfjs
-  // 需要保存 file 引用以便重渲染不同页面
-  const [pdfFileRef, setPdfFileRef] = useState(null);
-  const pdfDocRef = useRef(null);  // 保留已加载的 pdf 文档避免重复解析
-
-  const handleNextBatch = async () => {
-    const nextStart = batchStart + BATCH_SIZE;
-    if (nextStart >= totalPages) {
-      alert(`🎉 已处理完整本书所有页!\n累积 ${accumulatedUnits.length} 个 unit,请点页面上的 "全部保存到数据库" 按钮`);
-      return;
-    }
-    setBatchStart(nextStart);
-
-    // 直接重新渲染下一批 (无需让用户再选 PDF)
-    if (!pdfDocRef.current) {
-      alert('PDF 已卸载,请重新选 PDF 继续 (batchStart 已加 ' + BATCH_SIZE + ', 即下一批从 ' + (nextStart+1) + ' 页起)');
-      return;
-    }
-    setRendering(true);
-    try {
-      const pdf = pdfDocRef.current;
-      const startPage = nextStart + 1;
-      const maxPages = Math.min(BATCH_SIZE, pdf.numPages - nextStart);
-      const images = [];
-      for (let i = 0; i < maxPages; i++) {
-        const pageNum = startPage + i;
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d');
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        const blob = await new Promise(res => canvas.toBlob(res, 'image/png', 0.85));
-        images.push({ blob, url: URL.createObjectURL(blob) });
-      }
-      // revoke 旧图的 URL 避免内存泄漏
-      renderedImages.forEach(img => URL.revokeObjectURL(img.url));
-      setRenderedImages(images);
-      if (pdf.numPages > nextStart + BATCH_SIZE) {
-        setRenderError(`当前批次: 第 ${nextStart+1}-${nextStart + images.length} 页 (共 ${pdf.numPages} 页). 还剩 ${pdf.numPages - nextStart - images.length} 页未处理`);
-      } else {
-        setRenderError(`最后一批次: 第 ${nextStart+1}-${nextStart + images.length} 页 (共 ${pdf.numPages} 页)`);
+        alert('AI 识别失败: ' + (json.error?.message || '未知错误'));
       }
     } catch (err) {
-      setRenderError('下一批 PDF 渲染失败: ' + err.message);
+      alert('识别请求出错: ' + err.message);
     }
-    setRendering(false);
+    setExtracting(false);
   };
 
-  // 一次性把累积的所有 unit 写入 D1
-  const handleCommitAll = async () => {
-    if (accumulatedUnits.length === 0 && (!previewUnits || previewUnits.length === 0)) {
-      alert('还没有任何已校对的内容,请先 AI 识别并确认各批内容');
-      return;
-    }
-    const allUnits = [...accumulatedUnits];
-    if (previewUnits && previewUnits.length > 0) allUnits.push(...previewUnits);
-    setCommitting(true);
-    try {
-      const r = await fetch(`${API_BASE_URL}/textbooks/commit-units/${selectedBook.code}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-        body: JSON.stringify({ units: allUnits })
-      });
-      const resp = await r.json();
-      if (resp.data) {
-        const d = resp.data;
-        alert(`✅ 已保存!\n识别 ${d.units_received} 个 unit → 写入 ${d.units_written} 个:\n${(d.written || []).map(w => `  Unit ${w.unit_number} (${w.unit_title||''}): ${w.vocab_count} 词, ${w.patterns_count} 句型`).join('\n')}\n\n跳过 ${d.units_skipped?.length || 0} 个`);
-        setShowReviewModal(false);
-        setPreviewUnits(null);
-        setAccumulatedUnits([]);
-        setBatchStart(0);
-        openBook(selectedBook.code);
-        setSelectedUnit(null);
-      } else {
-        alert(resp.error?.message || '保存失败');
-      }
-    } catch (e) { alert('保存失败: ' + e.message); }
-    setCommitting(false);
-  };
-
-  // 编辑 previewUnits 的辅助函数
-  const updateUnitField = (idx, field, value) => {
-    setPreviewUnits(prev => prev.map((u, i) => i === idx ? { ...u, [field]: value } : u));
-  };
-  const removeVocab = (unitIdx, vocabIdx) => {
-    setPreviewUnits(prev => prev.map((u, i) => i === unitIdx ? { ...u, vocab: (u.vocab || []).filter((_, j) => j !== vocabIdx) } : u));
-  };
-  const removePattern = (unitIdx, patIdx) => {
-    setPreviewUnits(prev => prev.map((u, i) => i === unitIdx ? { ...u, patterns: (u.patterns || []).filter((_, j) => j !== patIdx) } : u));
-  };
-  const removeGrammar = (unitIdx, gIdx) => {
-    setPreviewUnits(prev => prev.map((u, i) => i === unitIdx ? { ...u, grammar: (u.grammar || []).filter((_, j) => j !== gIdx) } : u));
-  };
-  const removeUnit = (idx) => {
-    if (!confirm('删除此单元全部内容?')) return;
-    setPreviewUnits(prev => prev.filter((_, i) => i !== idx));
-  };
-  // 删除累积数组里的 unit (已校对的)
-  const removeAccumulatedUnit = (idx) => {
-    if (!confirm('从已校对累积列表里删除此 unit?')) return;
-    setAccumulatedUnits(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  // 保存提取结果到 D1 (用 extract 返回的已存的内容, 或者用校对后的)
-  const handleSaveContent = async (content) => {
+  // 保存当前校对内容到 D1 数据库
+  const handleSaveUnitContent = async () => {
+    if (!selectedBookCode || selectedUnitNum === null || !unitDetail) return;
     setSaving(true);
     try {
-      const resp = await request(`/textbooks/content/${selectedBook.code}/${selectedUnit.unit_number}`, {
+      const resp = await request(`/textbooks/content/${selectedBookCode}/${selectedUnitNum}`, {
         method: 'POST',
-        body: JSON.stringify({ ...content, extracted_by: 'llm' })
+        body: JSON.stringify({
+          vocab: unitDetail.vocab || [],
+          patterns: unitDetail.patterns || [],
+          grammar: unitDetail.grammar || [],
+          extracted_by: 'ai_workbench'
+        })
       });
-      if (resp.data) { alert('✅ 已保存'); openUnit(selectedUnit); }
-      else { alert(resp.error?.message || '保存失败'); }
-    } catch (e) { alert('保存失败: ' + e.message); }
+
+      if (resp.data) {
+        // 如果修改了单元标题，同步更新 textbook_units
+        if (unitDetail.unit_title) {
+          await request(`/textbooks/units-manage/${selectedBookCode}/${selectedUnitNum}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ unit_title: unitDetail.unit_title })
+          });
+        }
+
+        alert('✅ 保存成功！教师端与家长端已同步更新');
+        // 刷新单元列表状态
+        const uResp = await request(`/textbooks/units-manage/${selectedBookCode}`);
+        setBookUnits(uResp.data?.units || []);
+      } else {
+        alert('保存失败: ' + (resp.error?.message || '未知错误'));
+      }
+    } catch (err) {
+      alert('保存出错: ' + err.message);
+    }
     setSaving(false);
   };
 
-  // 删除 R2 里的 PDF
-  const [pdfs, setPdfs] = useState([]);
-  const loadPdfs = async () => {
+  // 删除单张 R2 切图
+  const handleDeletePageImg = async (pageNum) => {
+    if (!confirm(`确定删除第 ${pageNum} 页切图吗？`)) return;
     try {
-      const resp = await request('/textbooks/pdfs');
-      setPdfs(resp.data || []);
-    } catch { setPdfs([]); }
+      await fetch(`${API_BASE_URL}/textbooks/page-img/${selectedBookCode}/${selectedUnitNum}/${pageNum}`, {
+        method: 'DELETE',
+        headers: { 'X-API-Key': API_KEY }
+      });
+      loadUnitPages(selectedBookCode, selectedUnitNum);
+    } catch (e) {
+      alert('删除失败: ' + e.message);
+    }
   };
-  useEffect(() => { loadPdfs(); }, []);
 
-  // ====== 渲染 ======
-  if (loading) return <div className="p-8 text-gray-500">加载中...</div>;
+  // 编辑助手函数
+  const addVocabItem = () => {
+    setUnitDetail(prev => ({
+      ...prev,
+      vocab: [...(prev.vocab || []), { word: '', translation: '', is_core: true, difficulty: 1 }]
+    }));
+  };
 
-  // 三级视图: 教材列表 → 单本教材单元列表 → 单元详细 (PDF + 提取 + 编辑)
-  if (!selectedBook) {
+  const updateVocabItem = (index, field, val) => {
+    setUnitDetail(prev => {
+      const list = [...prev.vocab];
+      list[index] = { ...list[index], [field]: val };
+      return { ...prev, vocab: list };
+    });
+  };
+
+  const removeVocabItem = (index) => {
+    setUnitDetail(prev => ({
+      ...prev,
+      vocab: prev.vocab.filter((_, i) => i !== index)
+    }));
+  };
+
+  const addPatternItem = () => {
+    setUnitDetail(prev => ({
+      ...prev,
+      patterns: [...(prev.patterns || []), { pattern: '', translation: '', is_core: true }]
+    }));
+  };
+
+  const updatePatternItem = (index, field, val) => {
+    setUnitDetail(prev => {
+      const list = [...prev.patterns];
+      list[index] = { ...list[index], [field]: val };
+      return { ...prev, patterns: list };
+    });
+  };
+
+  const removePatternItem = (index) => {
+    setUnitDetail(prev => ({
+      ...prev,
+      patterns: prev.patterns.filter((_, i) => i !== index)
+    }));
+  };
+
+  const addGrammarItem = () => {
+    setUnitDetail(prev => ({
+      ...prev,
+      grammar: [...(prev.grammar || []), { point: '', example: '', is_core: true }]
+    }));
+  };
+
+  const updateGrammarItem = (index, field, val) => {
+    setUnitDetail(prev => {
+      const list = [...prev.grammar];
+      list[index] = { ...list[index], [field]: val };
+      return { ...prev, grammar: list };
+    });
+  };
+
+  const removeGrammarItem = (index) => {
+    setUnitDetail(prev => ({
+      ...prev,
+      grammar: prev.grammar.filter((_, i) => i !== index)
+    }));
+  };
+
+  const selectedBook = books.find(b => b.code === selectedBookCode);
+
+  if (loading) {
     return (
-      <div className="p-6 max-w-6xl">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Book className="w-6 h-6 text-primary-600" />📚 教材库</h1>
-          <button
-            onClick={openBooksManage}
-            className="px-4 py-2 text-sm border-2 border-purple-400 text-purple-700 rounded-lg hover:bg-purple-50 font-medium"
-          >
-            ⚙️ 管理教材列表
-          </button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {books.map(b => (
-            <div key={b.code} onClick={() => openBook(b.code)} className="border rounded-lg p-4 hover:shadow-md hover:border-primary-300 cursor-pointer transition">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <div className="font-semibold text-gray-800">{b.name}</div>
-                  <div className="text-xs text-gray-500 mt-1">{b.publisher} · {b.level}</div>
-                </div>
-                <span className="text-xs px-2 py-1 bg-primary-50 text-primary-700 rounded">{b.code}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <FileText size={14} />
-                <span>{b.unit_count || 0} / {b.total_units} 单元已录入</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 🎯 教材库管理 Modal — 直接增删改 textbooks 列表 */}
-        {showBooksManage && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-auto">
-              {/* header */}
-              <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
-                <div>
-                  <h2 className="text-lg font-bold flex items-center gap-2">⚙️ 管理教材列表</h2>
-                  <p className="text-xs text-gray-500 mt-1">直接编辑 教材库 (新增教材/改元数据/删除教材). 改字段自动写库.</p>
-                </div>
-                <button
-                  onClick={() => { setShowBooksManage(false); loadBooks(); }}
-                  className="text-gray-400 hover:text-gray-700 text-2xl leading-none"
-                >×</button>
-              </div>
-
-              {/* body — 教材表格 */}
-              <div className="p-6">
-                {booksManageLoading ? (
-                  <div className="flex items-center gap-2 text-gray-500"><Loader size={14} className="animate-spin" /> 加载中...</div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-2 mb-2">
-                      <div className="col-span-2">code (唯一)</div>
-                      <div className="col-span-4">教材名称</div>
-                      <div className="col-span-2">level</div>
-                      <div className="col-span-2">出版社</div>
-                      <div className="col-span-1">单元数</div>
-                      <div className="col-span-1">删</div>
-                    </div>
-                    <div className="space-y-1">
-                      {manageBooks.map(b => (
-                        <div key={b.code} className="grid grid-cols-12 gap-2 items-center px-2 py-1 border rounded text-sm">
-                          <div className="col-span-2 text-xs text-gray-600 font-mono">{b.code}</div>
-                          <input
-                            type="text"
-                            value={b.name}
-                            onChange={(e) => updateManageBook(b.code, 'name', e.target.value)}
-                            className="col-span-4 px-2 py-1 border rounded text-sm"
-                          />
-                          <input
-                            type="text"
-                            value={b.level || ''}
-                            placeholder="Starter/L1..."
-                            onChange={(e) => updateManageBook(b.code, 'level', e.target.value)}
-                            className="col-span-2 px-2 py-1 border rounded text-sm"
-                          />
-                          <input
-                            type="text"
-                            value={b.publisher || ''}
-                            onChange={(e) => updateManageBook(b.code, 'publisher', e.target.value)}
-                            className="col-span-2 px-2 py-1 border rounded text-sm"
-                          />
-                          <input
-                            type="number"
-                            min={1} max={30}
-                            value={b.total_units || 8}
-                            onChange={(e) => updateManageBook(b.code, 'total_units', e.target.value)}
-                            className="col-span-1 px-1 py-1 border rounded text-sm"
-                          />
-                          <button
-                            onClick={() => deleteManageBook(b.code, b.name)}
-                            className="col-span-1 text-red-500 hover:bg-red-100 px-1 rounded text-xs"
-                            title="删除整本教材 (含全部 unit)"
-                          >🗑</button>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* 新增教材 */}
-                    <div className="mt-6 pt-4 border-t">
-                      <div className="text-sm font-medium text-gray-700 mb-3">添加新教材</div>
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-12 gap-2 items-center">
-                          <input
-                            type="text"
-                            value={newBook.code}
-                            onChange={(e) => setNewBook({ ...newBook, code: e.target.value })}
-                            placeholder="code (如 EU-S)"
-                            className="col-span-2 px-2 py-1 border rounded text-sm font-mono"
-                          />
-                          <input
-                            type="text"
-                            value={newBook.name}
-                            onChange={(e) => setNewBook({ ...newBook, name: e.target.value })}
-                            placeholder="教材全名"
-                            className="col-span-4 px-2 py-1 border rounded text-sm"
-                          />
-                          <input
-                            type="text"
-                            value={newBook.level}
-                            onChange={(e) => setNewBook({ ...newBook, level: e.target.value })}
-                            placeholder="Starter/L1..."
-                            className="col-span-2 px-2 py-1 border rounded text-sm"
-                          />
-                          <input
-                            type="text"
-                            value={newBook.publisher}
-                            onChange={(e) => setNewBook({ ...newBook, publisher: e.target.value })}
-                            placeholder="出版社"
-                            className="col-span-2 px-2 py-1 border rounded text-sm"
-                          />
-                          <input
-                            type="number"
-                            min={1} max={30}
-                            value={newBook.total_units}
-                            onChange={(e) => setNewBook({ ...newBook, total_units: parseInt(e.target.value) || 8 })}
-                            className="col-span-1 px-1 py-1 border rounded text-sm"
-                          />
-                        </div>
-                        <input
-                          type="text"
-                          value={newBook.description}
-                          onChange={(e) => setNewBook({ ...newBook, description: e.target.value })}
-                          placeholder="教材描述 (可选)"
-                          className="w-full px-2 py-1 border rounded text-sm"
-                        />
-                        <button
-                          onClick={addManageBook}
-                          className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-                        >+ 新增教材</button>
-                      </div>
-                    </div>
-
-                    <p className="mt-4 text-xs text-gray-500">
-                      💡 提示: 新增教材后,这本书默认没有任何 unit. 进入新书 → 点右上角 <b>⚙️ 管理单元列表</b> 添加 unit.
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {/* footer */}
-              <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex items-center justify-between">
-                <div className="text-xs text-gray-500">编辑自动保存 (改字段即写库). 删除教材前会二次确认.</div>
-                <button
-                  onClick={() => { setShowBooksManage(false); loadBooks(); }}
-                  className="px-4 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
-                >完成</button>
-              </div>
-            </div>
-          </div>
-        )}
+      <div className="flex items-center justify-center min-h-[500px] text-gray-500 gap-2">
+        <Loader className="w-5 h-5 animate-spin text-purple-600" />
+        <span>正在加载教材工作台...</span>
       </div>
     );
   }
 
-  // ====== 单本教材单元列表 ======
-  if (selectedBook && !selectedUnit) {
-    return (
-      <div className="p-6 max-w-6xl">
-        <button onClick={() => setSelectedBook(null)} className="text-gray-500 hover:text-gray-700 flex items-center gap-1 mb-4 text-sm">
-          <ArrowLeft size={16} /> 返回教材列表
-        </button>
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold mb-2">{selectedBook.name}</h1>
-            <div className="text-sm text-gray-500">{selectedBook.code} · {selectedBook.level} · {selectedBook.publisher}</div>
-          </div>
-          <button
-            onClick={openUnitsManage}
-            className="px-4 py-2 text-sm border-2 border-purple-400 text-purple-700 rounded-lg hover:bg-purple-50 font-medium"
-          >
-            ⚙️ 管理单元列表
-          </button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {selectedBook.units?.map(u => (
-            <div key={u.unit_number} onClick={() => openUnit(u)} className={`border rounded-lg p-3 hover:shadow-md cursor-pointer ${u.has_content ? 'border-green-300 bg-green-50' : 'hover:border-primary-300'}`}>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="font-medium text-gray-800">Unit {u.unit_number}</div>
-                  <div className="text-sm text-gray-500 mt-1">{u.unit_title || '-'}</div>
-                </div>
-                {u.has_content ? (
-                  <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded flex items-center gap-1"><CheckCircle size={12} />已录入</span>
-                ) : (
-                  <span className="text-xs px-2 py-1 bg-gray-100 text-gray-500 rounded">待录入</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 🎯 单元管理 Modal — 直接增删改 textbook_units 列表 */}
-        {showUnitsManage && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-auto">
-              {/* header */}
-              <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
-                <div>
-                  <h2 className="text-lg font-bold flex items-center gap-2">⚙️ 管理单元列表</h2>
-                  <p className="text-xs text-gray-500 mt-1">
-                    直接编辑 {selectedBook.code} 的单元列表 (如改单元标题/编号/添加新单元/删除错的单元).
-                    本教材是 <b>Everybody Up 第二版</b>? 此处按每级 8 个 Unit 的真实结构维护。
-                  </p>
-                </div>
-                <button
-                  onClick={() => { setShowUnitsManage(false); setManageUnits([]); openBook(selectedBook.code); }}
-                  className="text-gray-400 hover:text-gray-700 text-2xl leading-none"
-                >×</button>
-              </div>
-
-              {/* body */}
-              <div className="p-6">
-                {manageLoading ? (
-                  <div className="flex items-center gap-2 text-gray-500"><Loader size={14} className="animate-spin" /> 加载中...</div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-2 mb-2">
-                      <div className="col-span-1">编号</div>
-                      <div className="col-span-5">单元标题</div>
-                      <div className="col-span-2">课时数</div>
-                      <div className="col-span-2">启用</div>
-                      <div className="col-span-1">内容</div>
-                      <div className="col-span-1">删除</div>
-                    </div>
-                    <div className="space-y-1">
-                      {manageUnits.map((u, idx) => (
-                        <div key={u.id || idx} className="grid grid-cols-12 gap-2 items-center px-2 py-1 border rounded text-sm">
-                          <input
-                            type="number"
-                            min={0} max={99}
-                            value={u.unit_number}
-                            onChange={(e) => updateManageUnit(idx, 'unit_number', parseInt(e.target.value) || 0)}
-                            className="col-span-1 px-1 py-1 border rounded text-sm"
-                          />
-                          <input
-                            type="text"
-                            value={u.unit_title || ''}
-                            placeholder="如:Hello!"
-                            onChange={(e) => updateManageUnit(idx, 'unit_title', e.target.value)}
-                            className="col-span-5 px-2 py-1 border rounded text-sm"
-                          />
-                          <input
-                            type="number"
-                            min={1} max={20}
-                            value={u.lesson_count || 1}
-                            onChange={(e) => updateManageUnit(idx, 'lesson_count', parseInt(e.target.value) || 1)}
-                            className="col-span-2 px-1 py-1 border rounded text-sm"
-                          />
-                          <input
-                            type="checkbox"
-                            checked={u.is_active === 1 || u.is_active === true}
-                            onChange={(e) => updateManageUnit(idx, 'is_active', e.target.checked)}
-                            className="col-span-2 w-4 h-4"
-                          />
-                          <span className="col-span-1 text-xs text-gray-500 text-center">{u.content_count || 0}</span>
-                          <button
-                            onClick={() => deleteManageUnit(u.unit_number)}
-                            className="col-span-1 text-red-500 hover:bg-red-100 px-1 rounded text-xs"
-                            title="删除此单元"
-                          >🗑</button>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* 新增单元 */}
-                    <div className="mt-4 pt-4 border-t">
-                      <div className="text-sm font-medium text-gray-700 mb-2">添加新单元</div>
-                      <div className="grid grid-cols-12 gap-2 items-center">
-                        <input
-                          type="number"
-                          min={0} max={99}
-                          value={newUnitNum}
-                          onChange={(e) => setNewUnitNum(e.target.value)}
-                          placeholder="编号"
-                          className="col-span-1 px-1 py-1 border rounded text-sm"
-                        />
-                        <input
-                          type="text"
-                          value={newUnitTitle}
-                          onChange={(e) => setNewUnitTitle(e.target.value)}
-                          placeholder="标题"
-                          className="col-span-5 px-2 py-1 border rounded text-sm"
-                        />
-                        <div className="col-span-2 text-xs text-gray-400">1 (默认)</div>
-                        <div className="col-span-2 text-xs text-gray-400">默认启用</div>
-                        <button
-                          onClick={addManageUnit}
-                          className="col-span-2 px-2 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-                        >+ 添加</button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* footer */}
-              <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex items-center justify-between">
-                <div className="text-xs text-gray-500">编辑自动保存 (改一个字段即写库). 删除前会确认.</div>
-                <button
-                  onClick={() => { setShowUnitsManage(false); setManageUnits([]); openBook(selectedBook.code); }}
-                  className="px-4 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
-                >完成</button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ====== 单元详细: PDF 上传 + LLM 提取 + 校对 + 保存 ======
   return (
-    <div className="p-6 max-w-5xl">
-      <button onClick={() => setSelectedUnit(null)} className="text-gray-500 hover:text-gray-700 flex items-center gap-1 mb-4 text-sm">
-        <ArrowLeft size={16} /> 返回 {selectedBook.name}
-      </button>
-      <h1 className="text-2xl font-bold mb-1">{selectedBook.name} · Unit {selectedUnit.unit_number}</h1>
-      <div className="text-gray-500 mb-6">{selectedUnit.unit_title}</div>
-
-      {/* 已有内容 */}
-      {unitContent && (
-        <div className="border rounded-lg p-4 mb-6 bg-gray-50">
-          <div className="font-medium text-gray-700 mb-2">📚 当前已保存内容</div>
-          <ContentView data={unitContent} />
+    <div className="h-[calc(100vh-64px)] flex flex-col bg-gray-50 overflow-hidden font-sans">
+      {/* 顶部工具栏 */}
+      <div className="bg-white border-b px-6 py-3 flex items-center justify-between shadow-xs shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 font-bold">
+            <Book className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-gray-900 flex items-center gap-2">
+              教材数字化工作台
+              <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-700 font-medium rounded-full border border-purple-200">
+                SaaS Workbench
+              </span>
+            </h1>
+            <p className="text-xs text-gray-500">统一标准 R2 存储 · AI 视觉切片提取 · 多端闭环</p>
+          </div>
         </div>
-      )}
 
-      {/* PDF 上传 + 提取 (含单 unit + 整本书两种模式, 整本书支持分批) */}
-      <div className="border-2 border-dashed rounded-lg p-6 mb-6">
-        <div className="font-medium text-gray-700 mb-3 flex items-center gap-2">
-          <Sparkles size={18} className="text-purple-600" /> AI 提取
-          <span className="text-xs text-gray-500 ml-2">
-            模式: <span className="font-medium">{bookMode ? '📚 整本书 (自动分单元,分批处理)' : '📄 当前 Unit'}</span>
-            <button onClick={() => { setBookMode(!bookMode); setBatchStart(0); setAccumulatedUnits([]); }} className="ml-2 text-primary-600 underline">
-              切换到 {bookMode ? '单 unit' : '整本书'} 模式
-            </button>
-          </span>
-        </div>
-        <div className="flex items-center gap-3 mb-3">
-          <input
-            type="file"
-            accept=".pdf,image/*"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="text-sm"
-          />
+        <div className="flex items-center gap-3">
           <button
-            onClick={bookMode ? handleExtractBook : handleExtractPreview}
-            disabled={extracting || rendering || renderedImages.length === 0}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm flex items-center gap-2"
+            type="button"
+            onClick={() => setShowBooksManage(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-2xs"
           >
-            {extracting ? <Loader className="animate-spin" size={16} /> : <Sparkles size={16} />}
-            {extracting ? 'AI 识别中... (10-60 秒)' : bookMode ? `🤖 识别第 ${batchStart+1}-${batchStart + (renderedImages.length||BATCH_SIZE)} 页` : '🤖 AI 提取并保存'}
+            <Layers className="w-3.5 h-3.5 text-gray-500" />
+            <span>教材管理</span>
           </button>
-          {/* 整本书模式: 已累积 unit 数 + 全部保存按钮 */}
-          {bookMode && accumulatedUnits.length > 0 && (
+        </div>
+      </div>
+
+      {/* 三栏工作区主体 */}
+      <div className="flex-1 flex overflow-hidden">
+        
+        {/* ================= 第一栏：教材目录列表 (260px) ================= */}
+        <div className="w-64 bg-white border-r flex flex-col shrink-0">
+          <div className="p-3 border-b bg-gray-50/70 flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">教材系列 ({books.length})</span>
             <button
-              onClick={handleCommitAll}
-              disabled={committing}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm flex items-center gap-2"
+              onClick={() => setShowBooksManage(true)}
+              className="text-purple-600 hover:text-purple-800 text-xs flex items-center gap-1"
             >
-              {committing ? <Loader className="animate-spin" size={16} /> : <CheckCircle size={16} />}
-              {committing ? '保存中...' : `✅ 全部保存 ${accumulatedUnits.length} 个 unit 到数据库`}
+              <Plus className="w-3.5 h-3.5" /> 添加
             </button>
-          )}
-        </div>
-        <p className="text-xs text-gray-500 mb-2">
-          {bookMode
-            ? `整本书模式: 每次处理 ${BATCH_SIZE} 页 → AI 识别 → 校对后点"确认这批"累积到列表 → 切下一批继续 → 全部完成后点"全部保存"一次性写入数据库`
-            : '单 Unit 模式: 上传 PDF → 浏览器渲染每页 → AI 提取词汇/句型/语法 → 仅写入当前选定的 unit'}
-        </p>
-        {/* 整本书模式: 进度条 */}
-        {bookMode && totalPages > 0 && (
-          <div className="mb-2 text-xs text-gray-600">
-            📖 进度: 第 {batchStart + 1}-{Math.min(batchStart + BATCH_SIZE, totalPages)} 页 / 共 {totalPages} 页
-            <span className="ml-2">已完成 {accumulatedUnits.length} 个 unit 校对</span>
           </div>
-        )}
-        {/* 已累积的 unit 列表 (折叠显示) */}
-        {bookMode && accumulatedUnits.length > 0 && (
-          <div className="mt-3 p-3 bg-green-50 border rounded">
-            <div className="font-medium text-sm text-green-700 mb-2">✅ 已校对的 {accumulatedUnits.length} 个 unit (待全部完成才写入库)</div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {accumulatedUnits.map((u, i) => (
-                <div key={i} className="text-xs bg-white px-2 py-1 border rounded flex items-center justify-between">
-                  <span>Unit {u.unit_number}: {u.unit_title || '?'} ({(u.vocab||[]).length} 词)</span>
-                  <button onClick={() => removeAccumulatedUnit(i)} className="text-red-500 hover:bg-red-100 px-1 rounded">×</button>
+
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            {books.map(b => {
+              const isSelected = b.code === selectedBookCode;
+              return (
+                <div
+                  key={b.code}
+                  onClick={() => selectBook(b.code)}
+                  className={`p-3 rounded-xl cursor-pointer transition border text-left ${
+                    isSelected
+                      ? 'bg-purple-50/90 border-purple-300 shadow-xs ring-1 ring-purple-400/30'
+                      : 'bg-white border-gray-200/80 hover:border-purple-200 hover:bg-gray-50/60'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <span className="font-bold text-sm text-gray-900">{b.name}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 uppercase">
+                      {b.level || 'A1'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1 flex items-center justify-between">
+                    <span>{b.code}</span>
+                    <span className="font-medium text-purple-600">{b.unit_count || 0} / {b.total_units} 单元</span>
+                  </div>
+                  {/* 进度条 */}
+                  <div className="w-full bg-gray-100 h-1 rounded-full mt-2 overflow-hidden">
+                    <div
+                      className="bg-purple-500 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(100, Math.round(((b.unit_count || 0) / (b.total_units || 1)) * 100))}%` }}
+                    />
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
-        )}
-        {renderError && <div className="mt-2 text-sm text-amber-600">⚠️ {renderError}</div>}
-        {rendering && <div className="mt-2 text-sm text-gray-500 flex items-center gap-2"><Loader size={14} className="animate-spin" /> 正在把 PDF 转图片...</div>}
-        {renderedImages.length > 0 && (
-          <div className="mt-3 p-3 bg-gray-50 rounded grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {renderedImages.map((img, i) => (
-              <div key={i} className="relative">
-                <img src={img.url} alt={`page ${i+1}`} className="w-full h-auto rounded border" style={{maxHeight: '120px', objectFit: 'contain', backgroundColor: '#fff'}} />
-                <span className="text-xs text-gray-600 absolute top-1 left-1 bg-white/80 px-1 rounded">P{batchStart + i + 1}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        {extractError && <div className="mt-2 text-sm text-red-600">❌ {extractError}</div>}
-      </div>
-
-      {/* 提取结果预览 / 校对 */}
-      {extractResult && (
-        <div className="border rounded-lg p-4 mb-6 bg-amber-50 border-amber-200">
-          <div className="font-medium text-gray-700 mb-3 flex items-center gap-2">
-            <CheckCircle size={18} className="text-green-600" /> 提取结果 (已自动保存)
-          </div>
-          <ContentView data={extractResult} />
         </div>
-      )}
 
-      {/* R2 已上传的 PDF 列表 */}
-      <div className="mt-8">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">📁 R2 中已上传的 PDF</h3>
-        {pdfs.length === 0 ? (
-          <div className="text-sm text-gray-400">还没有 PDF 文件</div>
-        ) : (
-          <ul className="space-y-1">
-            {pdfs.map(p => (
-              <li key={p.key} className="text-sm text-gray-600 flex items-center gap-2">
-                <FileText size={14} />
-                <a href={`${API_BASE_URL}/textbooks/pdf/${encodeURIComponent(p.key)}`}
-                   target="_blank" rel="noreferrer" className="text-primary-600 hover:underline">
-                  {p.key}
-                </a>
-                <span className="text-xs text-gray-400">({(p.size/1024).toFixed(1)} KB)</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+        {/* ================= 第二栏：单元大纲列表 (280px) ================= */}
+        <div className="w-72 bg-white border-r flex flex-col shrink-0">
+          <div className="p-3 border-b bg-gray-50/70 flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+              {selectedBook ? `${selectedBook.code} 单元列表` : '单元大纲'}
+            </span>
+            <span className="text-xs text-gray-500 font-medium">
+              共 {bookUnits.length} 单元
+            </span>
+          </div>
 
-      {/* 🎯 校对 Modal — AI 识别完成后弹出,用户可编辑 unit_number/vocab/patterns/grammar */}
-      {showReviewModal && previewUnits && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-auto">
-            {/* Modal header */}
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
-              <div>
-                <h2 className="text-lg font-bold flex items-center gap-2">
-                  <CheckCircle size={20} className="text-amber-500" />
-                  AI 识别结果校对
-                </h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  AI 识别出 {previewUnits.length} 个 unit。请检查以下内容,
-                  可改 unit_number / 删错词 / 删整个 unit,
-                  然后点 "确认保存" 才会写入数据库。
-                </p>
-              </div>
-              <button
-                onClick={() => { setShowReviewModal(false); setPreviewUnits(null); }}
-                className="text-gray-400 hover:text-gray-700 text-2xl leading-none"
-              >×</button>
-            </div>
-
-            {/* Modal body — 各 unit 校对区 */}
-            <div className="p-6 space-y-4">
-              {previewUnits.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  AI 没识别出任何 unit (可能是封面/目录页),请重新上传含词汇内容的 PDF 页
-                </div>
-              ) : (
-                previewUnits.map((unit, idx) => (
-                  <div key={idx} className="border rounded-lg p-4 bg-amber-50 border-amber-200">
-                    {/* Unit header */}
-                    <div className="flex items-center gap-3 mb-3">
-                      <label className="text-sm font-medium text-gray-700">Unit #</label>
-                      <input
-                        type="number"
-                        min={0} max={99}
-                        value={unit.unit_number}
-                        onChange={(e) => updateUnitField(idx, 'unit_number', parseInt(e.target.value) || 0)}
-                        disabled={!bookMode}
-                        className="w-16 px-2 py-1 border rounded text-sm disabled:bg-gray-100 disabled:text-gray-500"
-                        title={bookMode ? '可改 unit 编号' : '单 Unit 模式下 unit 编号锁定'}
-                      />
-                      <label className="text-sm font-medium text-gray-700">Title</label>
-                      <input
-                        type="text"
-                        value={unit.unit_title || ''}
-                        onChange={(e) => updateUnitField(idx, 'unit_title', e.target.value)}
-                        className="flex-1 px-2 py-1 border rounded text-sm"
-                      />
-                      <button
-                        onClick={() => removeUnit(idx)}
-                        className="px-2 py-1 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50 flex items-center gap-1"
-                      >
-                        <Trash2 size={12} /> 删除此 unit
-                      </button>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {loadingUnits ? (
+              <div className="py-8 text-center text-xs text-gray-400">正在加载单元...</div>
+            ) : bookUnits.length === 0 ? (
+              <div className="py-8 text-center text-xs text-gray-400">暂无单元数据</div>
+            ) : (
+              bookUnits.map(u => {
+                const isSelected = u.unit_number === selectedUnitNum;
+                const hasContent = u.has_content || u.content_count > 0;
+                return (
+                  <div
+                    key={u.unit_number}
+                    onClick={() => selectUnit(selectedBookCode, u.unit_number)}
+                    className={`p-2.5 rounded-lg cursor-pointer transition flex items-center justify-between border ${
+                      isSelected
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm font-medium'
+                        : 'bg-white border-gray-150 text-gray-700 hover:bg-purple-50/50 hover:border-purple-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        U{u.unit_number}
+                      </span>
+                      <span className="text-xs truncate" title={u.unit_title || `Unit ${u.unit_number}`}>
+                        {u.unit_title || `Unit ${u.unit_number}`}
+                      </span>
                     </div>
 
-                    {/* Vocab */}
-                    <div className="mb-2">
-                      <div className="text-xs font-medium text-gray-700 mb-1">📚 词汇 ({(unit.vocab || []).length})</div>
-                      <div className="space-y-1">
-                        {(unit.vocab || []).map((v, vi) => (
-                          <div key={vi} className="flex items-center gap-2 bg-white px-2 py-1 rounded text-sm">
-                            <input
-                              type="checkbox"
-                              checked={v.is_core || false}
-                              onChange={(e) => setPreviewUnits(prev => prev.map((u,i) => i===idx ? {...u, vocab: u.vocab.map((vv,j) => j===vi ? {...vv, is_core: e.target.checked} : vv)} : u))}
-                              className="w-3 h-3"
-                              title="核心词汇"
-                            />
-                            <input
-                              type="text"
-                              value={v.word}
-                              onChange={(e) => setPreviewUnits(prev => prev.map((u,i) => i===idx ? {...u, vocab: u.vocab.map((vv,j) => j===vi ? {...vv, word: e.target.value} : vv)} : u))}
-                              className="flex-1 px-1 py-0.5 border rounded text-sm"
-                            />
-                            <input
-                              type="text"
-                              value={v.translation || ''}
-                              placeholder="翻译"
-                              onChange={(e) => setPreviewUnits(prev => prev.map((u,i) => i===idx ? {...u, vocab: u.vocab.map((vv,j) => j===vi ? {...vv, translation: e.target.value} : vv)} : u))}
-                              className="w-24 px-1 py-0.5 border rounded text-sm"
-                            />
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      {hasContent ? (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
+                          isSelected ? 'bg-green-400/30 text-green-100' : 'bg-green-100 text-green-700'
+                        }`}>
+                          <CheckCircle className="w-2.5 h-2.5" /> 已录入
+                        </span>
+                      ) : (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                          isSelected ? 'bg-white/20 text-white/80' : 'bg-gray-100 text-gray-400'
+                        }`}>
+                          待录入
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ================= 第三栏：右侧主工作台 (自适应) ================= */}
+        <div className="flex-1 flex flex-col bg-gray-50/50 overflow-hidden">
+          {selectedUnitNum === null || !unitDetail ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 space-y-2">
+              <FileText className="w-12 h-12 text-gray-300 stroke-1" />
+              <p className="text-sm">请在左侧选择需要编辑与提取的教材单元</p>
+            </div>
+          ) : (
+            <>
+              {/* 工作区 Header */}
+              <div className="bg-white border-b px-6 py-3 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-bold text-gray-900">
+                    {selectedBookCode} · Unit {selectedUnitNum}
+                  </span>
+                  <input
+                    type="text"
+                    value={unitDetail.unit_title || ''}
+                    onChange={(e) => setUnitDetail({ ...unitDetail, unit_title: e.target.value })}
+                    placeholder="单元标题 (如: Art Class / Animals)"
+                    className="px-2.5 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 w-48 font-medium"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAiExtract}
+                    disabled={extracting || (renderedImages.length === 0 && r2Pages.length === 0)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-xs font-semibold rounded-lg hover:shadow-md transition disabled:opacity-50 cursor-pointer shadow-xs"
+                  >
+                    {extracting ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    <span>{extracting ? 'AI 识别中...' : '🤖 AI 视觉提取'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveUnitContent}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition disabled:opacity-50 cursor-pointer shadow-xs"
+                  >
+                    {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>{saving ? '保存中...' : '💾 保存入库'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 工作区内容双栏分屏 (左切图预览，右词汇句型) */}
+              <div className="flex-1 flex overflow-hidden p-4 gap-4">
+                
+                {/* 1. 左半屏：PDF 上传与 R2 切图管理 */}
+                <div className="w-1/2 bg-white rounded-xl border border-gray-200/80 shadow-2xs flex flex-col overflow-hidden">
+                  <div className="p-3 border-b bg-gray-50/70 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-gray-700">📄 课本原图切片</span>
+                      <span className="text-[11px] text-gray-500 font-medium">
+                        (R2 已存: {r2Pages.length} 页{renderedImages.length > 0 ? ` · 待上传: ${renderedImages.length} 页` : ''})
+                      </span>
+                    </div>
+
+                    <label className="flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded border border-purple-200 hover:bg-purple-100 cursor-pointer transition">
+                      <Upload className="w-3 h-3" />
+                      <span>{rendering ? renderProgress : '上传 PDF 切片'}</span>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={handlePdfUpload}
+                        className="hidden"
+                        disabled={rendering}
+                      />
+                    </label>
+                  </div>
+
+                  {/* 切图网格 */}
+                  <div className="flex-1 overflow-y-auto p-4">
+                    {loadingPages ? (
+                      <div className="py-12 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
+                        <Loader className="w-4 h-4 animate-spin text-purple-600" />
+                        <span>正在检索 R2 切图...</span>
+                      </div>
+                    ) : renderedImages.length > 0 ? (
+                      <div>
+                        <div className="text-xs font-bold text-purple-700 mb-2 flex items-center gap-1">
+                          <span>✨ 本地新切片 ({renderedImages.length} 页) — 点击右上角 AI 识别即可一键入库:</span>
+                        </div>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                          {renderedImages.map((img, i) => (
+                            <div key={i} className="relative group border rounded-lg overflow-hidden bg-gray-100 shadow-2xs">
+                              <img src={img.url} alt={`P${i + 1}`} className="w-full h-28 object-contain bg-white" />
+                              <div className="text-[11px] text-center text-gray-600 bg-gray-50 py-0.5 border-t">
+                                第 {i + 1} 页
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewImageModal(img.url)}
+                                className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-medium gap-1"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> 放大
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : r2Pages.length > 0 ? (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                        {r2Pages.map(p => (
+                          <div key={p.page_num} className="relative group border rounded-lg overflow-hidden bg-gray-50 shadow-2xs">
+                            <img src={p.url} alt={`Page ${p.page_num}`} className="w-full h-28 object-contain bg-white" />
+                            <div className="text-[11px] text-center text-gray-600 bg-gray-50 py-0.5 border-t flex items-center justify-between px-1.5">
+                              <span>P{p.page_num}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePageImg(p.page_num)}
+                                className="text-red-400 hover:text-red-600"
+                                title="删除此页"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
                             <button
-                              onClick={() => removeVocab(idx, vi)}
-                              className="text-red-500 hover:bg-red-100 px-1 rounded text-xs"
-                            >×</button>
+                              type="button"
+                              onClick={() => setPreviewImageModal(p.url)}
+                              className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-medium gap-1"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> 放大
+                            </button>
                           </div>
                         ))}
                       </div>
+                    ) : (
+                      <div className="py-16 text-center text-gray-400 space-y-2">
+                        <Upload className="w-8 h-8 text-gray-300 mx-auto" />
+                        <p className="text-xs">该单元在 R2 空间暂无切图</p>
+                        <p className="text-[11px] text-gray-400">点击右上角「上传 PDF 切片」自动切图并 AI 提取</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. 右半屏：结构化教学内容编辑 (Tabs) */}
+                <div className="w-1/2 bg-white rounded-xl border border-gray-200/80 shadow-2xs flex flex-col overflow-hidden">
+                  {/* Tabs */}
+                  <div className="flex items-center justify-between border-b bg-gray-50/70 px-3 shrink-0">
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('vocab')}
+                        className={`px-3 py-2 text-xs font-bold border-b-2 transition ${
+                          activeTab === 'vocab'
+                            ? 'border-purple-600 text-purple-700'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        🔤 核心词汇 ({(unitDetail.vocab || []).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('patterns')}
+                        className={`px-3 py-2 text-xs font-bold border-b-2 transition ${
+                          activeTab === 'patterns'
+                            ? 'border-purple-600 text-purple-700'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        💬 重点句型 ({(unitDetail.patterns || []).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('grammar')}
+                        className={`px-3 py-2 text-xs font-bold border-b-2 transition ${
+                          activeTab === 'grammar'
+                            ? 'border-purple-600 text-purple-700'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        📐 语法焦点 ({(unitDetail.grammar || []).length})
+                      </button>
                     </div>
 
-                    {/* Patterns */}
-                    {(unit.patterns || []).length > 0 && (
-                      <div className="mb-2">
-                        <div className="text-xs font-medium text-gray-700 mb-1">💬 句型 ({(unit.patterns || []).length})</div>
-                        <div className="space-y-1">
-                          {(unit.patterns || []).map((p, pi) => (
-                            <div key={pi} className="flex items-center gap-2 bg-white px-2 py-1 rounded text-sm">
+                    <div>
+                      {activeTab === 'vocab' && (
+                        <button type="button" onClick={addVocabItem} className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-0.5">
+                          <Plus className="w-3.5 h-3.5" /> 添加单词
+                        </button>
+                      )}
+                      {activeTab === 'patterns' && (
+                        <button type="button" onClick={addPatternItem} className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-0.5">
+                          <Plus className="w-3.5 h-3.5" /> 添加句型
+                        </button>
+                      )}
+                      {activeTab === 'grammar' && (
+                        <button type="button" onClick={addGrammarItem} className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-0.5">
+                          <Plus className="w-3.5 h-3.5" /> 添加语法
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tab 内容区 */}
+                  <div className="flex-1 overflow-y-auto p-4">
+                    {/* 词汇列表 */}
+                    {activeTab === 'vocab' && (
+                      <div className="space-y-2">
+                        {(unitDetail.vocab || []).length === 0 ? (
+                          <div className="py-12 text-center text-xs text-gray-400">暂无词汇数据，可点击「添加单词」或「AI 视觉提取」</div>
+                        ) : (
+                          (unitDetail.vocab || []).map((v, i) => (
+                            <div key={i} className="flex items-center gap-2 p-2 bg-gray-50/70 border border-gray-200/80 rounded-lg">
+                              <button
+                                type="button"
+                                onClick={() => updateVocabItem(i, 'is_core', !v.is_core)}
+                                className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                                  v.is_core ? 'bg-amber-100 text-amber-800' : 'bg-gray-200 text-gray-500'
+                                }`}
+                                title="切换是否为核心重点词"
+                              >
+                                {v.is_core ? '⭐ 核心' : '普通'}
+                              </button>
+
                               <input
                                 type="text"
-                                value={p.pattern}
-                                onChange={(e) => setPreviewUnits(prev => prev.map((u,i) => i===idx ? {...u, patterns: u.patterns.map((pp,j) => j===pi ? {...pp, pattern: e.target.value} : pp)} : u))}
-                                className="flex-1 px-1 py-0.5 border rounded text-sm"
+                                value={v.word || ''}
+                                onChange={(e) => updateVocabItem(i, 'word', e.target.value)}
+                                placeholder="英文单词"
+                                className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded bg-white font-medium"
+                              />
+
+                              <input
+                                type="text"
+                                value={v.translation || ''}
+                                onChange={(e) => updateVocabItem(i, 'translation', e.target.value)}
+                                placeholder="中文释义"
+                                className="w-28 px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600"
+                              />
+
+                              <button
+                                type="button"
+                                onClick={() => removeVocabItem(i)}
+                                className="text-gray-400 hover:text-red-600 p-1"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+
+                    {/* 句型列表 */}
+                    {activeTab === 'patterns' && (
+                      <div className="space-y-2">
+                        {(unitDetail.patterns || []).length === 0 ? (
+                          <div className="py-12 text-center text-xs text-gray-400">暂无句型数据，可点击「添加句型」或「AI 视觉提取」</div>
+                        ) : (
+                          (unitDetail.patterns || []).map((p, i) => (
+                            <div key={i} className="p-2.5 bg-gray-50/70 border border-gray-200/80 rounded-lg space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-gray-500">句型 {i + 1}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removePatternItem(i)}
+                                  className="text-gray-400 hover:text-red-600"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <input
+                                type="text"
+                                value={p.pattern || ''}
+                                onChange={(e) => updatePatternItem(i, 'pattern', e.target.value)}
+                                placeholder="英文句型 (如: I have a pencil.)"
+                                className="w-full px-2.5 py-1 text-xs border border-gray-300 rounded bg-white font-medium"
                               />
                               <input
                                 type="text"
                                 value={p.translation || ''}
-                                placeholder="翻译"
-                                onChange={(e) => setPreviewUnits(prev => prev.map((u,i) => i===idx ? {...u, patterns: u.patterns.map((pp,j) => j===pi ? {...pp, translation: e.target.value} : pp)} : u))}
-                                className="w-32 px-1 py-0.5 border rounded text-sm"
+                                onChange={(e) => updatePatternItem(i, 'translation', e.target.value)}
+                                placeholder="中文翻译 (如: 我有一支铅笔。)"
+                                className="w-full px-2.5 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600"
                               />
-                              <button
-                                onClick={() => removePattern(idx, pi)}
-                                className="text-red-500 hover:bg-red-100 px-1 rounded text-xs"
-                              >×</button>
                             </div>
-                          ))}
-                        </div>
+                          ))
+                        )}
                       </div>
                     )}
 
-                    {/* Grammar */}
-                    {(unit.grammar || []).length > 0 && (
-                      <div>
-                        <div className="text-xs font-medium text-gray-700 mb-1">📐 语法 ({(unit.grammar || []).length})</div>
-                        <div className="space-y-1">
-                          {(unit.grammar || []).map((g, gi) => (
-                            <div key={gi} className="flex items-center gap-2 bg-white px-2 py-1 rounded text-sm">
+                    {/* 语法列表 */}
+                    {activeTab === 'grammar' && (
+                      <div className="space-y-2">
+                        {(unitDetail.grammar || []).length === 0 ? (
+                          <div className="py-12 text-center text-xs text-gray-400">暂无语法数据，可点击「添加语法」或「AI 视觉提取」</div>
+                        ) : (
+                          (unitDetail.grammar || []).map((g, i) => (
+                            <div key={i} className="p-2.5 bg-gray-50/70 border border-gray-200/80 rounded-lg space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-gray-500">语法点 {i + 1}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeGrammarItem(i)}
+                                  className="text-gray-400 hover:text-red-600"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                               <input
                                 type="text"
-                                value={g.point}
-                                onChange={(e) => setPreviewUnits(prev => prev.map((u,i) => i===idx ? {...u, grammar: u.grammar.map((gg,j) => j===gi ? {...gg, point: e.target.value} : gg)} : u))}
-                                className="flex-1 px-1 py-0.5 border rounded text-sm"
+                                value={g.point || ''}
+                                onChange={(e) => updateGrammarItem(i, 'point', e.target.value)}
+                                placeholder="语法要点 (如: Simple Present / Countable Nouns)"
+                                className="w-full px-2.5 py-1 text-xs border border-gray-300 rounded bg-white font-medium"
                               />
                               <input
                                 type="text"
                                 value={g.example || ''}
-                                placeholder="例句"
-                                onChange={(e) => setPreviewUnits(prev => prev.map((u,i) => i===idx ? {...u, grammar: u.grammar.map((gg,j) => j===gi ? {...gg, example: e.target.value} : gg)} : u))}
-                                className="w-48 px-1 py-0.5 border rounded text-sm"
+                                onChange={(e) => updateGrammarItem(i, 'example', e.target.value)}
+                                placeholder="例句 (如: Do you have paper? Yes, I do.)"
+                                className="w-full px-2.5 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600"
                               />
-                              <button
-                                onClick={() => removeGrammar(idx, gi)}
-                                className="text-red-500 hover:bg-red-100 px-1 rounded text-xs"
-                              >×</button>
                             </div>
-                          ))}
-                        </div>
+                          ))
+                        )}
                       </div>
                     )}
                   </div>
-                ))
-              )}
-            </div>
+                </div>
 
-            {/* Modal footer */}
-            <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex items-center justify-between gap-3">
-              <div className="text-sm text-gray-500">
-                {bookMode
-                  ? `本批 ${previewUnits.length} 个 unit (累积已完成 ${accumulatedUnits.length} 个)`
-                  : `当前 Unit ${selectedUnit?.unit_number}: ${selectedUnit?.unit_title}`}
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => { setShowReviewModal(false); setPreviewUnits(null); }}
-                  className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
-                  disabled={committing}
-                >取消 (丢弃本次结果)</button>
-                {bookMode ? (
-                  <>
-                    {/* 整本书模式: 切下一批 + 全部保存双按钮 */}
-                    <button
-                      onClick={handleAppendBatch}
-                      disabled={committing || previewUnits.length === 0}
-                      className="px-4 py-2 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50 flex items-center gap-2"
-                    >
-                      <CheckCircle size={14} />
-                      确认这批 + 切下一批 →
-                    </button>
-                    <button
-                      onClick={handleCommitAll}
-                      disabled={committing}
-                      className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-2"
-                    >
-                      {committing ? <Loader size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-                      ✅ 全部保存到数据库 ({accumulatedUnits.length + (previewUnits?.length || 0)} 个)
-                    </button>
-                  </>
-                ) : (
-                  /* 单 Unit 模式: 直接保存到当前 unit */
-                  <button
-                    onClick={handleCommitAll}
-                    disabled={committing || previewUnits.length === 0}
-                    className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {committing ? <Loader size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-                    {committing ? '保存中...' : `✅ 保存到 Unit ${selectedUnit?.unit_number}`}
-                  </button>
-                )}
-              </div>
-            </div>
+            </>
+          )}
+        </div>
+
+      </div>
+
+      {/* 图片放大灯箱 Modal */}
+      {previewImageModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setPreviewImageModal(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] bg-white rounded-lg overflow-hidden p-2" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setPreviewImageModal(null)}
+              className="absolute top-3 right-3 bg-black/60 text-white rounded-full p-1.5 hover:bg-black/80"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img src={previewImageModal} alt="Preview" className="max-h-[85vh] w-auto mx-auto object-contain" />
           </div>
         </div>
+      )}
+
+      {/* 教材库管理 Modal */}
+      {showBooksManage && (
+        <BooksManageModal
+          books={books}
+          onClose={() => {
+            setShowBooksManage(false);
+            loadBooks();
+          }}
+        />
       )}
     </div>
   );
 }
 
-// 子组件: 显示 vocab/patterns/grammar 内容
-function ContentView({ data }) {
-  const vocab = data.vocab || [];
-  const patterns = data.patterns || [];
-  const grammar = data.grammar || [];
+// 教材库管理子组件
+function BooksManageModal({ books, onClose }) {
+  const [list, setList] = useState(books || []);
+  const [editingCode, setEditingCode] = useState(null);
+  const [form, setForm] = useState({ code: '', name: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+
+  const handleSaveBook = async (e) => {
+    e.preventDefault();
+    if (!form.code || !form.name) return alert('Code 和名称必填');
+
+    try {
+      if (editingCode) {
+        await request(`/textbooks/books-manage/${editingCode}`, { method: 'PATCH', body: JSON.stringify(form) });
+      } else {
+        await request('/textbooks/books-manage', { method: 'POST', body: JSON.stringify(form) });
+      }
+      const resp = await request('/textbooks');
+      setList(resp.data || []);
+      setEditingCode(null);
+      setForm({ code: '', name: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+    } catch (err) {
+      alert('保存失败: ' + err.message);
+    }
+  };
+
+  const handleDeleteBook = async (code) => {
+    if (!confirm(`确定删除教材 ${code} 及其所有单元内容吗？`)) return;
+    try {
+      await request(`/textbooks/books-manage/${code}`, { method: 'DELETE' });
+      const resp = await request('/textbooks');
+      setList(resp.data || []);
+    } catch (err) {
+      alert('删除失败: ' + err.message);
+    }
+  };
 
   return (
-    <div className="space-y-3 text-sm">
-      {vocab.length > 0 && (
-        <div>
-          <div className="font-medium mb-1">📚 词汇 ({vocab.length})</div>
-          <ul className="space-y-1">
-            {vocab.map((v, i) => (
-              <li key={i} className="flex items-center gap-2">
-                {v.is_core && <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded">核心</span>}
-                <span className="font-medium">{v.word}</span>
-                {v.translation && <span className="text-gray-500">{v.translation}</span>}
-                {v.difficulty && <span className="text-xs text-gray-400">D{v.difficulty}</span>}
-              </li>
-            ))}
-          </ul>
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-xl flex flex-col max-h-[85vh]">
+        <div className="px-6 py-4 border-b flex items-center justify-between bg-gray-50">
+          <h2 className="text-base font-bold text-gray-900">📚 教材目录管理</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
         </div>
-      )}
-      {patterns.length > 0 && (
-        <div>
-          <div className="font-medium mb-1">💬 句型 ({patterns.length})</div>
-          <ul className="space-y-1">
-            {patterns.map((p, i) => (
-              <li key={i} className="flex items-center gap-2">
-                {p.is_core && <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded">核心</span>}
-                <span className="font-medium">{p.pattern}</span>
-                {p.translation && <span className="text-gray-500">{p.translation}</span>}
-              </li>
+
+        <div className="p-6 overflow-y-auto space-y-6">
+          {/* 编辑/新增表单 */}
+          <form onSubmit={handleSaveBook} className="p-4 bg-purple-50/60 border border-purple-200 rounded-xl space-y-3">
+            <div className="text-xs font-bold text-purple-900">
+              {editingCode ? `编辑教材: ${editingCode}` : '➕ 新增教材'}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] text-gray-600 mb-1">教材代码 (Code)</label>
+                <input
+                  type="text"
+                  disabled={!!editingCode}
+                  value={form.code}
+                  onChange={e => setForm({ ...form, code: e.target.value })}
+                  placeholder="如 EU-L4"
+                  className="w-full px-2.5 py-1.5 text-xs border rounded bg-white font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-600 mb-1">教材全称</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  placeholder="如 Everybody Up 4"
+                  className="w-full px-2.5 py-1.5 text-xs border rounded bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-600 mb-1">CEFR 等级</label>
+                <select
+                  value={form.level}
+                  onChange={e => setForm({ ...form, level: e.target.value })}
+                  className="w-full px-2.5 py-1.5 text-xs border rounded bg-white"
+                >
+                  <option value="Pre-A1">Pre-A1</option>
+                  <option value="A1">A1</option>
+                  <option value="A1+">A1+</option>
+                  <option value="A2">A2</option>
+                  <option value="B1">B1</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              {editingCode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingCode(null);
+                    setForm({ code: '', name: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+                  }}
+                  className="px-3 py-1 text-xs text-gray-600 bg-white border rounded"
+                >
+                  取消
+                </button>
+              )}
+              <button type="submit" className="px-4 py-1 text-xs font-semibold bg-purple-600 text-white rounded hover:bg-purple-700">
+                {editingCode ? '更新' : '添加'}
+              </button>
+            </div>
+          </form>
+
+          {/* 教材列表 */}
+          <div className="space-y-2">
+            <div className="text-xs font-bold text-gray-700">现有教材列表</div>
+            {list.map(b => (
+              <div key={b.code} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 text-xs">
+                <div>
+                  <span className="font-bold text-gray-900 mr-2">{b.name}</span>
+                  <span className="text-gray-500 mr-2">({b.code})</span>
+                  <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px]">{b.level}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setEditingCode(b.code);
+                      setForm({ code: b.code, name: b.name, level: b.level || 'A1', publisher: b.publisher || 'Oxford', total_units: b.total_units || 8, description: b.description || '' });
+                    }}
+                    className="text-purple-600 hover:text-purple-800 p-1"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteBook(b.code)}
+                    className="text-red-500 hover:text-red-700 p-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
-      )}
-      {grammar.length > 0 && (
-        <div>
-          <div className="font-medium mb-1">📐 语法 ({grammar.length})</div>
-          <ul className="space-y-1">
-            {grammar.map((g, i) => (
-              <li key={i} className="flex items-center gap-2">
-                {g.is_core && <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded">核心</span>}
-                <span className="font-medium">{g.point}</span>
-                {g.example && <span className="text-gray-500">→ {g.example}</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {vocab.length === 0 && patterns.length === 0 && grammar.length === 0 && (
-        <div className="text-gray-400">无内容</div>
-      )}
+      </div>
     </div>
   );
 }
