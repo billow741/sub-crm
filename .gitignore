@@ -35,3 +35,6 @@ Thumbs.db
 # Database backups
 prod_backup.sql
 *.sqlite
+
+# Migration configs (contains R2 secret keys)
+scripts/r2_config.json
