@@ -649,48 +649,99 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
 classes.delete('/:id', validateParams(idParamSchema), async (c) => {
   const DB = c.env.DB;
   const { id } = c.req.validatedParams;
+  const userRole = c.req.header('X-User-Role') || 'org_admin';
+  const userOrgId = c.req.header('X-Organization-Id');
 
-  // 检查上课记录是否存在
-  const cls = await DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
-  if (!cls) {
-    return c.json(error('NOT_FOUND', '上课记录不存在'), 404);
-  }
-
-  // 如果是已完成状态，恢复课时
-  if (cls.status === 'completed') {
-    // 1. 恢复学生 used_hours
-    const student = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(cls.student_id).first();
-    if (student) {
-      await DB.prepare('UPDATE students SET used_hours = used_hours - ?, updated_at = datetime(\'now\') WHERE id = ?').bind(cls.hours, cls.student_id).run();
+  try {
+    // 检查上课记录是否存在
+    const cls = await DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
+    if (!cls) {
+      return c.json(error('NOT_FOUND', '上课记录不存在'), 404);
     }
 
-    // 2. 恢复机构课时包
-    if (cls.organization_id) {
-      const targetPkg = await DB.prepare(
-        `SELECT id FROM org_packages
-         WHERE org_id = ? AND status IN ('pending', 'partial_paid')
-         ORDER BY created_at DESC LIMIT 1`
-      ).bind(cls.organization_id).first();
+    // 非超管只能操作本机构课程
+    if (userRole !== 'super_admin' && userOrgId && cls.organization_id && cls.organization_id !== parseInt(userOrgId)) {
+      return c.json(error('FORBIDDEN', '无权操作其他机构课程'), 403);
+    }
 
-      if (targetPkg) {
-        await DB.prepare('UPDATE org_packages SET used_hours = used_hours - ?, updated_at = datetime(\'now\') WHERE id = ?').bind(cls.hours, targetPkg.id).run();
+    // 1. 机构端权限校验：机构端不可直接删除已完成的课程
+    if (userRole !== 'super_admin' && cls.status === 'completed') {
+      return c.json(error('FORBIDDEN', '机构端不可直接删除已完成的课程，如需调整请联系系统管理员'), 403);
+    }
+
+    // 2. 结算单校验：已进入机构结算单的课程禁止删除
+    try {
+      const settledItem = await DB.prepare(`
+        SELECT osi.settlement_id, os.status as settle_status
+        FROM org_settlement_items osi
+        JOIN org_settlements os ON osi.settlement_id = os.id
+        WHERE osi.class_id = ? AND os.status != 'void'
+        LIMIT 1
+      `).bind(id).first();
+
+      if (settledItem) {
+        return c.json(error('FORBIDDEN', `该课程已包含在机构结算单 #${settledItem.settlement_id} 中，无法直接删除。如需调整请先在机构结算中作废该结算单。`), 400);
+      }
+    } catch (_) {}
+
+    // 3. 如果是已完成状态且为超管操作，安全恢复课时与流水
+    if (cls.status === 'completed' && !cls.is_trial) {
+      // 恢复学生 used_hours
+      try {
+        const student = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(cls.student_id).first();
+        if (student) {
+          const newUsed = Math.max(0, Math.round(((student.used_hours || 0) - (cls.hours || 0)) * 100) / 100);
+          const balanceAfter = Math.round(((student.total_hours || 0) - newUsed) * 100) / 100;
+          await DB.prepare('UPDATE students SET used_hours = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(newUsed, cls.student_id).run();
+
+          // 记录流水
+          try {
+            await DB.prepare(
+              `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
+               VALUES (?, 'adjust', ?, ?, ?, ?)`
+            ).bind(cls.student_id, cls.hours || 0, balanceAfter, id, `删除课程恢复 ${cls.hours} 课时 (class ${id})`).run();
+          } catch (_) {
+            await DB.prepare(
+              `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
+               VALUES (?, 'adjust', ?, ?, ?)`
+            ).bind(cls.student_id, cls.hours || 0, id, `删除课程恢复 ${cls.hours} 课时 (class ${id})`).run();
+          }
+        }
+      } catch (stuErr) {
+        console.warn('恢复学生课时警告:', stuErr.message);
+      }
+
+      // 恢复机构课时包（仅限机构分配的非自费课程）
+      if (cls.organization_id && !cls.is_self_paid) {
+        try {
+          const allocCheck = await DB.prepare('SELECT id FROM org_hour_allocations WHERE org_id = ? AND student_id = ? LIMIT 1').bind(cls.organization_id, cls.student_id).first();
+          if (allocCheck) {
+            const targetPkg = await DB.prepare(
+              `SELECT id FROM org_packages
+               WHERE org_id = ? AND status IN ('pending', 'partial_paid')
+               ORDER BY created_at DESC LIMIT 1`
+            ).bind(cls.organization_id).first();
+
+            if (targetPkg) {
+              await DB.prepare('UPDATE org_packages SET used_hours = MAX(0, used_hours - ?), updated_at = datetime(\'now\') WHERE id = ?').bind(cls.hours, targetPkg.id).run();
+            }
+          }
+        } catch (orgErr) {
+          console.warn('恢复机构课时包警告:', orgErr.message);
+        }
       }
     }
 
-    // 3. 记录 hour_changes（恢复为正数加课）
-    const studentNow = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(cls.student_id).first();
-    const balanceAfter = studentNow ? Math.round(((studentNow.total_hours || 0) - (studentNow.used_hours || 0)) * 100) / 100 : null;
+    // 4. 清理关联外键数据并删除课程
+    try { await DB.prepare('DELETE FROM assessments WHERE class_id = ?').bind(id).run(); } catch (_) {}
+    try { await DB.prepare('DELETE FROM org_settlement_items WHERE class_id = ?').bind(id).run(); } catch (_) {}
+    await DB.prepare('DELETE FROM classes WHERE id = ?').bind(id).run();
 
-    await DB.prepare(
-      `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
-       VALUES (?, 'adjust', ?, ?, ?, ?)`
-    ).bind(cls.student_id, cls.hours, balanceAfter, id, `删除课程恢复 ${cls.hours} 课时`).run();
+    return c.json(success({ message: '课程记录删除成功' }));
+  } catch (err) {
+    console.error('DELETE /classes/:id 失败:', err);
+    return c.json(error('DATABASE_ERROR', '删除课程失败: ' + err.message), 500);
   }
-
-  // 删除记录
-  await DB.prepare('DELETE FROM classes WHERE id = ?').bind(id).run();
-
-  return c.json(success({ message: '删除成功' }));
 });
 
 export default classes;
