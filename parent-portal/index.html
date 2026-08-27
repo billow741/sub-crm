@@ -2433,18 +2433,18 @@ function spShareCard(btn) {
   var posterNode = document.createElement('div');
   posterNode.style.width = '375px';
   posterNode.style.padding = '22px 18px';
-  posterNode.style.background = 'linear-gradient(180deg, #FFF9F2 0%, #FFFFFF 20%, #F5F9FF 100%)';
+  posterNode.style.background = '#F8FAFC';
   posterNode.style.borderRadius = '16px';
   posterNode.style.fontFamily = 'system-ui, -apple-system, sans-serif';
   posterNode.style.color = '#1E293B';
   posterNode.style.boxSizing = 'border-box';
-  posterNode.style.border = '2px solid rgba(245,166,35,0.35)';
+  posterNode.style.border = '1px solid #E2E8F0';
   posterNode.style.textAlign = 'left';
 
   // 顶部 SunnyBridge 品牌
   var sName = document.getElementById('sp-name') ? document.getElementById('sp-name').textContent : '学员';
   var sGrade = document.getElementById('sp-level') ? document.getElementById('sp-level').textContent : 'Pre-A1';
-  var topHtml = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid rgba(245,166,35,0.25);">';
+  var topHtml = '<div style="background:#FFFFFF;border-radius:12px;padding:10px 14px;border:1px solid #E2E8F0;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">';
   topHtml += '<div style="display:flex;align-items:center;gap:10px;">';
   topHtml += '<img src="' + SUNNYBRIDGE_LOGO_B64 + '" style="height:38px;width:auto;object-fit:contain;display:block;background:transparent;" alt="SunnyBridge">';
   topHtml += '<div><div style="font-size:13px;font-weight:800;color:#1C244B;">阳光桥在线少儿英语</div><div style="font-size:10px;color:#64748B;">少儿英语进阶成长档案</div></div>';
