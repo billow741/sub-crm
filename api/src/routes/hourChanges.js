@@ -14,63 +14,99 @@ hourChanges.get('/student/:student_id', async (c) => {
   const page = c.req.query('page') || '1';
   const pageSize = c.req.query('page_size') || '50';
 
-  // 检查学生是否存在
-  const student = await DB.prepare('SELECT id, name FROM students WHERE id = ?').bind(studentId).first();
-  if (!student) {
-    return c.json(error('NOT_FOUND', '学生不存在'), 404);
+  try {
+    // 检查学生是否存在
+    const student = await DB.prepare('SELECT id, name FROM students WHERE id = ?').bind(studentId).first();
+    if (!student) {
+      return c.json(error('NOT_FOUND', '学生不存在'), 404);
+    }
+
+    // 查询总数
+    let total = 0;
+    try {
+      const countResult = await DB.prepare('SELECT COUNT(*) as total FROM hour_changes WHERE student_id = ?').bind(studentId).first();
+      total = countResult?.total || 0;
+    } catch (_) {}
+    const pagination = calculatePagination(page, pageSize, total);
+
+    // 查询变动记录（带 balance_after 降级）
+    let results = [];
+    try {
+      const res = await DB.prepare(`
+        SELECT 
+          hc.id,
+          hc.student_id,
+          hc.type,
+          hc.amount,
+          hc.description,
+          hc.related_id,
+          hc.balance_after,
+          hc.created_at,
+          CASE 
+            WHEN hc.type = 'payment' THEN p.description
+            WHEN hc.type = 'class' THEN cl.date || ' ' || cl.subject
+            ELSE hc.description
+          END as detail_text
+        FROM hour_changes hc
+        LEFT JOIN payments p ON hc.related_id = p.id AND hc.type = 'payment'
+        LEFT JOIN classes cl ON hc.related_id = cl.id AND hc.type = 'class'
+        WHERE hc.student_id = ?
+        ORDER BY hc.created_at DESC
+        LIMIT ? OFFSET ?
+      `).bind(studentId, pagination.page_size, pagination.offset).all();
+      results = res.results || [];
+    } catch (queryErr) {
+      // 降级查询：不带 balance_after
+      const res = await DB.prepare(`
+        SELECT 
+          hc.id,
+          hc.student_id,
+          hc.type,
+          hc.amount,
+          hc.description,
+          hc.related_id,
+          hc.created_at,
+          CASE 
+            WHEN hc.type = 'payment' THEN p.description
+            WHEN hc.type = 'class' THEN cl.date || ' ' || cl.subject
+            ELSE hc.description
+          END as detail_text
+        FROM hour_changes hc
+        LEFT JOIN payments p ON hc.related_id = p.id AND hc.type = 'payment'
+        LEFT JOIN classes cl ON hc.related_id = cl.id AND hc.type = 'class'
+        WHERE hc.student_id = ?
+        ORDER BY hc.created_at DESC
+        LIMIT ? OFFSET ?
+      `).bind(studentId, pagination.page_size, pagination.offset).all();
+      results = res.results || [];
+    }
+
+    // 获取当前余额
+    const studentData = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(studentId).first();
+    const currentBalance = (studentData?.total_hours || 0) - (studentData?.used_hours || 0);
+
+    const data = results.map(hc => ({
+      id: hc.id,
+      student_id: hc.student_id,
+      type: hc.type,
+      amount: hc.amount,
+      related_id: hc.related_id,
+      description: hc.description,
+      detail_text: hc.detail_text,
+      balance_after: hc.balance_after !== undefined ? hc.balance_after : null,
+      created_at: hc.created_at
+    }));
+
+    return c.json(success({
+      data,
+      pagination,
+      current_balance: currentBalance,
+      student: { id: student.id, name: student.name }
+    }));
+  } catch (err) {
+    console.error('GET /hour-changes/student 失败:', err);
+    return c.json(error('DATABASE_ERROR', '获取课时变动失败: ' + err.message), 500);
   }
-
-  // 查询总数
-  const countResult = await DB.prepare('SELECT COUNT(*) as total FROM hour_changes WHERE student_id = ?').bind(studentId).first();
-  const total = countResult?.total || 0;
-  const pagination = calculatePagination(page, pageSize, total);
-
-  // 查询变动记录
-  const results = await DB.prepare(`
-    SELECT 
-      hc.id,
-      hc.student_id,
-      hc.type,
-      hc.amount,
-      hc.description,
-      hc.related_id,
-      hc.balance_after,
-      hc.created_at,
-      CASE 
-        WHEN hc.type = 'payment' THEN p.description
-        WHEN hc.type = 'class' THEN cl.date || ' ' || cl.subject
-        ELSE hc.description
-      END as detail_text
-    FROM hour_changes hc
-    LEFT JOIN payments p ON hc.related_id = p.id AND hc.type = 'payment'
-    LEFT JOIN classes cl ON hc.related_id = cl.id AND hc.type = 'class'
-    WHERE hc.student_id = ?
-    ORDER BY hc.created_at DESC
-    LIMIT ? OFFSET ?
-  `).bind(studentId, pagination.page_size, pagination.offset).all();
-
-  // 获取当前余额
-  const studentData = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(studentId).first();
-  const currentBalance = (studentData?.total_hours || 0) - (studentData?.used_hours || 0);
-
-  const data = results.results?.map(hc => ({
-    id: hc.id,
-    student_id: hc.student_id,
-    type: hc.type,
-    amount: hc.amount,
-    related_id: hc.related_id,
-    description: hc.description,
-    detail_text: hc.detail_text,
-    balance_after: hc.balance_after,
-    created_at: hc.created_at
-  })) || [];
-
-  return c.json(success({
-    data,
-    pagination,
-    current_balance: currentBalance,
-    student: { id: student.id, name: student.name }
-  }));
 });
 
 // 获取单个变动记录

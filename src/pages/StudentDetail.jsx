@@ -101,8 +101,7 @@ export default function StudentDetail() {
               return tb.localeCompare(ta);
             });
             setHourChanges(merged);
-          }
-          
+            
             // 加载评估报告与阶段性成长报告
             try {
               const [assessmentsData, progressReportsData] = await Promise.all([
