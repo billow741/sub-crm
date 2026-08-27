@@ -994,19 +994,17 @@ textbooks.get('/page-img/:code/:num/:page', async (c) => {
   const page = parseInt(c.req.param('page'));
   if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 未配置' } }, 500);
 
-  // 优先级检索路径:
-  // 1. 标准两位数补零: EU-S/Unit1/page-01.png
-  // 2. 单数字不补零: EU-S/Unit1/page-1.png
-  // 3. 历史下划线补零: EU-S/Unit1_page-01.png
-  // 4. 历史下划线不补零: EU-S/Unit1_page-1.png
-  const candidateKeys = [
-    `${code}/Unit${num}/page-${String(page).padStart(2, '0')}.png`,
-    `${code}/Unit${num}/page-${page}.png`,
-    `${code}/Unit${num}_page-${String(page).padStart(2, '0')}.png`,
-    `${code}/Unit${num}_page-${page}.png`,
-    `${code}/Unit${num}/page_${page}.png`,
-    `${code}/Unit${num}/page_${String(page).padStart(2, '0')}.png`
-  ];
+  // 优先级检索路径 (支持 .jpg, .jpeg, .png, .webp 与多种命名习惯)
+  const exts = ['.jpg', '.jpeg', '.png', '.webp'];
+  const candidateKeys = [];
+  for (const ext of exts) {
+    candidateKeys.push(`${code}/Unit${num}/page-${String(page).padStart(2, '0')}${ext}`);
+    candidateKeys.push(`${code}/Unit${num}/page-${page}${ext}`);
+    candidateKeys.push(`${code}/Unit${num}_page-${String(page).padStart(2, '0')}${ext}`);
+    candidateKeys.push(`${code}/Unit${num}_page-${page}${ext}`);
+    candidateKeys.push(`${code}/Unit${num}/page_${page}${ext}`);
+    candidateKeys.push(`${code}/Unit${num}/page_${String(page).padStart(2, '0')}${ext}`);
+  }
 
   let obj = null;
   let foundKey = '';
@@ -1040,12 +1038,14 @@ textbooks.delete('/page-img/:code/:num/:page', async (c) => {
   const page = parseInt(c.req.param('page'));
   if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 未配置' } }, 500);
 
-  const candidateKeys = [
-    `${code}/Unit${num}/page-${String(page).padStart(2, '0')}.png`,
-    `${code}/Unit${num}/page-${page}.png`,
-    `${code}/Unit${num}_page-${String(page).padStart(2, '0')}.png`,
-    `${code}/Unit${num}_page-${page}.png`
-  ];
+  const exts = ['.jpg', '.jpeg', '.png', '.webp'];
+  const candidateKeys = [];
+  for (const ext of exts) {
+    candidateKeys.push(`${code}/Unit${num}/page-${String(page).padStart(2, '0')}${ext}`);
+    candidateKeys.push(`${code}/Unit${num}/page-${page}${ext}`);
+    candidateKeys.push(`${code}/Unit${num}_page-${String(page).padStart(2, '0')}${ext}`);
+    candidateKeys.push(`${code}/Unit${num}_page-${page}${ext}`);
+  }
 
   for (const k of candidateKeys) {
     try { await R2.delete(k); } catch(e) {}
