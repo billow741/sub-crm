@@ -34,7 +34,7 @@ export const paginated = (data, pagination, baseUrl = '') => {
   };
 };
 
-export const error = (code, message, details = null, status = 400) => {
+export const error = (code, message, details = null) => {
   const response = {
     error: {
       code,
@@ -49,7 +49,7 @@ export const error = (code, message, details = null, status = 400) => {
     response.error.details = details;
   }
 
-  return [response, status];
+  return response;
 };
 
 /**
