@@ -288,17 +288,39 @@ export default function Textbooks() {
     setSaving(false);
   };
 
-  // 删除单张 R2 切图
-  const handleDeletePageImg = async (pageNum) => {
+  // 删除单张 R2 切图 (支持按精确 key 或 pageNum 删除)
+  const handleDeletePageImg = async (pageObj) => {
+    const pageNum = pageObj.page_num || pageObj;
+    const key = pageObj.key;
     if (!confirm(`确定删除第 ${pageNum} 页切图吗？`)) return;
     try {
-      await fetch(`${API_BASE_URL}/textbooks/page-img/${selectedBookCode}/${selectedUnitNum}/${pageNum}`, {
-        method: 'DELETE',
-        headers: { 'X-API-Key': API_KEY }
-      });
+      if (key) {
+        await request('/textbooks/delete-r2-key', {
+          method: 'POST',
+          body: JSON.stringify({ key })
+        });
+      } else {
+        await request(`/textbooks/page-img/${selectedBookCode}/${selectedUnitNum}/${pageNum}`, {
+          method: 'DELETE'
+        });
+      }
       loadUnitPages(selectedBookCode, selectedUnitNum);
     } catch (e) {
       alert('删除失败: ' + e.message);
+    }
+  };
+
+  // 一键清空当前单元所有 R2 切图
+  const handleClearAllPages = async () => {
+    if (!confirm(`⚠️ 确定清空该单元 (${selectedBookCode} Unit ${selectedUnitNum}) 在 R2 中的全部 ${r2Pages.length} 张切图吗？`)) return;
+    try {
+      await request(`/textbooks/unit-pages/${selectedBookCode}/${selectedUnitNum}`, {
+        method: 'DELETE'
+      });
+      loadUnitPages(selectedBookCode, selectedUnitNum);
+      alert('✅ 已成功清空该单元所有切图');
+    } catch (e) {
+      alert('清空失败: ' + e.message);
     }
   };
 
@@ -606,17 +628,31 @@ export default function Textbooks() {
                       </span>
                     </div>
 
-                    <label className="flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded border border-purple-200 hover:bg-purple-100 cursor-pointer transition">
-                      <Upload className="w-3 h-3" />
-                      <span>{rendering ? renderProgress : '上传 PDF 切片'}</span>
-                      <input
-                        type="file"
-                        accept="application/pdf"
-                        onChange={handlePdfUpload}
-                        className="hidden"
-                        disabled={rendering}
-                      />
-                    </label>
+                    <div className="flex items-center gap-1.5">
+                      {r2Pages.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearAllPages}
+                          className="flex items-center gap-1 px-2 py-1 text-[11px] text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition"
+                          title="一键清空本单元所有切图 (重新切片)"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>清空切图</span>
+                        </button>
+                      )}
+
+                      <label className="flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded border border-purple-200 hover:bg-purple-100 cursor-pointer transition">
+                        <Upload className="w-3 h-3" />
+                        <span>{rendering ? renderProgress : '上传 PDF 切片'}</span>
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          onChange={handlePdfUpload}
+                          className="hidden"
+                          disabled={rendering}
+                        />
+                      </label>
+                    </div>
                   </div>
 
                   {/* 切图网格 */}
@@ -652,17 +688,17 @@ export default function Textbooks() {
                     ) : r2Pages.length > 0 ? (
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                         {r2Pages.map(p => (
-                          <div key={p.page_num} className="relative group border rounded-lg overflow-hidden bg-gray-50 shadow-2xs">
+                          <div key={p.key || p.page_num} className="relative group border rounded-lg overflow-hidden bg-gray-50 shadow-2xs">
                             <img src={p.url} alt={`Page ${p.page_num}`} className="w-full h-28 object-contain bg-white" />
-                            <div className="text-[11px] text-center text-gray-600 bg-gray-50 py-0.5 border-t flex items-center justify-between px-1.5">
-                              <span>P{p.page_num}</span>
+                            <div className="text-[11px] text-center text-gray-600 bg-gray-50 py-0.5 border-t flex items-center justify-between px-2">
+                              <span className="font-semibold text-gray-700">P{p.page_num}</span>
                               <button
                                 type="button"
-                                onClick={() => handleDeletePageImg(p.page_num)}
-                                className="text-red-400 hover:text-red-600"
-                                title="删除此页"
+                                onClick={() => handleDeletePageImg(p)}
+                                className="text-gray-400 hover:text-red-600 p-0.5 rounded hover:bg-red-50 transition"
+                                title={`删除第 ${p.page_num} 页 (${p.key || ''})`}
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                             <button

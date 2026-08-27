@@ -1030,6 +1030,44 @@ textbooks.get('/page-img/:code/:num/:page', async (c) => {
   });
 });
 
+// POST /delete-r2-key — 按精确 Key 删除 R2 对象
+textbooks.post('/delete-r2-key', async (c) => {
+  const R2 = c.env.TEXTBOOKS_R2;
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 未配置' } }, 500);
+  let body = {};
+  try { body = await c.req.json(); } catch {}
+  if (!body.key) return c.json({ error: { code: 'BAD_REQUEST', message: 'Missing key' } }, 400);
+
+  try {
+    await R2.delete(body.key);
+    return c.json({ data: { success: true, key: body.key } });
+  } catch (err) {
+    return c.json({ error: { code: 'R2_ERROR', message: err.message } }, 500);
+  }
+});
+
+// DELETE /unit-pages/:code/:num — 一键清空某 unit 在 R2 的所有切图
+textbooks.delete('/unit-pages/:code/:num', async (c) => {
+  const R2 = c.env.TEXTBOOKS_R2;
+  const code = c.req.param('code');
+  const num = parseInt(c.req.param('num'));
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 未配置' } }, 500);
+
+  const prefix1 = `${code}/Unit${num}/`;
+  const prefix2 = `${code}/Unit${num}_`;
+  const [res1, res2] = await Promise.all([
+    R2.list({ prefix: prefix1, limit: 100 }),
+    R2.list({ prefix: prefix2, limit: 100 })
+  ]);
+  const allObjs = [...(res1.objects || []), ...(res2.objects || [])];
+  
+  for (const obj of allObjs) {
+    try { await R2.delete(obj.key); } catch {}
+  }
+
+  return c.json({ data: { success: true, deleted_count: allObjs.length } });
+});
+
 // DELETE /page-img/:code/:num/:page — 删除单张切图 (工作台管理)
 textbooks.delete('/page-img/:code/:num/:page', async (c) => {
   const R2 = c.env.TEXTBOOKS_R2;
