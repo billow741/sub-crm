@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Book, FileText, Upload, Sparkles, Loader, CheckCircle, XCircle, 
   Trash2, Plus, Edit3, Save, Eye, RefreshCw, AlertCircle, 
-  ExternalLink, Layers, ChevronRight, Check, X
+  ExternalLink, Layers, ChevronRight, Check, X, ArrowRight, Play, CheckCheck
 } from 'lucide-react';
 import { request, API_BASE_URL, API_KEY } from '../store/api';
 
@@ -31,6 +31,7 @@ export default function Textbooks() {
 
   // 弹窗状态
   const [showBooksManage, setShowBooksManage] = useState(false);
+  const [showBatchBookModal, setShowBatchBookModal] = useState(false);
   const [previewImageModal, setPreviewImageModal] = useState(null);
 
   // 加载教材列表
@@ -94,7 +95,6 @@ export default function Textbooks() {
           grammar: resp.data.grammar || []
         });
       } else {
-        // 查找单元默认标题
         const u = bookUnits.find(item => item.unit_number === unitNum);
         setUnitDetail({
           unit_number: unitNum,
@@ -131,7 +131,7 @@ export default function Textbooks() {
     setLoadingPages(false);
   };
 
-  // 处理 PDF 上传与浏览器端切片
+  // 处理单单元 PDF 上传与浏览器端切片
   const handlePdfUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -146,11 +146,11 @@ export default function Textbooks() {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const numPages = pdf.numPages;
-      const maxPages = Math.min(numPages, 12); // 单单元切图最多支持 12 页
+      const maxPages = Math.min(numPages, 12);
 
       const images = [];
       for (let i = 1; i <= maxPages; i++) {
-        setRenderProgress(`正在切片渲染第 ${i} / ${maxPages} 页...`);
+        setRenderProgress(`正在切片第 ${i} / ${maxPages} 页...`);
         const page = await pdf.getPage(i);
         const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
@@ -172,7 +172,7 @@ export default function Textbooks() {
     e.target.value = '';
   };
 
-  // 触发 AI 视觉多模态识别 (同时保存切图至 R2)
+  // 触发单单元 AI 视觉多模态识别 (同时保存切图至 R2)
   const handleAiExtract = async () => {
     if (!selectedBookCode || selectedUnitNum === null) return;
     if (renderedImages.length === 0 && r2Pages.length === 0) {
@@ -188,7 +188,6 @@ export default function Textbooks() {
           fd.append('images', img.blob, `page-${String(i + 1).padStart(2, '0')}.png`);
         });
       } else {
-        // 如果本地没有刚切的，但 R2 上有切图，拉取切图 blob
         for (const p of r2Pages) {
           const res = await fetch(p.url, { headers: { 'X-API-Key': API_KEY } });
           const blob = await res.blob();
@@ -212,9 +211,8 @@ export default function Textbooks() {
           patterns: d.patterns || [],
           grammar: d.grammar || []
         }));
-        // 刷新 R2 列表
         loadUnitPages(selectedBookCode, selectedUnitNum);
-        alert('🎉 AI 视觉识别完成！内容已加载至下方，请校对后点击【保存入库】');
+        alert('🎉 AI 视觉识别完成！已自动为词汇和句型匹配标准中文翻译，请校对后点击【保存入库】');
       } else {
         alert('AI 识别失败: ' + (json.error?.message || '未知错误'));
       }
@@ -240,7 +238,6 @@ export default function Textbooks() {
       });
 
       if (resp.data) {
-        // 如果修改了单元标题，同步更新 textbook_units
         if (unitDetail.unit_title) {
           await request(`/textbooks/units-manage/${selectedBookCode}/${selectedUnitNum}`, {
             method: 'PATCH',
@@ -249,7 +246,6 @@ export default function Textbooks() {
         }
 
         alert('✅ 保存成功！教师端与家长端已同步更新');
-        // 刷新单元列表状态
         const uResp = await request(`/textbooks/units-manage/${selectedBookCode}`);
         setBookUnits(uResp.data?.units || []);
       } else {
@@ -368,15 +364,25 @@ export default function Textbooks() {
                 SaaS Workbench
               </span>
             </h1>
-            <p className="text-xs text-gray-500">统一标准 R2 存储 · AI 视觉切片提取 · 多端闭环</p>
+            <p className="text-xs text-gray-500">统一标准 R2 存储 · AI 视觉切片提取 · 双语对照闭环</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {/* 整本 PDF 批量导入按钮 */}
+          <button
+            type="button"
+            onClick={() => setShowBatchBookModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition shadow-2xs cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+            <span>📖 整本 PDF 批量导入</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setShowBooksManage(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-2xs cursor-pointer"
           >
             <Layers className="w-3.5 h-3.5 text-gray-500" />
             <span>教材管理</span>
@@ -849,6 +855,18 @@ export default function Textbooks() {
         </div>
       )}
 
+      {/* 整本 PDF 批量导入 Modal */}
+      {showBatchBookModal && selectedBookCode && (
+        <BatchBookImportModal
+          bookCode={selectedBookCode}
+          bookName={selectedBook?.name || selectedBookCode}
+          onClose={() => {
+            setShowBatchBookModal(false);
+            selectBook(selectedBookCode);
+          }}
+        />
+      )}
+
       {/* 教材库管理 Modal */}
       {showBooksManage && (
         <BooksManageModal
@@ -859,6 +877,272 @@ export default function Textbooks() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// 📖 整本 PDF 批量智能流式导入 Modal
+// ============================================================
+function BatchBookImportModal({ bookCode, bookName, onClose }) {
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const [totalPages, setTotalPages] = useState(0);
+  const [batchStart, setBatchStart] = useState(0);
+  const BATCH_SIZE = 8; // 每次送 8 页给大模型处理
+
+  const [processing, setProcessing] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
+  const [batchImages, setBatchImages] = useState([]);
+  const [accumulatedUnits, setAccumulatedUnits] = useState([]);
+  const [savingAll, setSavingAll] = useState(false);
+
+  // 加载 PDF 文件并准备分批
+  const handleSelectBookPdf = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setProcessing(true);
+    setStatusMsg('正在初始化 PDF 引擎...');
+    try {
+      const pdfjsLib = await import('pdfjs-dist');
+      const workerMod = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerMod.default;
+
+      const buf = await file.arrayBuffer();
+      const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+      setPdfDoc(doc);
+      setTotalPages(doc.numPages);
+      setBatchStart(0);
+      setAccumulatedUnits([]);
+      setStatusMsg(`PDF 加载成功！共 ${doc.numPages} 页，预计分 ${Math.ceil(doc.numPages / BATCH_SIZE)} 批处理`);
+    } catch (err) {
+      alert('加载整本 PDF 失败: ' + err.message);
+    }
+    setProcessing(false);
+  };
+
+  // 处理当前批次
+  const processCurrentBatch = async (startIdx) => {
+    if (!pdfDoc) return;
+    setProcessing(true);
+    const start = startIdx !== undefined ? startIdx : batchStart;
+    const end = Math.min(start + BATCH_SIZE, totalPages);
+    setStatusMsg(`正在切片渲染第 ${start + 1} ~ ${end} 页 (共 ${totalPages} 页)...`);
+
+    try {
+      const images = [];
+      const fd = new FormData();
+
+      for (let p = start + 1; p <= end; p++) {
+        const page = await pdfDoc.getPage(p);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/png', 0.85));
+        const url = URL.createObjectURL(blob);
+        images.push({ blob, url, pageNum: p });
+        fd.append('images', blob, `page-${p}.png`);
+      }
+      setBatchImages(images);
+
+      setStatusMsg(`正在请求 AI 视觉模型提取第 ${start + 1} ~ ${end} 页...`);
+      const res = await fetch(`${API_BASE_URL}/textbooks/preview-book/${bookCode}?batch_start=${start}`, {
+        method: 'POST',
+        headers: { 'X-API-Key': API_KEY },
+        body: fd
+      });
+      const json = await res.json();
+
+      if (json.data?.units) {
+        const newUnits = json.data.units;
+        setAccumulatedUnits(prev => {
+          // 合并 units (根据 unit_number 去重或增量补充)
+          const map = new Map();
+          prev.forEach(u => map.set(u.unit_number, u));
+          newUnits.forEach(u => {
+            if (map.has(u.unit_number)) {
+              const existing = map.get(u.unit_number);
+              map.set(u.unit_number, {
+                ...existing,
+                unit_title: u.unit_title || existing.unit_title,
+                vocab: [...(existing.vocab || []), ...(u.vocab || [])],
+                patterns: [...(existing.patterns || []), ...(u.patterns || [])],
+                grammar: [...(existing.grammar || []), ...(u.grammar || [])]
+              });
+            } else {
+              map.set(u.unit_number, u);
+            }
+          });
+          return Array.from(map.values()).sort((a, b) => a.unit_number - b.unit_number);
+        });
+
+        const nextStart = end;
+        setBatchStart(nextStart);
+        if (nextStart >= totalPages) {
+          setStatusMsg(`🎉 整本书所有批次已提取完毕！已累计识别 ${accumulatedUnits.length + newUnits.length} 个单元，请确认后点击【全部保存入库】`);
+        } else {
+          setStatusMsg(`✅ 第 ${start + 1} ~ ${end} 页提取成功！可继续提取下一批`);
+        }
+      } else {
+        alert('该批提取失败: ' + (json.error?.message || '未知错误'));
+      }
+    } catch (err) {
+      alert('处理出错: ' + err.message);
+    }
+    setProcessing(false);
+  };
+
+  // 一键把所有识别到的 Units 写入 D1
+  const handleCommitAllUnits = async () => {
+    if (accumulatedUnits.length === 0) {
+      alert('还没有任何已识别的单元');
+      return;
+    }
+    setSavingAll(true);
+    try {
+      const resp = await fetch(`${API_BASE_URL}/textbooks/commit-units/${bookCode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ units: accumulatedUnits })
+      });
+      const json = await resp.json();
+      if (json.data) {
+        alert(`🎉 保存成功！共写入 ${json.data.units_written} 个单元内容至数据库与 R2`);
+        onClose();
+      } else {
+        alert('保存失败: ' + (json.error?.message || '未知错误'));
+      }
+    } catch (err) {
+      alert('保存请求出错: ' + err.message);
+    }
+    setSavingAll(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+        {/* Modal Header */}
+        <div className="px-6 py-4 border-b bg-purple-50/70 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-purple-600" />
+            <div>
+              <h2 className="text-sm font-bold text-gray-900">整本教材 PDF 批量流式导入 — {bookName} ({bookCode})</h2>
+              <p className="text-xs text-gray-500">自动分批切片 · AI 自动按 Unit 归类 · 批量保存入库</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          {/* 1. PDF 导入区 */}
+          {!pdfDoc ? (
+            <div className="border-2 border-dashed border-purple-200 rounded-2xl p-8 text-center bg-purple-50/30 hover:bg-purple-50/60 transition">
+              <Upload className="w-10 h-10 text-purple-400 mx-auto mb-3" />
+              <div className="text-sm font-bold text-gray-800 mb-1">选择整本教材原版 PDF 文件</div>
+              <p className="text-xs text-gray-500 mb-4">系统将自动分批（每批 8 页）进行高清切图并由 AI 多模态识别各单元知识点</p>
+              <label className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white text-xs font-semibold rounded-xl hover:bg-purple-700 cursor-pointer shadow-sm">
+                <span>📁 浏览本地 PDF 文件</span>
+                <input type="file" accept="application/pdf" onChange={handleSelectBookPdf} className="hidden" />
+              </label>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* 进度控制条 */}
+              <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-4 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-purple-900">
+                    当前进度: 第 {batchStart} / {totalPages} 页 ({Math.min(100, Math.round((batchStart / totalPages) * 100))}%)
+                  </div>
+                  <div className="text-xs text-purple-700 mt-0.5">{statusMsg}</div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {batchStart < totalPages && (
+                    <button
+                      type="button"
+                      onClick={() => processCurrentBatch()}
+                      disabled={processing}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 shadow-xs cursor-pointer"
+                    >
+                      {processing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                      <span>{processing ? '正在提取...' : `提取下批 (P${batchStart + 1}~P${Math.min(batchStart + BATCH_SIZE, totalPages)})`}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 已累积识别的 Units 列表 */}
+              <div>
+                <div className="text-xs font-bold text-gray-800 mb-2 flex items-center justify-between">
+                  <span>✨ 累积已提取单元 ({accumulatedUnits.length} 个):</span>
+                  <span className="text-[11px] text-gray-500">词汇和句型已自动匹配双语对照</span>
+                </div>
+
+                {accumulatedUnits.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-gray-400 bg-gray-50 rounded-xl border">
+                    请点击上方「提取下批」开始识别
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {accumulatedUnits.map((u, idx) => (
+                      <div key={idx} className="p-3 bg-gray-50 border rounded-xl flex items-start justify-between text-xs">
+                        <div className="space-y-1">
+                          <div className="font-bold text-gray-900 flex items-center gap-2">
+                            <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px]">
+                              Unit {u.unit_number}
+                            </span>
+                            <span>{u.unit_title || `Unit ${u.unit_number}`}</span>
+                          </div>
+                          <div className="text-gray-600 text-[11px]">
+                            🔤 核心词汇 ({(u.vocab || []).length} 个): {(u.vocab || []).slice(0, 6).map(v => `${v.word} (${v.translation})`).join(', ')}
+                            {(u.vocab || []).length > 6 ? '...' : ''}
+                          </div>
+                          <div className="text-gray-600 text-[11px]">
+                            💬 重点句型 ({(u.patterns || []).length} 条): {(u.patterns || []).slice(0, 2).map(p => p.pattern).join('; ')}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setAccumulatedUnits(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-gray-400 hover:text-red-600 p-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="px-6 py-3 border-t bg-gray-50 flex items-center justify-between">
+          <button onClick={onClose} className="px-4 py-1.5 text-xs text-gray-600 hover:text-gray-800">
+            取消 / 关闭
+          </button>
+
+          {accumulatedUnits.length > 0 && (
+            <button
+              type="button"
+              onClick={handleCommitAllUnits}
+              disabled={savingAll}
+              className="flex items-center gap-1.5 px-5 py-2 bg-green-600 text-white text-xs font-bold rounded-xl hover:bg-green-700 transition disabled:opacity-50 shadow-sm cursor-pointer"
+            >
+              {savingAll ? <Loader className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
+              <span>{savingAll ? '正在写入系统...' : `全部保存入库 (${accumulatedUnits.length} 个单元)`}</span>
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -910,7 +1194,6 @@ function BooksManageModal({ books, onClose }) {
         </div>
 
         <div className="p-6 overflow-y-auto space-y-6">
-          {/* 编辑/新增表单 */}
           <form onSubmit={handleSaveBook} className="p-4 bg-purple-50/60 border border-purple-200 rounded-xl space-y-3">
             <div className="text-xs font-bold text-purple-900">
               {editingCode ? `编辑教材: ${editingCode}` : '➕ 新增教材'}
@@ -972,7 +1255,6 @@ function BooksManageModal({ books, onClose }) {
             </div>
           </form>
 
-          {/* 教材列表 */}
           <div className="space-y-2">
             <div className="text-xs font-bold text-gray-700">现有教材列表</div>
             {list.map(b => (

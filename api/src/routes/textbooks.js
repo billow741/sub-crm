@@ -247,33 +247,61 @@ function safeParse(str) {
 }
 
 // ============================================================
-// LLM 提取 Prompt (同 scripts/extract_textbook.py)
+// LLM 提取 Prompt (必须包含标准中文翻译)
 // ============================================================
-const EXTRACTION_PROMPT = `You are a textbook content extractor. Given the text content of a language textbook unit, extract the unit's title, vocabulary, sentence patterns, and grammar points into structured JSON.
+const EXTRACTION_PROMPT = `You are an expert ESL textbook curriculum analyzer. Given page images from an English textbook unit, extract the unit title, core vocabulary words, sentence patterns, and grammar points into structured JSON.
 
-Return ONLY valid JSON (no markdown fences, no explanation) in this exact schema:
+Return ONLY valid JSON (no markdown fences, no explanatory text) matching this exact schema:
 
 {
-  "unit_title": "Hello!",
+  "unit_title": "Art Class",
   "vocab": [
-    {"word": "apple", "translation": "苹果", "is_core": true, "difficulty": 1}
+    {"word": "paper", "translation": "纸", "is_core": true, "difficulty": 1},
+    {"word": "glue", "translation": "胶水", "is_core": true, "difficulty": 1}
   ],
   "patterns": [
-    {"pattern": "I like apples.", "translation": "我喜欢苹果。", "is_core": true}
+    {"pattern": "I have paper.", "translation": "我有一张纸。", "is_core": true},
+    {"pattern": "What do you have?", "translation": "你有什么？", "is_core": true}
   ],
   "grammar": [
-    {"point": "Present Simple", "example": "She plays tennis.", "is_core": true}
+    {"point": "Simple Present (have / do)", "example": "I have glue. / Do you have scissors?", "is_core": true}
   ]
 }
 
-Rules:
-- "unit_title": the actual heading printed on the textbook page (e.g. "Hello!", "My Family"). If you see a page heading like "Unit 1: Hello!", use "Hello!". If no title is visible, use null.
-- "is_core": true if the item appears prominently in the unit's main vocabulary list or is a target pattern/grammar; false if supplementary.
-- "difficulty": 1 (basic/critical), 2 (intermediate), 3 (advanced).
-- If a translation is provided in parentheses or list items, include it; otherwise leave translation as null.
-- Clean up bullet artifacts (e.g., (cid:127), •, -) from words/patterns.
-- If no vocab/patterns/grammar is found, return an empty array for that field.
-- Return ONLY the JSON object. No code fences, no preamble.`;
+Extraction Rules:
+1. "unit_title": The actual unit title heading on the page (e.g. "Art Class", "Animals").
+2. "translation": ALWAYS provide accurate, natural Simplified Chinese translation for EVERY vocabulary word and sentence pattern (e.g., "scissors" -> "剪刀", "I have a pen." -> "我有一支笔。"). Even if the original textbook is pure English without Chinese, YOU MUST translate it into Simplified Chinese.
+3. "is_core": Set true for key target vocabulary list and main target sentence patterns; false for incidental/supplementary words.
+4. "difficulty": 1 (basic), 2 (intermediate), 3 (advanced).
+5. "grammar": Identify key grammar structures introduced in this unit with concise rules and example sentences.
+6. Output MUST be strictly valid JSON without any markdown formatting or commentary.`;
+
+// 健壮的 JSON 解析器 (自动剥离 markdown 与前后非 JSON 字符)
+function cleanAndParseJson(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null;
+  const trimmed = rawText.trim();
+  try { return JSON.parse(trimmed); } catch(e) {}
+
+  // 剥离 ```json ... ```
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1].trim()); } catch(e) {}
+  }
+
+  // 提取最外层的大括号对象
+  const objMatch = trimmed.match(/(\{[\s\S]*\})/);
+  if (objMatch) {
+    try { return JSON.parse(objMatch[1]); } catch(e) {}
+  }
+
+  // 提取最外层的数组对象
+  const arrMatch = trimmed.match(/(\[[\s\S]*\])/);
+  if (arrMatch) {
+    try { return JSON.parse(arrMatch[1]); } catch(e) {}
+  }
+
+  return null;
+}
 
 // ============================================================
 // 调 LLM 做结构化提取
@@ -698,9 +726,9 @@ Rules:
     if (resp.ok) {
       const data = await resp.json();
       let raw = data.choices?.[0]?.message?.content || '';
-      raw = raw.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-      try { return JSON.parse(raw); }
-      catch { return { vocab: [], patterns: [], grammar: [], _raw: raw.substring(0, 500), _model: m }; }
+      const parsed = cleanAndParseJson(raw);
+      if (parsed) return parsed;
+      return { vocab: [], patterns: [], grammar: [], _raw: raw.substring(0, 500), _model: m };
     }
 
     if (resp.status === 429) {
@@ -710,9 +738,9 @@ Rules:
       if (resp.ok) {
         const data = await resp.json();
         let raw = data.choices?.[0]?.message?.content || '';
-        raw = raw.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-        try { return JSON.parse(raw); }
-        catch { return { vocab: [], patterns: [], grammar: [], _raw: raw.substring(0, 500), _model: m }; }
+        const parsed = cleanAndParseJson(raw);
+        if (parsed) return parsed;
+        return { vocab: [], patterns: [], grammar: [], _raw: raw.substring(0, 500), _model: m };
       }
       if (resp.status === 429) {
         // 当前模型限流,换下一个
