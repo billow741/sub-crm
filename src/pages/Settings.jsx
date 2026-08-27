@@ -25,9 +25,8 @@ export default function SettingsPage() {
   const handleSaveCoefficient = async () => {
     try {
       await request('/settings', {
-        method: 'PUT',
-        body: JSON.stringify({ short_class_coefficient: coefficient }),
-        headers: { 'Content-Type': 'application/json' }
+        method: 'PATCH',
+        body: { short_class_coefficient: coefficient },
       });
       setMessage({ type: 'success', text: `课时系数已保存为 ${coefficient}` });
     } catch(e) {

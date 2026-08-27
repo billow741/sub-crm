@@ -48,6 +48,8 @@ organizations.get('/', async (c) => {
       address: org.address,
       notes: org.notes,
       unit_price_cny: org.unit_price_cny,
+      unit_price_25_cny: org.unit_price_25_cny,
+      short_class_coefficient: org.short_class_coefficient,
       settlement_day: org.settlement_day,
       credit_limit_cny: org.credit_limit_cny,
       status: org.status,
@@ -99,7 +101,7 @@ organizations.get('/:id', async (c) => {
 organizations.post('/', async (c) => {
   const DB = c.env.DB;
   const body = await c.req.json();
-  const { name, contact_name, contact_phone, contact_email, address, notes, login_code, password, unit_price_cny, settlement_day, credit_limit_cny } = body;
+  const { name, contact_name, contact_phone, contact_email, address, notes, login_code, password, unit_price_cny, unit_price_25_cny, short_class_coefficient, settlement_day, credit_limit_cny } = body;
 
   if (!name) {
     return c.json(error('VALIDATION_ERROR', '机构名称不能为空'), 400);
@@ -121,9 +123,23 @@ organizations.post('/', async (c) => {
   }
 
   const result = await DB.prepare(`
-    INSERT INTO organizations (name, contact_name, contact_phone, contact_email, address, notes, login_code, password_hash, unit_price_cny, settlement_day, credit_limit_cny, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-  `).bind(name, contact_name || null, contact_phone || null, contact_email || null, address || null, notes || null, login_code || null, passwordHash, unit_price_cny ?? 80, settlement_day || 'monday', credit_limit_cny ?? 0).run();
+    INSERT INTO organizations (name, contact_name, contact_phone, contact_email, address, notes, login_code, password_hash, unit_price_cny, unit_price_25_cny, short_class_coefficient, settlement_day, credit_limit_cny, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).bind(
+    name,
+    contact_name || null,
+    contact_phone || null,
+    contact_email || null,
+    address || null,
+    notes || null,
+    login_code || null,
+    passwordHash,
+    unit_price_cny ?? 80,
+    unit_price_25_cny ?? 50,
+    short_class_coefficient !== undefined ? short_class_coefficient : null,
+    settlement_day || 'monday',
+    credit_limit_cny ?? 0
+  ).run();
 
   return c.json(success({
     id: result.meta.last_row_id,
@@ -138,7 +154,7 @@ organizations.patch('/:id', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json();
 
-  const { name, contact_name, contact_phone, contact_email, address, notes, status, login_code, password, unit_price_cny, settlement_day, credit_limit_cny } = body;
+  const { name, contact_name, contact_phone, contact_email, address, notes, status, login_code, password, unit_price_cny, unit_price_25_cny, short_class_coefficient, settlement_day, credit_limit_cny } = body;
 
   const updates = [];
   const values = [];
@@ -152,6 +168,8 @@ organizations.patch('/:id', async (c) => {
   if (status !== undefined) { updates.push('status = ?'); values.push(status); }
   if (login_code !== undefined) { updates.push('login_code = ?'); values.push(login_code); }
   if (unit_price_cny !== undefined) { updates.push('unit_price_cny = ?'); values.push(unit_price_cny); }
+  if (unit_price_25_cny !== undefined) { updates.push('unit_price_25_cny = ?'); values.push(unit_price_25_cny); }
+  if (short_class_coefficient !== undefined) { updates.push('short_class_coefficient = ?'); values.push(short_class_coefficient); }
   if (settlement_day !== undefined) { updates.push('settlement_day = ?'); values.push(settlement_day); }
   if (credit_limit_cny !== undefined) { updates.push('credit_limit_cny = ?'); values.push(credit_limit_cny); }
 

@@ -1,8 +1,8 @@
 // API 配置
 // 本地测试: http://127.0.0.1:8787/api/v1
 // 生产环境: https://api.changtian.dpdns.org/api/v1
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.changtian.dpdns.org/api/v1';
-const API_KEY='sunnyb...2024';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.changtian.dpdns.org/api/v1';
+export const API_KEY = 'sunnybridge-dev-key-2024';
 
 // 当前选中的机构 ID（用于多机构数据隔离）
 let _selectedOrgId = '';

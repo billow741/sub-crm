@@ -5,18 +5,6 @@ import { studentOps, paymentOps } from '../store';
 import OrgFilter from '../components/OrgFilter';
 import { setSelectedOrg, organizationOps } from '../store/api';
 
-// API 增加课时
-const addStudentHours = async (studentId, hours) => {
-  const res = await fetch(`https://api.changtian.dpdns.org/api/v1/students/${studentId}/add-hours`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': 'sunnybridge-dev-key-2024'
-    },
-    body: JSON.stringify({ hours })
-  });
-  return res.json();
-};
 
 export default function Payments() {
   const [payments, setPayments] = useState([]);

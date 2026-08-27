@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Clock, User, BookOpen, Lock, AlertCircle } from 'lucide-react';
+import { API_BASE_URL } from '../store';
 
 const STATUS_LABELS = {
   scheduled: '已预约',
@@ -42,7 +43,7 @@ export default function TeacherShare() {
     status: 'completed'
   });
 
-  const API_BASE = 'https://api.changtian.dpdns.org/api/v1';
+  const API_BASE = API_BASE_URL;
 
   useEffect(() => {
     loadTeacherInfo();

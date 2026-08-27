@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Receipt, Plus, CheckCircle, Trash2, Eye, FileText, Download } from 'lucide-react';
 import { request, organizationOps } from '../store/api';
 
-const API_BASE = 'https://api.changtian.dpdns.org';
 
 export default function OrgSettlements() {
   const [settlements, setSettlements] = useState([]);
@@ -136,7 +135,7 @@ export default function OrgSettlements() {
     ]);
     
     // Combine and add BOM for Excel UTF-8 support
-    const csvContent = "\\ufeff" + [headers, ...rows].map(e => e.join(",")).join("\\n");
+    const csvContent = '\uFEFF' + [headers, ...rows].map(e => e.join(',')).join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

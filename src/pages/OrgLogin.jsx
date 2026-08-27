@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Lock, Building2, ArrowLeft, Loader2 } from 'lucide-react';
-import { setOrgSession, isOrgLoggedIn } from '../store/api';
-
-const API_BASE_URL = 'https://api.changtian.dpdns.org/api/v1';
+import { setOrgSession, isOrgLoggedIn, API_BASE_URL } from '../store/api';
 
 export default function OrgLogin() {
   const navigate = useNavigate();

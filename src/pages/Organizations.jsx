@@ -38,9 +38,9 @@ export default function Organizations() {
     try {
       const submitData = { ...formData };
       // 数值字段转float或null
-      submitData.unit_price_cny = formData.unit_price_cny ? parseFloat(formData.unit_price_cny) : null;
-      submitData.unit_price_25_cny = formData.unit_price_25_cny ? parseFloat(formData.unit_price_25_cny) : null;
-      submitData.short_class_coefficient = formData.short_class_coefficient ? parseFloat(formData.short_class_coefficient) : null;
+      submitData.unit_price_cny = (formData.unit_price_cny !== '' && formData.unit_price_cny !== null) ? parseFloat(formData.unit_price_cny) : null;
+      submitData.unit_price_25_cny = (formData.unit_price_25_cny !== '' && formData.unit_price_25_cny !== null) ? parseFloat(formData.unit_price_25_cny) : null;
+      submitData.short_class_coefficient = (formData.short_class_coefficient !== '' && formData.short_class_coefficient !== null) ? parseFloat(formData.short_class_coefficient) : null;
       if (editingOrg) {
         await organizationOps.update(editingOrg.id, submitData);
       } else {

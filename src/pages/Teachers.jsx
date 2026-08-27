@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { teacherOps } from '../store';
 import { teacherPaymentOps } from '../store/api';
 import OrgFilter from '../components/OrgFilter';
-import { setSelectedOrg, organizationOps } from '../store/api';
+import { setSelectedOrg, organizationOps, API_BASE_URL, request } from '../store/api';
 import TeacherPayments from './TeacherPayments';
 
 export default function Teachers() {
@@ -149,13 +149,10 @@ export default function Teachers() {
 
   const verifyPassword = async () => {
     try {
-      const API_BASE = 'https://api.changtian.dpdns.org/api/v1';
-      const res = await fetch(`${API_BASE}/settings/verify-teacher-payment-password`, {
+      const data = await request('/settings/verify-teacher-payment-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
+        body: { password }
       });
-      const data = await res.json();
       if (data.success || data.data?.valid) {
         setPasswordVerified(true);
         setShowPasswordModal(false);
@@ -446,22 +443,20 @@ function TeacherCard({ teacher, onEdit, onDelete, orgs }) {
   };
 
   const [shareUrl, setShareUrl] = useState(null);
-  const API_BASE = 'https://api.changtian.dpdns.org/api/v1';
 
   const handleGenerateShareLink = async () => {
     try {
-      const res = await fetch(`${API_BASE}/teacher/share/${teacher.id}/generate-token`, {
+      const data = await request(`/teacher/share/${teacher.id}/generate-token`, {
         method: 'POST'
       });
-      const data = await res.json();
       if (data.data?.token) {
         const url = `${window.location.origin}/teacher/share/${data.data.token}`;
         setShareUrl(url);
         navigator.clipboard.writeText(url);
-        alert('分享链接已复制到剪贴板！\n\n链接：' + url);
+        alert('分享链接已复制到剪贴板！');
       }
-    } catch (err) {
-      alert('生成失败：' + err.message);
+    } catch (e) {
+      alert('生成分享链接失败');
     }
   };
 

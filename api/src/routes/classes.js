@@ -291,41 +291,35 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
 
   // 体验课免费，不扣课时（机构课时包 + 学生课时都不扣）
   if (!isTrial) {
-  // ── 同步机构课时包 ──
-  if (organizationId && classStatus === 'completed') {
-    // 找该机构最新 pending/partial_paid 包，增加 used_hours
-    const targetPkg = await DB.prepare(
-      `SELECT id FROM org_packages
-       WHERE org_id = ? AND status IN ('pending', 'partial_paid')
-       ORDER BY created_at DESC LIMIT 1`
-    ).bind(organizationId).first();
+    // ── 同步机构课时包 ──
+    if (organizationId && classStatus === 'completed') {
+      const targetPkg = await DB.prepare(
+        `SELECT id FROM org_packages
+         WHERE org_id = ? AND status IN ('pending', 'partial_paid')
+         ORDER BY created_at DESC LIMIT 1`
+      ).bind(organizationId).first();
 
-    if (targetPkg) {
-      await DB.prepare(
-        `UPDATE org_packages SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
-      ).bind(classHours, targetPkg.id).run();
-
-      await DB.prepare(
-        `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
-         VALUES (?, 'class', ?, ?, ?)`
-      ).bind(studentId, -classHours, classId, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
+      if (targetPkg) {
+        await DB.prepare(
+          `UPDATE org_packages SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
+        ).bind(classHours, targetPkg.id).run();
+      }
     }
-  }
 
-  // ── 同步学生课时 ──
-  const studentHours = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(studentId).first();
-  if (studentHours && classStatus === 'completed') {
-    const newUsedHours = (studentHours.used_hours || 0) + classHours;
-    const balanceAfter = Math.round(((studentHours.total_hours || 0) - newUsedHours) * 100) / 100;
-    await DB.prepare(
-      `UPDATE students SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
-    ).bind(classHours, studentId).run();
+    // ── 同步学生课时并记录唯一流水 ──
+    const studentHours = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(studentId).first();
+    if (studentHours && classStatus === 'completed') {
+      const newUsedHours = (studentHours.used_hours || 0) + classHours;
+      const balanceAfter = Math.round(((studentHours.total_hours || 0) - newUsedHours) * 100) / 100;
+      await DB.prepare(
+        `UPDATE students SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
+      ).bind(classHours, studentId).run();
 
-    await DB.prepare(
-      `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
-       VALUES (?, 'class', ?, ?, ?, ?)`
-    ).bind(studentId, -classHours, balanceAfter, classId, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
-  }
+      await DB.prepare(
+        `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
+         VALUES (?, 'class', ?, ?, ?, ?)`
+      ).bind(studentId, -classHours, balanceAfter, classId, `上课扣除 ${classHours} 课时 (class ${classId})`).run();
+    }
   }
 
   return c.json(success({
@@ -382,218 +376,232 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
     data.end_time = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
   }
 
-  // 检查记录是否存在
-  const existing = await DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
-  if (!existing) {
-    return c.json(error('NOT_FOUND', '上课记录不存在'), 404);
-  }
-
-  // 如果指定了课时包，检查是否属于该学生
-  if (data.package_id) {
-    const pkg = await DB.prepare('SELECT id, student_id FROM packages WHERE id = ?').bind(data.package_id).first();
-    if (!pkg || pkg.student_id !== existing.student_id) {
-      return c.json(error('INVALID_PACKAGE', '课时包不存在或不属于该学生'), 400);
-    }
-  }
-
-  // ── 老师时间冲突检查 ──
-  const checkTeacherId = data.teacher_id ?? existing.teacher_id;
-  const checkDate = data.date ?? existing.date;
-  const checkStart = data.start_time ?? existing.start_time;
-  const checkEnd = data.end_time ?? existing.end_time;
-
-  if (checkTeacherId && checkDate && checkStart && checkEnd) {
-    const conflicts = await checkTeacherConflict(DB, {
-      teacherId: checkTeacherId,
-      date: checkDate,
-      startTime: checkStart,
-      endTime: checkEnd,
-      excludeId: parseInt(id)
-    });
-    if (conflicts.length > 0) {
-      const conflictStudentIds = conflicts.map(c => c.student_id);
-      const studentNames = await DB.prepare(
-        `SELECT id, name FROM students WHERE id IN (${conflictStudentIds.map(() => '?').join(',')})`
-      ).bind(...conflictStudentIds).all();
-      const names = (studentNames.results || []).map(s => s.name).join('、');
-      return c.json(error('TEACHER_CONFLICT',
-        `教师时间冲突！该教师 ${checkDate} ${checkStart}-${checkEnd} 已有课程（${names}）`
-      ), 409);
-    }
-  }
-
-  // 更新字段
-  const fields = [];
-  const values = [];
-
-  for (const [key, value] of Object.entries(data)) {
-    fields.push(`${key} = ?`);
-    values.push(value);
-  }
-
-  fields.push('updated_at = ?');
-  values.push(new Date().toISOString());
-
-  values.push(id);
-
-  await DB.prepare(`UPDATE classes SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
-
-  // ── 同步学生等级：如果反馈中 Level 有变化，更新学生档案的 grade ──
-  if (data.fb_lesson_level && existing.student_id) {
-    const currentStudent = await DB.prepare('SELECT grade FROM students WHERE id = ?').bind(existing.student_id).first();
-    if (currentStudent && currentStudent.grade !== data.fb_lesson_level) {
-      await DB.prepare('UPDATE students SET grade = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(data.fb_lesson_level, existing.student_id).run();
-    }
-  }
-
-  // ── 同步机构课时包 ──
-  // 当 status 在 completed ↔ 其他 之间切换时，调整 org_packages.used_hours
-  const oldStatus = existing.status;
-  const newStatus = data.status ?? oldStatus;
-  const clsHours = data.hours ?? existing.hours;
-  const clsOrgId = existing.organization_id;
-  const isTrialUpdate = existing.is_trial || data.is_trial || 0;
-
-  // 体验课免费，不扣课时
-  if (!isTrialUpdate) {
-  if (clsOrgId && oldStatus !== newStatus) {
-    let delta = 0;
-    let note = '';
-    if (newStatus === 'completed' && oldStatus !== 'completed') {
-      // 非完成 → 完成：增加消耗
-      delta = clsHours;
-      note = `课程标记完成 +${clsHours}节 (class ${id})`;
-    } else if (oldStatus === 'completed' && newStatus !== 'completed') {
-      // 完成 → 非完成：回退消耗
-      delta = -clsHours;
-      note = `课程取消完成 -${clsHours}节 (class ${id})`;
+  try {
+    // 检查记录是否存在
+    const existing = await DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
+    if (!existing) {
+      return c.json(error('NOT_FOUND', '上课记录不存在'), 404);
     }
 
-    if (delta !== 0) {
-      const targetPkg = await DB.prepare(
-        `SELECT id FROM org_packages
-         WHERE org_id = ? AND status IN ('pending', 'partial_paid')
-         ORDER BY created_at DESC LIMIT 1`
-      ).bind(clsOrgId).first();
-
-      if (targetPkg) {
-        await DB.prepare(
-          `UPDATE org_packages SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
-        ).bind(delta, targetPkg.id).run();
-
-        await DB.prepare(
-          `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
-           VALUES (?, 'adjust', ?, ?, ?)`
-        ).bind(existing.student_id, -delta, id, note).run();
-      }
-    }
-  }
-
-  // ── 同步学生课时 ──
-  if (oldStatus !== newStatus) {
-    let delta = 0;
-    let note = '';
-    if (newStatus === 'completed' && oldStatus !== 'completed') {
-      delta = clsHours;
-      note = `课程标记完成 +${clsHours}节 (class ${id})`;
-    } else if (oldStatus === 'completed' && newStatus !== 'completed') {
-      delta = -clsHours;
-      note = `课程取消完成 -${clsHours}节 (class ${id})`;
-    }
-
-    if (delta !== 0) {
-      await DB.prepare(
-        `UPDATE students SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
-      ).bind(delta, existing.student_id).run();
-
-      await DB.prepare(
-        `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
-         VALUES (?, 'adjust', ?, ?, ?)`
-      ).bind(existing.student_id, -delta, id, note).run();
-    }
-  }
-  }
-
-  // ── 里程碑自动检测 ──
-  // 仅当非体验课、状态变为 completed 时触发
-  let milestone = null;
-  if (!isTrialUpdate && newStatus === 'completed' && oldStatus !== 'completed') {
-    // 查该学生已完成非体验课数量
-    const completedCount = await DB.prepare(
-      'SELECT COUNT(*) as cnt FROM classes WHERE student_id = ? AND status = ? AND is_trial = 0'
-    ).bind(existing.student_id, 'completed').first();
-
-    const milestones = [10, 30, 60];
-    for (const m of milestones) {
-      if (completedCount.cnt === m) {
-        milestone = { type: 'milestone', completedCount: m, reportType: `milestone_${m}` };
-        break;
+    // 如果指定了课时包，检查是否属于该学生
+    if (data.package_id) {
+      const pkg = await DB.prepare('SELECT id, student_id FROM packages WHERE id = ?').bind(data.package_id).first();
+      if (!pkg || pkg.student_id !== existing.student_id) {
+        return c.json(error('INVALID_PACKAGE', '课时包不存在或不属于该学生'), 400);
       }
     }
 
-    if (milestone) {
-      const reportType = milestone.reportType || milestone.levelUp?.reportType;
-      if (reportType) {
-        const existingReport = await DB.prepare(
-          'SELECT id FROM progress_reports WHERE student_id = ? AND report_type = ? ORDER BY created_at DESC LIMIT 1'
-        ).bind(existing.student_id, reportType).first();
-        if (existingReport) {
-          milestone.alreadyExists = true;
-        } else {
-          milestone.alreadyExists = false;
+    // ── 老师时间冲突检查 ──
+    const checkTeacherId = data.teacher_id ?? existing.teacher_id;
+    const checkDate = data.date ?? existing.date;
+    const checkStart = data.start_time ?? existing.start_time;
+    const checkEnd = data.end_time ?? existing.end_time;
+
+    if (checkTeacherId && checkDate && checkStart && checkEnd) {
+      const conflicts = await checkTeacherConflict(DB, {
+        teacherId: checkTeacherId,
+        date: checkDate,
+        startTime: checkStart,
+        endTime: checkEnd,
+        excludeId: parseInt(id)
+      });
+      if (conflicts.length > 0) {
+        const conflictStudentIds = conflicts.map(c => c.student_id);
+        const studentNames = await DB.prepare(
+          `SELECT id, name FROM students WHERE id IN (${conflictStudentIds.map(() => '?').join(',')})`
+        ).bind(...conflictStudentIds).all();
+        const names = (studentNames.results || []).map(s => s.name).join('、');
+        return c.json(error('TEACHER_CONFLICT',
+          `教师时间冲突！该教师 ${checkDate} ${checkStart}-${checkEnd} 已有课程（${names}）`
+        ), 409);
+      }
+    }
+
+    // 更新字段
+    const fields = [];
+    const values = [];
+
+    for (const [key, value] of Object.entries(data)) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+
+    values.push(id);
+
+    await DB.prepare(`UPDATE classes SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+
+    // ── 同步学生等级：如果反馈中 Level 有变化，更新学生档案的 grade ──
+    try {
+      if (data.fb_lesson_level && existing.student_id) {
+        const currentStudent = await DB.prepare('SELECT grade FROM students WHERE id = ?').bind(existing.student_id).first();
+        if (currentStudent && currentStudent.grade !== data.fb_lesson_level) {
+          await DB.prepare('UPDATE students SET grade = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(data.fb_lesson_level, existing.student_id).run();
         }
       }
+    } catch (e) {
+      console.warn('同步学生等级警告:', e.message);
     }
+
+    // ── 同步机构课时包 ──
+    const oldStatus = existing.status;
+    const newStatus = data.status ?? oldStatus;
+    const clsHours = data.hours ?? existing.hours;
+    const clsOrgId = existing.organization_id;
+    const isTrialUpdate = existing.is_trial || data.is_trial || 0;
+
+    // 体验课免费，不扣课时
+    if (!isTrialUpdate) {
+      try {
+        if (clsOrgId && oldStatus !== newStatus) {
+          let delta = 0;
+          if (newStatus === 'completed' && oldStatus !== 'completed') {
+            delta = clsHours;
+          } else if (oldStatus === 'completed' && newStatus !== 'completed') {
+            delta = -clsHours;
+          }
+
+          if (delta !== 0) {
+            const targetPkg = await DB.prepare(
+              `SELECT id FROM org_packages
+               WHERE org_id = ? AND status IN ('pending', 'partial_paid')
+               ORDER BY created_at DESC LIMIT 1`
+            ).bind(clsOrgId).first();
+
+            if (targetPkg) {
+              await DB.prepare(
+                `UPDATE org_packages SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
+              ).bind(delta, targetPkg.id).run();
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('同步机构课时包警告:', e.message);
+      }
+
+      // ── 同步学生课时并记录唯一流水 ──
+      try {
+        if (oldStatus !== newStatus) {
+          let delta = 0;
+          let note = '';
+          let changeAmount = 0;
+          if (newStatus === 'completed' && oldStatus !== 'completed') {
+            delta = clsHours;
+            changeAmount = -clsHours; // 消耗
+            note = `课程标记完成 扣除 ${clsHours} 课时 (class ${id})`;
+          } else if (oldStatus === 'completed' && newStatus !== 'completed') {
+            delta = -clsHours;
+            changeAmount = clsHours; // 恢复
+            note = `课程取消完成 恢复 ${clsHours} 课时 (class ${id})`;
+          }
+
+          if (delta !== 0) {
+            await DB.prepare(
+              `UPDATE students SET used_hours = used_hours + ?, updated_at = datetime('now') WHERE id = ?`
+            ).bind(delta, existing.student_id).run();
+
+            const studentNow = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(existing.student_id).first();
+            const balanceAfter = studentNow ? Math.round(((studentNow.total_hours || 0) - (studentNow.used_hours || 0)) * 100) / 100 : null;
+
+            await DB.prepare(
+              `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
+               VALUES (?, 'adjust', ?, ?, ?, ?)`
+            ).bind(existing.student_id, changeAmount, balanceAfter, id, note).run();
+          }
+        }
+      } catch (e) {
+        console.warn('扣除学生课时警告:', e.message);
+      }
+    }
+
+    // ── 里程碑自动检测 ──
+    let milestone = null;
+    try {
+      if (!isTrialUpdate && newStatus === 'completed' && oldStatus !== 'completed') {
+        const completedCount = await DB.prepare(
+          'SELECT COUNT(*) as cnt FROM classes WHERE student_id = ? AND status = ? AND is_trial = 0'
+        ).bind(existing.student_id, 'completed').first();
+
+        const milestones = [10, 30, 60];
+        for (const m of milestones) {
+          if (completedCount?.cnt === m) {
+            milestone = { type: 'milestone', completedCount: m, reportType: `milestone_${m}` };
+            break;
+          }
+        }
+
+        if (milestone) {
+          const reportType = milestone.reportType || milestone.levelUp?.reportType;
+          if (reportType) {
+            const existingReport = await DB.prepare(
+              'SELECT id FROM progress_reports WHERE student_id = ? AND report_type = ? ORDER BY created_at DESC LIMIT 1'
+            ).bind(existing.student_id, reportType).first();
+            milestone.alreadyExists = !!existingReport;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('里程碑检测跳过:', e.message);
+    }
+
+    // 重新查询更新后的记录
+    let updated = await DB.prepare(`
+      SELECT c.*, s.name as student_name, s.grade as student_grade, p.name as package_name, t.name as teacher_name
+      FROM classes c
+      LEFT JOIN students s ON c.student_id = s.id
+      LEFT JOIN packages p ON c.package_id = p.id
+      LEFT JOIN teachers t ON c.teacher_id = t.id
+      WHERE c.id = ?
+    `).bind(id).first();
+
+    if (!updated) {
+      updated = await DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
+    }
+
+    return c.json(success({
+      id: updated.id,
+      student_id: updated.student_id,
+      student_name: updated.student_name || '',
+      student_grade: updated.student_grade || '',
+      package_id: updated.package_id,
+      package_name: updated.package_name || '',
+      teacher: updated.teacher,
+      teacher_id: updated.teacher_id,
+      teacher_name: updated.teacher_name || '',
+      subject: updated.subject,
+      hours: updated.hours,
+      date: updated.date,
+      start_time: updated.start_time,
+      end_time: updated.end_time,
+      content: updated.content,
+      homework: updated.homework,
+      notes: updated.notes,
+      class_link: updated.class_link,
+      is_trial: updated.is_trial || 0,
+      status: updated.status,
+      organization_id: updated.organization_id,
+      created_at: updated.created_at,
+      updated_at: updated.updated_at,
+      fb_lesson_level: updated.fb_lesson_level,
+      fb_unit: updated.fb_unit,
+      fb_lesson: updated.fb_lesson,
+      fb_vocab: updated.fb_vocab,
+      fb_patterns: updated.fb_patterns,
+      fb_grammar: updated.fb_grammar,
+      fb_pronunciation_errors: updated.fb_pronunciation_errors,
+      fb_grammar_errors: updated.fb_grammar_errors,
+      fb_teacher_message: updated.fb_teacher_message,
+      fb_homework: updated.fb_homework,
+      fb_next_preview: updated.fb_next_preview,
+      duration: updated.duration,
+      milestone: milestone
+    }));
+  } catch (err) {
+    console.error('PATCH /classes/:id 失败:', err);
+    return c.json(error('DATABASE_ERROR', '更新课程失败: ' + err.message), 500);
   }
-
-  // 重新查询更新后的记录
-  const updated = await DB.prepare(`
-    SELECT c.*, s.name as student_name, s.grade as student_grade, p.name as package_name, t.name as teacher_name
-    FROM classes c
-    JOIN students s ON c.student_id = s.id
-    LEFT JOIN packages p ON c.package_id = p.id
-    LEFT JOIN teachers t ON c.teacher_id = t.id
-    WHERE c.id = ?
-  `).bind(id).first();
-
-return c.json(success({
-  id: updated.id,
-  student_id: updated.student_id,
-  student_name: updated.student_name,
-  student_grade: updated.student_grade,
-  package_id: updated.package_id,
-  package_name: updated.package_name,
-  teacher: updated.teacher,
-  teacher_id: updated.teacher_id,
-  teacher_name: updated.teacher_name,
-  subject: updated.subject,
-  hours: updated.hours,
-  date: updated.date,
-  start_time: updated.start_time,
-  end_time: updated.end_time,
-  content: updated.content,
-  homework: updated.homework,
-  notes: updated.notes,
-  class_link: updated.class_link,
-  is_trial: updated.is_trial || 0,
-  status: updated.status,
-  organization_id: updated.organization_id,
-  created_at: updated.created_at,
-  updated_at: updated.updated_at,
-  fb_lesson_level: updated.fb_lesson_level,
-  fb_unit: updated.fb_unit,
-  fb_lesson: updated.fb_lesson,
-  fb_vocab: updated.fb_vocab,
-  fb_patterns: updated.fb_patterns,
-  fb_grammar: updated.fb_grammar,
-  fb_pronunciation_errors: updated.fb_pronunciation_errors,
-  fb_grammar_errors: updated.fb_grammar_errors,
-  fb_teacher_message: updated.fb_teacher_message,
-  fb_homework: updated.fb_homework,
-  fb_next_preview: updated.fb_next_preview,
-  duration: updated.duration,
-  milestone: milestone
-}));
 });
 
 // 删除上课记录
@@ -628,11 +636,14 @@ classes.delete('/:id', validateParams(idParamSchema), async (c) => {
       }
     }
 
-    // 3. 记录 hour_changes（恢复）
+    // 3. 记录 hour_changes（恢复为正数加课）
+    const studentNow = await DB.prepare('SELECT total_hours, used_hours FROM students WHERE id = ?').bind(cls.student_id).first();
+    const balanceAfter = studentNow ? Math.round(((studentNow.total_hours || 0) - (studentNow.used_hours || 0)) * 100) / 100 : null;
+
     await DB.prepare(
-      `INSERT INTO hour_changes (student_id, type, amount, related_id, description)
-       VALUES (?, 'adjust', ?, ?, ?)`
-    ).bind(cls.student_id, -cls.hours, id, `删除课程恢复 ${cls.hours} 课时`).run();
+      `INSERT INTO hour_changes (student_id, type, amount, balance_after, related_id, description)
+       VALUES (?, 'adjust', ?, ?, ?, ?)`
+    ).bind(cls.student_id, cls.hours, balanceAfter, id, `删除课程恢复 ${cls.hours} 课时`).run();
   }
 
   // 删除记录

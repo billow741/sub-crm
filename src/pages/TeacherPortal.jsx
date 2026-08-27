@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Clock, User, BookOpen, CheckCircle, XCircle, Calendar, Edit, Plus, X } from 'lucide-react';
-import { teacherOps, classOps, packageOps } from '../store';
+import { teacherOps, classOps, packageOps, API_BASE_URL } from '../store';
 
 const STATUS_LABELS = {
   scheduled: '已预约',
@@ -105,23 +105,6 @@ export default function TeacherPortal() {
         fb_grammar_errors: gramErrors.length ? JSON.stringify(gramErrors) : null,
         status: feedbackForm.status
       });
-
-      if (selectedClass.status === 'scheduled' && feedbackForm.status === 'completed' && selectedClass.student_id) {
-        const hoursToDeduct = selectedClass.hours || 1;
-        const res = await fetch(`https://api.changtian.dpdns.org/api/v1/students/${selectedClass.student_id}/use-hours`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': 'sunnybridge-dev-key-2024'
-          },
-          body: JSON.stringify({ hours: hoursToDeduct })
-        });
-
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData?.error?.message || '扣除课时失败');
-        }
-      }
 
       setShowFeedbackModal(false);
       setSelectedClass(null);
@@ -448,14 +431,14 @@ export default function TeacherPortal() {
                           return (
                             <a
                               key={page}
-                              href={`https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${feedbackForm.textbook_code}/${feedbackForm.unit_number}/${page}`}
+                              href={`${API_BASE_URL}/textbooks/page-img/${feedbackForm.textbook_code}/${feedbackForm.unit_number}/${page}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="block border rounded overflow-hidden hover:shadow-md"
                               title={`点击看大图: 页 ${page}`}
                             >
                               <img
-                                src={`https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${feedbackForm.textbook_code}/${feedbackForm.unit_number}/${page}`}
+                                src={`${API_BASE_URL}/textbooks/page-img/${feedbackForm.textbook_code}/${feedbackForm.unit_number}/${page}`}
                                 alt={`Page ${page}`}
                                 className="w-full h-auto"
                                 loading="lazy"

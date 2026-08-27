@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { User, Calendar, Package, Clock, BookOpen, AlertCircle } from 'lucide-react';
-import { studentOps, packageOps, classOps, loadData } from '../store';
+import { studentOps, packageOps, classOps, loadData, API_BASE_URL } from '../store';
 
 // 家长端 - 通过学生ID或手机号查询
 function ParentLookup() {
@@ -287,14 +287,14 @@ function ParentStudentView() {
                             return (
                               <a
                                 key={page}
-                                href={`https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`}
+                                href={`${API_BASE_URL}/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="block border rounded overflow-hidden hover:shadow-md"
                                 title={`点击看大图: 第 ${page} 页`}
                               >
                                 <img
-                                  src={`https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`}
+                                  src={`${API_BASE_URL}/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`}
                                   alt={`第 ${page} 页`}
                                   className="w-full h-auto"
                                   loading="lazy"

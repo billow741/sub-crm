@@ -391,7 +391,9 @@ function getLocalDate() {
 // ===== API Requests =====
 async function apiGet(endpoint) {
   var res = await fetch(API_BASE + endpoint, { headers: { 'X-API-Key': API_KEY } });
-  return res.json();
+  var json = await res.json();
+  if (!res.ok) throw new Error(json.error?.message || json.message || ('Error ' + res.status));
+  return json;
 }
 
 async function apiPatch(endpoint, data) {
@@ -401,11 +403,14 @@ async function apiPatch(endpoint, data) {
     body: JSON.stringify(data)
   });
   var text = await res.text();
+  var json;
   try {
-    return JSON.parse(text);
+    json = JSON.parse(text);
   } catch (e) {
-    throw new Error('Server returned non-JSON (status ' + res.status + '): ' + text.slice(0, 100));
+    throw new Error('Server error (' + res.status + '): ' + text.slice(0, 100));
   }
+  if (!res.ok) throw new Error(json.error?.message || json.message || ('Error ' + res.status));
+  return json;
 }
 
 async function apiPost(endpoint, data) {
@@ -414,7 +419,15 @@ async function apiPost(endpoint, data) {
     headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
     body: JSON.stringify(data)
   });
-  return res.json();
+  var text = await res.text();
+  var json;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    throw new Error('Server error (' + res.status + '): ' + text.slice(0, 100));
+  }
+  if (!res.ok) throw new Error(json.error?.message || json.message || ('Error ' + res.status));
+  return json;
 }
 
 // ===== View Feedback Modal =====
