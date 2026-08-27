@@ -735,8 +735,14 @@ Rules:
 - Return ONLY the JSON array. No fences, no explanation.`
     : EXTRACTION_PROMPT;
 
+  // 单元模式 vs 整本书模式
+  let promptText = opts.bookMode ? `You are given pages from a language textbook. Extract vocabulary, patterns, and grammar PER UNIT.` : EXTRACTION_PROMPT;
+  if (opts.unitText) {
+    promptText += `\n\n=== TEXT LAYER CONTENT FROM THESE PAGES ===\n${opts.unitText}\n===========================================`;
+  }
+
   const userContent = [
-    { type: 'text', text: `${prompt}\n\nPlease extract vocabulary, sentence patterns, and grammar from the textbook page images.` },
+    { type: 'text', text: `${promptText}\n\nPlease analyze the textbook image and text layer carefully, and extract ALL vocabulary words, sentence patterns, and grammar points with simplified Chinese translations in valid JSON.` },
     ...imageContents
   ];
 
@@ -827,10 +833,11 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
   }
 
   try {
-    // 从 Header 或 FormData 读取动态模型配置
+    // 从 Header 或 FormData 读取动态模型配置与页面文本
     const llmBaseUrl = formData.get('llm_base_url') || c.req.header('x-llm-base-url');
     const llmApiKey = formData.get('llm_api_key') || c.req.header('x-llm-api-key');
     const llmModel = formData.get('llm_model') || c.req.header('x-llm-model');
+    const unitText = formData.get('unit_text') || '';
 
     // 单 Unit prompt 提取 (若有 ai_vision 单图则用单图，保证 100% 兼容 Llama 等多模态模型)
     const imagesToLLM = aiVision ? [aiVision] : images;
@@ -839,7 +846,8 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       maxPages: 4,
       baseUrl: llmBaseUrl,
       apiKey: llmApiKey,
-      model: llmModel
+      model: llmModel,
+      unitText
     });
 
     // 把这次上传的 PDF 页面图保存到 R2 (path: `${code}/Unit${num}/page-${i}.png`)

@@ -1099,23 +1099,37 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
       try {
         const fd = new FormData();
         const pageBlobs = [];
+        let unitTextContent = '';
 
-        // 1. 逐页高清切片 (用于 R2 存储与教师/家长端精确展示)
+        // 1. 逐页高清切片与文字层提取 (用于 R2 存储与双核 AI 提取)
         for (let p = pdfStart; p <= realPdfEnd; p++) {
           const bookPageNum = p - pageOffset; // 对应的真实课本页码
           const page = await pdfDoc.getPage(p);
-          const viewport = page.getViewport({ scale: 1.2 });
+
+          // 提取该页文本层
+          try {
+            const textObj = await page.getTextContent();
+            const pageStr = textObj.items.map(it => it.str).filter(Boolean).join(' ');
+            if (pageStr.trim()) {
+              unitTextContent += `\n[Page ${bookPageNum}]: ${pageStr}`;
+            }
+          } catch (te) {
+            console.warn('Text extract error:', te);
+          }
+
+          // 渲染高清切图
+          const viewport = page.getViewport({ scale: 1.5 });
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const ctx = canvas.getContext('2d');
           await page.render({ canvasContext: ctx, viewport }).promise;
-          const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.8));
+          const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
           pageBlobs.push({ blob, pageNum: bookPageNum });
           fd.append('images', blob, `page-${String(bookPageNum).padStart(2, '0')}.jpg`);
         }
 
-        // 2. 核心：为 AI 视觉模型合成单张全景拼图 (彻底解决 Llama 等模型单图限制)
+        // 2. 核心：为 AI 视觉模型合成超高清全景拼图 (单页 1200px 宽，保证字迹极其清晰)
         if (pageBlobs.length > 0) {
           const coreBlobs = pageBlobs.slice(0, Math.min(4, pageBlobs.length));
           const loadedImgs = await Promise.all(coreBlobs.map(b => new Promise(res => {
@@ -1126,7 +1140,7 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
 
           const cols = loadedImgs.length === 1 ? 1 : 2;
           const rows = Math.ceil(loadedImgs.length / cols);
-          const singleW = 800;
+          const singleW = 1200;
           const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
 
           const collageCanvas = document.createElement('canvas');
@@ -1142,12 +1156,16 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
             cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
           });
 
-          const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
-          // 把拼图作为 ai_vision.jpg 传给后端
+          const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.88));
           fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
         }
 
-        // 同时在 FormData 和 Header 中携带配置 (双重保障避免被拦截)
+        // 3. 注入课本文本层内容
+        if (unitTextContent.trim()) {
+          fd.append('unit_text', unitTextContent.trim());
+        }
+
+        // 同时在 FormData 和 Header 中携带配置
         if (llmConfig?.baseUrl) fd.append('llm_base_url', llmConfig.baseUrl);
         if (llmConfig?.apiKey) fd.append('llm_api_key', llmConfig.apiKey);
         if (llmConfig?.model) fd.append('llm_model', llmConfig.model);
