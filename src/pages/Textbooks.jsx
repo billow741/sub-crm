@@ -1581,17 +1581,31 @@ function BooksManageModal({ books, onClose }) {
 const LLM_PRESETS = [
   {
     id: 'nvidia',
-    name: 'NVIDIA NIM (推荐, 免费多模态)',
+    name: 'NVIDIA NIM (推荐, 免费视觉多模态)',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
-    model: 'google/gemma-3n-e4b-it',
-    desc: '免费提供 1000 次调用额度，高清晰度视觉提取'
+    model: 'meta/llama-3.2-11b-vision-instruct',
+    desc: '免费提供 1000 次调用额度，强大多模态视觉切片识别'
+  },
+  {
+    id: 'nvidia_qwen',
+    name: 'NVIDIA Qwen2.5-VL',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    model: 'qwen/qwen2.5-vl-72b-instruct',
+    desc: 'NVIDIA 平台上的 Qwen2.5 视觉旗舰大模型，中英双语极准'
   },
   {
     id: 'zhipu',
     name: '智谱 GLM-4V',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     model: 'glm-4v-flash',
-    desc: 'glm-4v-flash 免费提供，中文理解极其地道'
+    desc: 'glm-4v-flash 免费提供无需充值，中文释义地道'
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI (GPT-4o)',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    desc: '业界顶级视觉多模态 (支持 gpt-4o / gpt-4o-mini)'
   },
   {
     id: 'qwen',
@@ -1599,13 +1613,6 @@ const LLM_PRESETS = [
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     model: 'qwen-vl-plus',
     desc: '阿里云通义千问视觉大模型，识别速度快'
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI (GPT-4o)',
-    baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-4o-mini',
-    desc: '业界顶级视觉多模态大模型 (支持 gpt-4o / gpt-4o-mini)'
   },
   {
     id: 'custom',

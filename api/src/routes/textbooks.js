@@ -620,7 +620,7 @@ textbooks.post('/test-llm', async (c) => {
   
   const baseUrl = body.base_url || c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
   const apiKey = body.api_key || c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
-  const model = body.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'google/gemma-3n-e4b-it';
+  const model = body.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'meta/llama-3.2-11b-vision-instruct';
 
   if (!apiKey) {
     return c.json({ error: { code: 'NO_API_KEY', message: '未提供 API Key' } }, 400);
@@ -658,8 +658,8 @@ textbooks.post('/test-llm', async (c) => {
 async function callLLMWithImages(c, imageFiles, opts = {}) {
   const baseUrl = c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
   const apiKey = c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
-  const model = c.req.header('x-llm-model') || c.env.LLM_MODEL || 'google/gemma-3n-e4b-it';
-  const fallbackModels = [model, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'meta/llama-3.2-11b-vision-instruct'];
+  const model = c.req.header('x-llm-model') || c.env.LLM_MODEL || 'meta/llama-3.2-11b-vision-instruct';
+  const fallbackModels = [model, 'qwen/qwen2.5-vl-72b-instruct', 'meta/llama-3.2-11b-vision-instruct'];
 
   if (!apiKey) {
     throw new Error('LLM_API_KEY not configured. Run: wrangler secret put LLM_API_KEY');
