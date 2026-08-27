@@ -669,18 +669,30 @@ export default function Textbooks() {
                         </div>
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                           {renderedImages.map((img, i) => (
-                            <div key={i} className="relative group border rounded-lg overflow-hidden bg-gray-100 shadow-2xs">
-                              <img src={img.url} alt={`P${i + 1}`} className="w-full h-28 object-contain bg-white" />
-                              <div className="text-[11px] text-center text-gray-600 bg-gray-50 py-0.5 border-t">
-                                第 {i + 1} 页
-                              </div>
-                              <button
-                                type="button"
+                            <div key={i} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-2xs flex flex-col group">
+                              <div
                                 onClick={() => setPreviewImageModal(img.url)}
-                                className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-medium gap-1"
+                                className="relative h-28 bg-gray-50 flex items-center justify-center cursor-pointer overflow-hidden"
                               >
-                                <Eye className="w-3.5 h-3.5" /> 放大
-                              </button>
+                                <img src={img.url} alt={`P${i + 1}`} className="w-full h-full object-contain" />
+                                <div className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-medium gap-1 pointer-events-none">
+                                  <Eye className="w-3.5 h-3.5" /> 放大
+                                </div>
+                              </div>
+                              <div className="px-2 py-1 bg-gray-50/90 border-t border-gray-100 flex items-center justify-between text-[11px]">
+                                <span className="font-medium text-gray-600">第 {i + 1} 页</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRenderedImages(prev => prev.filter((_, idx) => idx !== i));
+                                  }}
+                                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition cursor-pointer"
+                                  title="移除此切片"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -688,26 +700,33 @@ export default function Textbooks() {
                     ) : r2Pages.length > 0 ? (
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                         {r2Pages.map(p => (
-                          <div key={p.key || p.page_num} className="relative group border rounded-lg overflow-hidden bg-gray-50 shadow-2xs">
-                            <img src={p.url} alt={`Page ${p.page_num}`} className="w-full h-28 object-contain bg-white" />
-                            <div className="text-[11px] text-center text-gray-600 bg-gray-50 py-0.5 border-t flex items-center justify-between px-2">
-                              <span className="font-semibold text-gray-700">P{p.page_num}</span>
+                          <div key={p.key || p.page_num} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-2xs flex flex-col hover:border-purple-300 transition group">
+                            {/* 图片区域 (点击放大) */}
+                            <div
+                              onClick={() => setPreviewImageModal(p.url)}
+                              className="relative h-28 bg-gray-50 flex items-center justify-center cursor-pointer overflow-hidden"
+                            >
+                              <img src={p.url} alt={`Page ${p.page_num}`} className="w-full h-full object-contain" />
+                              <div className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-medium gap-1 pointer-events-none">
+                                <Eye className="w-3.5 h-3.5" /> 放大
+                              </div>
+                            </div>
+
+                            {/* 底部独立控制栏 (完全脱离遮罩，绝对可点) */}
+                            <div className="px-2 py-1 bg-gray-50/90 border-t border-gray-100 flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-gray-700">P{p.page_num}</span>
                               <button
                                 type="button"
-                                onClick={() => handleDeletePageImg(p)}
-                                className="text-gray-400 hover:text-red-600 p-0.5 rounded hover:bg-red-50 transition"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeletePageImg(p);
+                                }}
+                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition cursor-pointer"
                                 title={`删除第 ${p.page_num} 页 (${p.key || ''})`}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setPreviewImageModal(p.url)}
-                              className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-medium gap-1"
-                            >
-                              <Eye className="w-3.5 h-3.5" /> 放大
-                            </button>
                           </div>
                         ))}
                       </div>
