@@ -1274,6 +1274,9 @@ async function loadStudentData() {
     renderUpcoming(upcoming.slice(0, 10));
     window_allPastClasses = past;
 
+    // 异步加载教材库与单元翻译字典
+    preloadTextbookTranslations(classesData);
+
     // 加载评估报告数据（供成长报告Tab和学习轨迹Tab使用）
     loadAssessments(studentId).then(function() {
       renderStudyProfile(student, classesData);
@@ -1434,25 +1437,40 @@ function showViewFeedback(idx) {
 
   var html = '';
 
-  // 📅 上课信息
-  if (cls.fb_lesson_level || cls.fb_unit || cls.fb_lesson) {
-    html += '<div class="modal-feedback__group"><label>📅 上课信息</label>';
-    html += '<div class="modal-feedback__box">课程级别：' + esc(cls.fb_lesson_level) + ' · 教材进度：Unit ' + esc(cls.fb_unit) + ' / Lesson ' + esc(cls.fb_lesson) + '</div></div>';
+  // 📅 上课信息与教材
+  var bName = getBookName(cls.textbook_code);
+  var uNum = cls.unit_number || cls.fb_unit;
+  var lNum = cls.fb_lesson;
+  
+  html += '<div class="modal-feedback__group"><label>📅 课程与教材进度</label><div class="modal-feedback__box">';
+  if (bName || cls.textbook_code) {
+    html += '<div style="margin-bottom:4px;"><span style="color:#4B9FE0;font-weight:700;">📖 所用教材：</span><b>' + esc(bName || cls.textbook_code) + '</b>' + (uNum ? ' · Unit ' + esc(uNum) : '') + (lNum && lNum !== '-' ? ' (Lesson ' + esc(lNum) + ')' : '') + '</div>';
   }
+  if (cls.fb_lesson_level) {
+    html += '<div style="color:#64748B;font-size:12px;">课程等级：' + esc(cls.fb_lesson_level) + '</div>';
+  }
+  if (!bName && !cls.textbook_code && (cls.fb_unit || cls.fb_lesson)) {
+    html += '<div>教材进度：Unit ' + esc(cls.fb_unit || '-') + ' / Lesson ' + esc(cls.fb_lesson || '-') + '</div>';
+  }
+  html += '</div></div>';
 
   // 📖 教材页码 (嵌入 PDF 真实页面图, 方便家长指导复习)
-  if (cls.textbook_code && cls.unit_number && cls.page_from && cls.page_to) {
-    var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
-    html += '<div class="modal-feedback__group"><label>📖 教材第 ' + cls.page_from + '-' + cls.page_to + ' 页 (点击放大)</label>';
-    html += '<div class="modal-feedback__box"><div class="grid grid-cols-3 gap-1">';
-    for (var p = parseInt(cls.page_from); p <= parseInt(cls.page_to); p++) {
-      var url = API_TXT + '/textbooks/page-img/' + encodeURIComponent(cls.textbook_code) + '/' + encodeURIComponent(cls.unit_number) + '/' + p;
-      html += '<a href="' + url + '" target="_blank" class="block border rounded overflow-hidden hover:shadow-md" title="第 ' + p + ' 页 (点击放大)">';
-      html += '<img src="' + url + '" alt="第 ' + p + ' 页" class="w-full h-auto" loading="lazy" onerror="this.parentElement.style.display=\'none\'">';
-      html += '<div class="text-xs text-center text-gray-500 bg-white py-0.5">P' + p + '</div>';
-      html += '</a>';
+  if (cls.textbook_code && cls.unit_number) {
+    var pageLabel = (cls.page_from && cls.page_to) ? '第 ' + cls.page_from + '-' + cls.page_to + ' 页 (点击放大)' : '教材课本切图';
+    html += '<div class="modal-feedback__group"><label>📖 ' + esc(bName || cls.textbook_code) + ' · ' + pageLabel + '</label>';
+    if (cls.page_from && cls.page_to) {
+      var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
+      html += '<div class="modal-feedback__box"><div class="grid grid-cols-3 gap-1">';
+      for (var p = parseInt(cls.page_from); p <= parseInt(cls.page_to); p++) {
+        var url = API_TXT + '/textbooks/page-img/' + encodeURIComponent(cls.textbook_code) + '/' + encodeURIComponent(cls.unit_number) + '/' + p;
+        html += '<a href="' + url + '" target="_blank" class="block border rounded overflow-hidden hover:shadow-md" title="第 ' + p + ' 页 (点击放大)">';
+        html += '<img src="' + url + '" alt="第 ' + p + ' 页" class="w-full h-auto" loading="lazy" onerror="this.parentElement.style.display=\'none\'">';
+        html += '<div class="text-xs text-center text-gray-500 bg-white py-0.5">P' + p + '</div>';
+        html += '</a>';
+      }
+      html += '</div></div>';
     }
-    html += '</div></div></div>';
+    html += '</div>';
   }
 
   // 📚 今日学习内容
@@ -1520,13 +1538,119 @@ function spEsc(s) {
   return String(s).replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
 }
 
+// ===== 教材名称与双语翻译字典库 =====
+var TEXTBOOK_NAMES = {
+  'EU-S': 'Everybody Up Starter',
+  'EU-L1': 'Everybody Up Level 1',
+  'EU-L2': 'Everybody Up Level 2',
+  'EU-L3': 'Everybody Up Level 3',
+  'EU-L4': 'Everybody Up Level 4',
+  'EU-L5': 'Everybody Up Level 5',
+  'EU-L6': 'Everybody Up Level 6'
+};
+
+function getBookName(code) {
+  if (!code) return '';
+  return TEXTBOOK_NAMES[code] || (window_textbookNames && window_textbookNames[code]) || code;
+}
+
+// 内置高频教学生词字典 (自动双语补全)
+var BUILTIN_VOCAB_DICT = {
+  'paper': '纸', 'glue': '胶水', 'scissors': '剪刀', 'paint': '颜料',
+  'pencil': '铅笔', 'pen': '笔', 'crayon': '蜡笔', 'marker': '记号笔',
+  'eraser': '橡皮', 'ruler': '尺子', 'book': '书本', 'desk': '课桌', 'chair': '椅子',
+  'mother': '妈妈', 'father': '爸爸', 'sister': '姐妹', 'brother': '兄弟',
+  'grandmother': '奶奶/外婆', 'grandfather': '爷爷/外公', 'family': '家庭',
+  'apple': '苹果', 'banana': '香蕉', 'orange': '橙子', 'cat': '猫', 'dog': '狗',
+  'red': '红色', 'blue': '蓝色', 'yellow': '黄色', 'green': '绿色', 'pink': '粉色',
+  'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10'
+};
+
+var window_vocabTranslations = Object.assign({}, BUILTIN_VOCAB_DICT);
+var window_patternTranslations = {
+  'I have paper.': '我有一张纸。',
+  'I have glue.': '我有一瓶胶水。',
+  'I have scissors.': '我有一把剪刀。',
+  'I have paint.': '我有一罐颜料。',
+  'What do you have?': '你有什么？',
+  'I have a pencil.': '我有一支铅笔。',
+  'I have a crayon.': '我有一支蜡笔。',
+  'I have a marker.': '我有一支记号笔。',
+  'I have a pen.': '我有一支笔。'
+};
+
+var window_textbookNames = {};
+
+// 动态预加载教材列表与词汇翻译字典
+async function preloadTextbookTranslations(classes) {
+  try {
+    // 1. 获取所有教材名称
+    var bRes = await apiGet('/textbooks');
+    if (bRes && bRes.data && Array.isArray(bRes.data)) {
+      bRes.data.forEach(function(b) {
+        if (b.code) window_textbookNames[b.code] = b.name || b.code;
+      });
+    }
+  } catch(e) {}
+
+  // 2. 收集所有出现过的教材+单元
+  if (!Array.isArray(classes)) return;
+  var pairs = new Set();
+  classes.forEach(function(c) {
+    if (c.textbook_code && c.unit_number) {
+      pairs.add(c.textbook_code + ':' + c.unit_number);
+    }
+  });
+
+  // 3. 异步拉取这些单元的建议词汇与翻译
+  pairs.forEach(async function(p) {
+    var parts = p.split(':');
+    var code = parts[0];
+    var unit = parts[1];
+    try {
+      var sRes = await apiGet('/textbooks/suggest?textbook_code=' + encodeURIComponent(code) + '&unit_number=' + encodeURIComponent(unit));
+      if (sRes && sRes.data && sRes.data.vocab) {
+        sRes.data.vocab.forEach(function(v) {
+          if (v.word && v.translation) {
+            window_vocabTranslations[v.word.toLowerCase().trim()] = v.translation.trim();
+          }
+        });
+      }
+      if (sRes && sRes.data && sRes.data.patterns) {
+        sRes.data.patterns.forEach(function(pat) {
+          if (pat.pattern && pat.translation) {
+            window_patternTranslations[pat.pattern.trim()] = pat.translation.trim();
+          }
+        });
+      }
+    } catch(e) {}
+  });
+}
+
 function spFormatVocabPills(vocabStr) {
   if (!vocabStr) return '';
   var words = vocabStr.split(/[,，\n]/).map(function(w) { return w.trim(); }).filter(Boolean);
   if (words.length === 0) return spEsc(vocabStr);
-  var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">';
-  words.forEach(function(w) {
-    h += '<span style="display:inline-flex;align-items:center;background:#EEF2FF;color:#4338CA;font-weight:600;font-size:12px;padding:3px 9px;border-radius:100px;border:1px solid #E0E7FF;box-shadow:0 1px 2px rgba(0,0,0,0.02);">' + spEsc(w) + '</span>';
+  var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">';
+  words.forEach(function(rawW) {
+    // 检查是否本身自带括号中文，如 "paper (纸)" 或 "paper 纸"
+    var cleanWord = rawW;
+    var trans = '';
+    var match = rawW.match(/^([a-zA-Z\s\-']+)(?:[\(（]([^）\)]+)[\)）]|\s+([\u4e00-\u9fa5]+))$/);
+    if (match) {
+      cleanWord = match[1].trim();
+      trans = (match[2] || match[3] || '').trim();
+    } else {
+      var lower = rawW.toLowerCase().trim();
+      trans = window_vocabTranslations[lower] || '';
+    }
+
+    h += '<span style="display:inline-flex;align-items:center;background:#EEF2FF;color:#4338CA;font-size:12px;padding:3.5px 10px;border-radius:100px;border:1px solid #E0E7FF;gap:5px;box-shadow:0 1px 2px rgba(0,0,0,0.03);">';
+    h += '<strong style="font-weight:700;">' + spEsc(cleanWord) + '</strong>';
+    if (trans) {
+      h += '<span style="color:#6366F1;font-size:11px;background:#E0E7FF;padding:0.5px 5px;border-radius:999px;">' + spEsc(trans) + '</span>';
+    }
+    h += '</span>';
   });
   h += '</div>';
   return h;
@@ -1536,9 +1660,24 @@ function spFormatPatternPills(patternStr) {
   if (!patternStr) return '';
   var patterns = patternStr.split(/\n/).map(function(p) { return p.trim(); }).filter(Boolean);
   if (patterns.length === 0) return spEsc(patternStr);
-  var h = '<div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">';
-  patterns.forEach(function(p) {
-    h += '<div style="background:#F8FAFC;border-left:3px solid #4B9FE0;padding:5px 10px;border-radius:4px;font-size:12px;color:#1E293B;line-height:1.4;">' + spEsc(p) + '</div>';
+  var h = '<div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;">';
+  patterns.forEach(function(rawP) {
+    var en = rawP;
+    var zh = '';
+    if (rawP.indexOf('·') > 0) {
+      var parts = rawP.split('·');
+      en = parts[0].trim();
+      zh = parts[1].trim();
+    } else if (window_patternTranslations[rawP]) {
+      zh = window_patternTranslations[rawP];
+    }
+
+    h += '<div style="background:#F8FAFC;border-left:3px solid #4B9FE0;padding:6px 12px;border-radius:4px;font-size:12px;color:#1E293B;line-height:1.4;">';
+    h += '<div style="font-weight:700;color:#0F172A;">' + spEsc(en) + '</div>';
+    if (zh) {
+      h += '<div style="color:#64748B;font-size:11.5px;margin-top:2px;">' + spEsc(zh) + '</div>';
+    }
+    h += '</div>';
   });
   h += '</div>';
   return h;
@@ -1815,8 +1954,18 @@ function renderStudyProfile(student, allClasses) {
       histHtml += '</div>';
       histHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:4px;">';
       histHtml += '执教老师: <b style="color:var(--sb-dark);">' + (c.teacher_name || '-') + '</b>';
-      if (c.fb_lesson_level || c.fb_unit || c.fb_lesson) {
-        histHtml += ' · <span style="color:var(--sb-blue);font-weight:600;">' + (c.fb_lesson_level ? c.fb_lesson_level + ' ' : '') + 'Unit ' + (c.fb_unit || '-') + ' / Lesson ' + (c.fb_lesson || '-') + '</span>';
+      var bookDisplay = getBookName(c.textbook_code);
+      var unitNum = c.unit_number || c.fb_unit;
+      var lessonNum = c.fb_lesson;
+      if (bookDisplay || unitNum || lessonNum || c.fb_lesson_level) {
+        histHtml += ' · <span style="color:var(--sb-blue);font-weight:600;">';
+        if (bookDisplay) {
+          histHtml += '📖 ' + escapeHtml(bookDisplay) + (unitNum ? ' · Unit ' + escapeHtml(unitNum) : '');
+          if (lessonNum && lessonNum !== '-') histHtml += ' (Lesson ' + escapeHtml(lessonNum) + ')';
+        } else {
+          histHtml += (c.fb_lesson_level ? c.fb_lesson_level + ' ' : '') + (unitNum ? 'Unit ' + unitNum : '') + (lessonNum && lessonNum !== '-' ? ' / Lesson ' + lessonNum : '');
+        }
+        histHtml += '</span>';
       }
       histHtml += '</div>';
       histHtml += '</div>';
@@ -1836,18 +1985,24 @@ function renderStudyProfile(student, allClasses) {
       if (hasFb || isTrialWithReport) {
         histHtml += '<div id="' + collapseId + '" class="sp-collapse-body ' + (isFirstClass ? '' : 'collapsed') + '" style="margin-top:12px;padding-top:12px;border-top:1px dashed #E2E8F0;">';
         
-        // 📖 教材 PDF 页图 (history 紧凑版 grid)
-        if (c.textbook_code && c.unit_number && c.page_from && c.page_to) {
-          var API_TXT2 = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
-          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📖 教材第 ' + c.page_from + '-' + c.page_to + ' 页 (点击放大)</div><div class="sp-feedback-text"><div class="grid grid-cols-3 gap-1">';
-          for (var pidx = parseInt(c.page_from); pidx <= parseInt(c.page_to); pidx++) {
-            var purl = API_TXT2 + '/textbooks/page-img/' + encodeURIComponent(c.textbook_code) + '/' + encodeURIComponent(c.unit_number) + '/' + pidx;
-            histHtml += '<a href="' + purl + '" target="_blank" class="block border rounded overflow-hidden hover:shadow-md" title="第 ' + pidx + ' 页">';
-            histHtml += '<img src="' + purl + '" alt="第 ' + pidx + ' 页" class="w-full h-auto" loading="lazy" onerror="this.parentElement.style.display=\'none\'">';
-            histHtml += '<div class="text-xs text-center text-gray-500 bg-white py-0.5">P' + pidx + '</div>';
-            histHtml += '</a>';
+        // 📖 教材与切图展示
+        if (c.textbook_code && c.unit_number) {
+          var bFullName = getBookName(c.textbook_code);
+          var pLabel = (c.page_from && c.page_to) ? ' (第 ' + c.page_from + '-' + c.page_to + ' 页)' : '';
+          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📖 教材：' + escapeHtml(bFullName) + ' · Unit ' + c.unit_number + pLabel + '</div>';
+          if (c.page_from && c.page_to) {
+            var API_TXT2 = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
+            histHtml += '<div class="sp-feedback-text"><div class="grid grid-cols-3 gap-1">';
+            for (var pidx = parseInt(c.page_from); pidx <= parseInt(c.page_to); pidx++) {
+              var purl = API_TXT2 + '/textbooks/page-img/' + encodeURIComponent(c.textbook_code) + '/' + encodeURIComponent(c.unit_number) + '/' + pidx;
+              histHtml += '<a href="' + purl + '" target="_blank" class="block border rounded overflow-hidden hover:shadow-md" title="第 ' + pidx + ' 页 (点击放大)">';
+              histHtml += '<img src="' + purl + '" alt="第 ' + pidx + ' 页" class="w-full h-auto" loading="lazy" onerror="this.parentElement.style.display=\'none\'">';
+              histHtml += '<div class="text-xs text-center text-gray-500 bg-white py-0.5">P' + pidx + '</div>';
+              histHtml += '</a>';
+            }
+            histHtml += '</div></div>';
           }
-          histHtml += '</div></div></div>';
+          histHtml += '</div>';
         }
         if (c.fb_vocab) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📚 词汇</div><div class="sp-feedback-text">' + spFormatVocabPills(c.fb_vocab) + '</div></div>';
         if (c.fb_patterns) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💬 句型</div><div class="sp-feedback-text">' + spFormatPatternPills(c.fb_patterns) + '</div></div>';

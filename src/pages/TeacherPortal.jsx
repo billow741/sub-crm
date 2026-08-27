@@ -502,12 +502,12 @@ export default function TeacherPortal() {
                   )}
                 </div>
 
-                {/* 智能教材库词汇/句型推荐面板 */}
+                {/* 智能教材库词汇/句型推荐面板 (全英文) */}
                 {suggestData && (
                   <div className="border border-purple-200 bg-purple-50/70 rounded-lg p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="text-xs font-semibold text-purple-900 flex items-center gap-1.5">
-                        <span>✨ 教材库联动:</span>
+                        <span>✨ Textbook Content:</span>
                         <span>{feedbackForm.textbook_code} · Unit {feedbackForm.unit_number} {suggestData.unit_title ? `(${suggestData.unit_title})` : ''}</span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -522,22 +522,22 @@ export default function TeacherPortal() {
                           }}
                           className="text-xs px-2 py-0.5 bg-purple-200 text-purple-800 rounded font-medium hover:bg-purple-300"
                         >
-                          ⚡ 全选核心词
+                          ⚡ Select All Core
                         </button>
                         <button
                           type="button"
                           onClick={() => setFeedbackForm(prev => ({ ...prev, fb_vocab: '' }))}
                           className="text-xs text-gray-500 hover:text-gray-700"
                         >
-                          清空
+                          Clear
                         </button>
                       </div>
                     </div>
 
-                    {/* 词汇 Pills */}
+                    {/* 词汇 Pills (纯英文) */}
                     {suggestData.vocab && suggestData.vocab.length > 0 && (
                       <div>
-                        <div className="text-[11px] font-medium text-gray-600 mb-1">点击快速勾选词汇:</div>
+                        <div className="text-[11px] font-medium text-gray-600 mb-1">Click to select vocabulary:</div>
                         <div className="flex flex-wrap gap-1.5">
                           {suggestData.vocab.map((v, i) => {
                             const curWords = (feedbackForm.fb_vocab || '').split(/[,，\n]/).map(s => s.trim().toLowerCase());
@@ -562,7 +562,6 @@ export default function TeacherPortal() {
                                 {isSel ? '✓ ' : '+ '}
                                 {v.is_core && '⭐ '}
                                 {v.word}
-                                {v.translation && <span className="opacity-80 text-[11px]">({v.translation})</span>}
                               </button>
                             );
                           })}
@@ -570,10 +569,10 @@ export default function TeacherPortal() {
                       </div>
                     )}
 
-                    {/* 句型 Pills */}
+                    {/* 句型 Pills (纯英文) */}
                     {suggestData.patterns && suggestData.patterns.length > 0 && (
                       <div className="pt-1 border-t border-purple-100">
-                        <div className="text-[11px] font-medium text-gray-600 mb-1">点击快速添加句型:</div>
+                        <div className="text-[11px] font-medium text-gray-600 mb-1">Click to select sentence patterns:</div>
                         <div className="flex flex-wrap gap-1.5">
                           {suggestData.patterns.map((p, i) => (
                             <button
@@ -590,7 +589,7 @@ export default function TeacherPortal() {
                               }}
                               className="px-2.5 py-0.5 rounded-full text-xs bg-white text-gray-700 hover:bg-indigo-50 border border-gray-200 text-left"
                             >
-                              + {p.pattern} {p.translation && <span className="opacity-80 text-[11px]">· {p.translation}</span>}
+                              + {p.pattern}
                             </button>
                           ))}
                         </div>
