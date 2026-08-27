@@ -941,7 +941,7 @@
 <!-- ===== Floating Header ===== -->
 <header class="sb-header">
   <div class="sb-header__left">
-    <div class="sb-header__avatar" id="header-avatar" style="background:transparent;box-shadow:none;"><img src="sunblogo.webp" alt="SunnyBridge" style="width:100%;height:100%;object-fit:contain;"></div>
+    <div style="display:flex;align-items:center;margin-right:6px;"><img src="sunblogo.webp" alt="SunnyBridge" style="height:36px;width:auto;object-fit:contain;display:block;"></div>
     <div class="sb-header__info">
       <h1 id="student-name">Loading...</h1>
       <p id="student-info"></p>
@@ -2424,12 +2424,12 @@ function spShareCard(btn) {
   // 顶部 SunnyBridge 品牌
   var sName = document.getElementById('sp-name') ? document.getElementById('sp-name').textContent : '学员';
   var sGrade = document.getElementById('sp-level') ? document.getElementById('sp-level').textContent : 'Pre-A1';
-  var topHtml = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid rgba(245,166,35,0.25);">';
+  var topHtml = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid rgba(245,166,35,0.25);">';
   topHtml += '<div style="display:flex;align-items:center;gap:10px;">';
-  topHtml += '<img src="sunblogo.webp" style="width:36px;height:36px;object-fit:contain;" alt="SunnyBridge">';
-  topHtml += '<div><div style="font-size:13px;font-weight:800;color:#1C244B;">SunnyBridge 阳光桥英语</div><div style="font-size:10px;color:#64748B;">少儿英语进阶成长档案</div></div>';
+  topHtml += '<img src="sunblogo.webp" style="height:38px;width:auto;object-fit:contain;display:block;" alt="SunnyBridge">';
+  topHtml += '<div><div style="font-size:13px;font-weight:800;color:#1C244B;">阳光桥在线少儿英语</div><div style="font-size:10px;color:#64748B;">少儿英语进阶成长档案</div></div>';
   topHtml += '</div>';
-  topHtml += '<div style="font-size:11px;padding:3px 8px;background:rgba(245,166,35,0.12);color:#D97706;border-radius:100px;font-weight:700;">' + spEsc(sGrade) + '</div>';
+  topHtml += '<div style="font-size:11px;padding:4px 10px;background:rgba(245,166,35,0.12);color:#D97706;border-radius:100px;font-weight:700;">' + spEsc(sGrade) + '</div>';
   topHtml += '</div>';
 
   // 学员与日期摘要
