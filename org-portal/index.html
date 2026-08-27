@@ -196,10 +196,16 @@ async function renderDashboard(main) {
     const allocations = allocRes.data?.data || [];
 
     // ── 统计计算 ──
-    const totalHours = packages.reduce((s,p) => s+(p.total_hours||0), 0);
-    const usedHours = packages.reduce((s,p) => s+(p.used_hours||0), 0);
-    const remainHours = totalHours - usedHours;
+    const totalHours = pkgRes.data?.total_hours ?? packages.reduce((s,p) => s+(p.total_hours||0), 0);
+    const allocatedHours = pkgRes.data?.total_allocated_hours ?? allocations.reduce((s,a) => s+(a.hours||0), 0);
+    const unallocatedHours = pkgRes.data?.total_unallocated_hours ?? Math.max(0, totalHours - allocatedHours);
+    const usedHours = pkgRes.data?.total_used_hours ?? packages.reduce((s,p) => s+(p.used_hours||0), 0);
+    const remainHours = pkgRes.data?.total_remaining_hours ?? (totalHours - usedHours);
     const studentCount = students.length;
+
+    // 分配与消耗百分比
+    const allocPct = totalHours > 0 ? Math.round((allocatedHours / totalHours) * 100) : 0;
+    const usedPct = totalHours > 0 ? Math.round((usedHours / totalHours) * 100) : 0;
 
     // 本周课程
     const now = new Date();
@@ -240,7 +246,6 @@ async function renderDashboard(main) {
     const recentAllocs = allocations.slice(0, 5);
 
     // ── 渲染 ──
-    const usagePct = totalHours > 0 ? Math.round((usedHours/totalHours)*100) : 0;
     let html = `<div class="p-8 page-enter">
 
       <!-- 欢迎区 -->
@@ -249,33 +254,44 @@ async function renderDashboard(main) {
         <p class="text-gray-500 mt-1">${now.toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</p>
       </div>
 
-      <!-- 统计卡片 -->
-      <div class="grid grid-cols-4 gap-4 mb-6">
+      <!-- 统计卡片：5 核心指标 -->
+      <div class="grid grid-cols-5 gap-4 mb-6">
         <div class="bg-white rounded-xl shadow-sm p-5 border">
           <div class="flex items-center justify-between">
-            <div><p class="text-sm text-gray-500">总课时</p><p class="text-3xl font-bold mt-1">${totalHours}</p></div>
-            <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center"><i class="ri-stack-line text-blue-500 text-xl"></i></div>
+            <div><p class="text-xs text-gray-500 font-medium">机构总课时</p><p class="text-2xl font-bold mt-1 text-gray-800">${totalHours}</p></div>
+            <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center"><i class="ri-stack-line text-blue-500 text-lg"></i></div>
           </div>
+          <p class="text-xs text-gray-400 mt-2">采购总额度</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm p-5 border">
           <div class="flex items-center justify-between">
-            <div><p class="text-sm text-gray-500">已用课时</p><p class="text-3xl font-bold text-orange-600 mt-1">${usedHours}</p></div>
-            <div class="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center"><i class="ri-fire-line text-orange-500 text-xl"></i></div>
+            <div><p class="text-xs text-gray-500 font-medium">已分配课时</p><p class="text-2xl font-bold text-purple-600 mt-1">${allocatedHours}</p></div>
+            <div class="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center"><i class="ri-user-shared-line text-purple-500 text-lg"></i></div>
           </div>
-          <div class="mt-2"><div class="w-full bg-gray-200 rounded-full h-1.5"><div class="bg-orange-500 h-1.5 rounded-full" style="width:${usagePct}%"></div></div>
-          <span class="text-xs text-gray-400 mt-1">${usagePct}% 已消耗</span></div>
+          <div class="mt-2"><div class="w-full bg-gray-100 rounded-full h-1.5"><div class="bg-purple-500 h-1.5 rounded-full" style="width:${allocPct}%"></div></div>
+          <span class="text-xs text-gray-400 mt-1 inline-block">${allocPct}% 已分配</span></div>
         </div>
         <div class="bg-white rounded-xl shadow-sm p-5 border">
           <div class="flex items-center justify-between">
-            <div><p class="text-sm text-gray-500">可用课时</p><p class="text-3xl font-bold text-green-600 mt-1">${remainHours}</p></div>
-            <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center"><i class="ri-leaf-line text-green-500 text-xl"></i></div>
+            <div><p class="text-xs text-gray-500 font-medium">课时池待分配</p><p class="text-2xl font-bold text-emerald-600 mt-1">${unallocatedHours}</p></div>
+            <div class="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center"><i class="ri-inbox-archive-line text-emerald-500 text-lg"></i></div>
           </div>
+          <p class="text-xs text-gray-400 mt-2">池中可自由分配</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm p-5 border">
           <div class="flex items-center justify-between">
-            <div><p class="text-sm text-gray-500">学生人数</p><p class="text-3xl font-bold mt-1">${studentCount}</p></div>
-            <div class="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center"><i class="ri-user-line text-purple-500 text-xl"></i></div>
+            <div><p class="text-xs text-gray-500 font-medium">学生已上课时</p><p class="text-2xl font-bold text-orange-600 mt-1">${usedHours}</p></div>
+            <div class="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center"><i class="ri-fire-line text-orange-500 text-lg"></i></div>
           </div>
+          <div class="mt-2"><div class="w-full bg-gray-100 rounded-full h-1.5"><div class="bg-orange-500 h-1.5 rounded-full" style="width:${usedPct}%"></div></div>
+          <span class="text-xs text-gray-400 mt-1 inline-block">${usedPct}% 已消耗</span></div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-5 border">
+          <div class="flex items-center justify-between">
+            <div><p class="text-xs text-gray-500 font-medium">机构学生数</p><p class="text-2xl font-bold text-cyan-600 mt-1">${studentCount}</p></div>
+            <div class="w-10 h-10 bg-cyan-50 rounded-lg flex items-center justify-center"><i class="ri-user-line text-cyan-500 text-lg"></i></div>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">当前关联学员</p>
         </div>
       </div>
 
@@ -1049,9 +1065,10 @@ async function renderHoursPool(main) {
     const packages = pkgRes.data?.data || [];
     const allocations = allocRes.data?.data || [];
     const students = studentsRes.data?.data || [];
-    const totalH = packages.reduce((s,p) => s+(p.total_hours||0), 0);
-    const usedH = packages.reduce((s,p) => s+(p.used_hours||0), 0);
-    const remainH = totalH - usedH;
+    const totalH = pkgRes.data?.total_hours ?? packages.reduce((s,p) => s+(p.total_hours||0), 0);
+    const allocH = pkgRes.data?.total_allocated_hours ?? allocations.reduce((s,a) => s+(a.hours||0), 0);
+    const unallocH = pkgRes.data?.total_unallocated_hours ?? Math.max(0, totalH - allocH);
+    const usedH = pkgRes.data?.total_used_hours ?? packages.reduce((s,p) => s+(p.used_hours||0), 0);
 
     let html = `<div class="p-8 page-enter">
       <div class="flex items-center justify-between mb-6">
@@ -1060,13 +1077,15 @@ async function renderHoursPool(main) {
           <i class="ri-add-line mr-1"></i> 分配课时
         </button>
       </div>
-      <div class="grid grid-cols-3 gap-4 mb-6">
+      <div class="grid grid-cols-4 gap-4 mb-6">
         <div class="bg-white rounded-xl shadow-sm p-5 border text-center">
-          <p class="text-sm text-gray-500">总课时</p><p class="text-2xl font-bold mt-1">${totalH}</p></div>
+          <p class="text-xs text-gray-500 font-medium">总课时</p><p class="text-2xl font-bold mt-1 text-gray-800">${totalH}</p></div>
         <div class="bg-white rounded-xl shadow-sm p-5 border text-center">
-          <p class="text-sm text-gray-500">已用课时</p><p class="text-2xl font-bold text-orange-600 mt-1">${usedH}</p></div>
+          <p class="text-xs text-gray-500 font-medium">已分配课时</p><p class="text-2xl font-bold text-purple-600 mt-1">${allocH}</p></div>
         <div class="bg-white rounded-xl shadow-sm p-5 border text-center">
-          <p class="text-sm text-gray-500">可用课时</p><p class="text-2xl font-bold text-green-600 mt-1">${remainH}</p></div>
+          <p class="text-xs text-gray-500 font-medium">课时池待分配</p><p class="text-2xl font-bold text-emerald-600 mt-1">${unallocH}</p></div>
+        <div class="bg-white rounded-xl shadow-sm p-5 border text-center">
+          <p class="text-xs text-gray-500 font-medium">学生已上课时</p><p class="text-2xl font-bold text-orange-600 mt-1">${usedH}</p></div>
       </div>`;
 
     // 课时包列表

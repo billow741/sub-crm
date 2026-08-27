@@ -94,12 +94,38 @@ orgPackages.get('/', async (c) => {
     }
   }));
 
-  // 汇总总可用课时
-  const totalAvailable = data.reduce((sum, p) => sum + (p.remaining_hours || 0), 0);
+  // 汇总总课时与已用课时
+  const totalHours = data.reduce((sum, p) => sum + (p.total_hours || 0), 0);
+  const totalUsedHours = data.reduce((sum, p) => sum + (p.used_hours || 0), 0);
+  const totalRemainingHours = data.reduce((sum, p) => sum + (p.remaining_hours || 0), 0);
+
+  // 统计已分配课时总数
+  let totalAllocatedHours = 0;
+  try {
+    let allocQuery = 'SELECT COALESCE(SUM(hours), 0) as total FROM org_hour_allocations';
+    const allocParams = [];
+    if (orgId && role !== 'super_admin') {
+      allocQuery += ' WHERE org_id = ?';
+      allocParams.push(parseInt(orgId));
+    } else if (c.req.query('org_id')) {
+      allocQuery += ' WHERE org_id = ?';
+      allocParams.push(parseInt(c.req.query('org_id')));
+    }
+    const allocRes = await DB.prepare(allocQuery).bind(...allocParams).first();
+    totalAllocatedHours = allocRes?.total || 0;
+  } catch (_) {}
+
+  // 课时池待分配课时 = 总课时 - 已分配课时
+  const totalUnallocatedHours = Math.max(0, Math.round((totalHours - totalAllocatedHours) * 100) / 100);
 
   return c.json(success({
     data,
-    total_available_hours: totalAvailable,
+    total_hours: totalHours,
+    total_used_hours: totalUsedHours,
+    total_available_hours: totalRemainingHours,
+    total_remaining_hours: totalRemainingHours,
+    total_allocated_hours: totalAllocatedHours,
+    total_unallocated_hours: totalUnallocatedHours,
     pagination
   }));
 });
