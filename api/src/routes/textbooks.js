@@ -691,36 +691,40 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     });
   }
 
-  const SINGLE_UNIT_PROMPT = `你是一位顶级的少儿英语教研专家。请仔细阅读并识别提供的课本页面图片，严格按照图片中实际印刷的内容提取本单元的核心词汇、重点句型与语法点。
+  const SINGLE_UNIT_PROMPT = `你是一位顶级的少儿英语教研专家。请仔细阅读并识别当前提供的课本页面图片，严格按照当前图片中实际印刷的内容提取本页的核心词汇、重点句型与语法点。
 
-必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
+【重要原则】：
+1. 只能提取当前图片中实际印有的单词、句子和语法！绝对严禁编造或从其他单元复制！
+2. 每一个提取项必须给出准确地道的简体中文翻译。
+3. 必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
 {
-  "unit_title": "图片中印刷的单元标题",
+  "unit_title": "图片顶端印刷的单元标题 (例如 Unit 2 Let's Play)",
   "vocab": [
-    { "word": "必须严格按图片中实际印刷的英文单词填写 (如 paper, glue)", "translation": "准确地道的简体中文翻译 (如 纸, 胶水)", "is_core": true, "difficulty": 1 }
+    { "word": "当前图片中印刷的英文目标单词", "translation": "地道简体中文翻译", "is_core": true, "difficulty": 1 }
   ],
   "patterns": [
-    { "pattern": "核心交际句型 (如 I have paper. / What do you have?)", "translation": "句型的地道简体中文翻译 (如 我有一张纸。/ 你有什么？)", "is_core": true }
+    { "pattern": "当前图片对话框或句型框中印刷的核心交际句型", "translation": "地道简体中文翻译", "is_core": true }
   ],
   "grammar": [
-    { "point": "本单元语法焦点 (如 常用物品拥有句型 I have...)", "example": "I have paper. / Do you have glue?" }
+    { "point": "当前页面的语法要点", "example": "当前页面对应的真实英文例句", "is_core": true }
   ]
 }
 
-【少儿英语全单元重点句型与词汇提取铁律】：
-1. 🎯 核心词汇提取规则：
-   - 包含各课（Lesson 1、Lesson 2）带有数字编号 (1, 2, 3, 4...) 的核心实物生词（如 paper, glue, scissors, paint / pencil, pen, crayon, marker）；
-   - 包含 Lesson 3 故事拓展词及 Lesson 4 的字母发音拓展词；
-   - 准确提取印刷在插图正下方的真实英文目标词汇，绝不漏词，严禁编造！
-2. 💬 重点句型与功能交际（非常重要）：
-   - 核心语法句型（Lesson 1 & 2）：I have [paper]. / What do you have? - I have [glue]. / What's this? - It's a [pencil].
-   - 故事与日常功能交际用语（Lesson 3 Story & Everyday English）：如 "What's your name? - I'm Danny." / "My name is Emma." / "Nice to meet you." / "This is my friend." 等真实对话中的交际金句！
-3. 🚫 绝对黑名单（严禁作为句型提取，违者扣分）：
-   - 绝对严禁提取题干与课堂指令词！例如：
-     ❌ "Listen, point, and say." (这是课堂指令，不是核心句型！)
-     ❌ "Listen and point." / "Listen and say." / "Listen, ask, and answer."
-     ❌ "Listen and number." / "Listen and sing." / "Look and listen."
-4. 🇨🇳 每一个 word 和 pattern 的 translation 字段都必须翻译为准确地道的【简体中文】，不可留空。`;
+【少儿英语切图识别严格铁律】：
+1. 🎯 核心词汇：
+   - 提取图片中带有数字编号 (1, 2, 3...) 的实物生词、故事生词或字母发音拓展词，一字不差，绝对严禁编造或借用其他单元的词！
+2. 💬 重点句型与日常交际：
+   - 提取本页对话框或句型框中印刷的核心交际句型（例如问答、物品陈述、日常打招呼与交际句型），绝不漏句！
+3. 🚫 绝对黑名单（严禁作为句型或语法点输出）：
+   - 严禁提取课堂指令词！例如：
+     ❌ "Listen, point, and say."
+     ❌ "Listen and point."
+     ❌ "Listen and say."
+     ❌ "Listen and number."
+     ❌ "Listen and sing."
+     ❌ "Look and listen."
+   - 严禁输出任何与本页图片无关的词汇或句子！
+4. 🇨🇳 翻译全部使用规范准确的【简体中文】。`;
 
   // 单元模式 vs 整本书模式
   let promptText = opts.bookMode
@@ -990,7 +994,7 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       for (const g of rawGrammar) {
         const pt = (g.point || g.topic || g.title || '').trim();
         const ex = (g.example || g.explanation || g.desc || '').trim();
-        if (pt && !grammarMap.has(pt.toLowerCase())) {
+        if (pt && !isCommand(pt) && !grammarMap.has(pt.toLowerCase())) {
           grammarMap.set(pt.toLowerCase(), {
             point: pt,
             example: ex || pt,
@@ -1002,7 +1006,7 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
 
     const cleanVocab = Array.from(vocabMap.values());
     let cleanPatterns = Array.from(patternMap.values());
-    let cleanGrammar = Array.from(grammarMap.values());
+    let cleanGrammar = Array.from(grammarMap.values()).filter(g => !isCommand(g.point));
 
     // 如果句型为空，根据核心生词自动生成标准少儿交际句型
     if (cleanPatterns.length === 0 && cleanVocab.length > 0) {
