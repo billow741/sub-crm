@@ -48,11 +48,15 @@ export default function AdjustHoursModal({ studentInfo, onClose, onSuccess }) {
     }
   };
 
-  const totalHours = studentInfo?.total_hours || 0;
-  const usedHours = studentInfo?.used_hours || 0;
-  const remainingHours = totalHours - usedHours;
-  const newTotal = totalHours + adjustment;
-  const newRemaining = remainingHours + adjustment;
+  const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+  const totalHours = r2(studentInfo?.total_hours);
+  const usedHours = r2(studentInfo?.used_hours);
+  const remainingHours = r2(totalHours - usedHours);
+
+  const numAdj = typeof adjustment === 'number' ? adjustment : (parseFloat(adjustment) || 0);
+  const newTotal = r2(totalHours + numAdj);
+  const newRemaining = r2(remainingHours + numAdj);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -87,7 +91,7 @@ export default function AdjustHoursModal({ studentInfo, onClose, onSuccess }) {
                 <button
                   key={qa.value}
                   type="button"
-                  onClick={() => setAdjustment(adjustment + qa.value)}
+                  onClick={() => setAdjustment(r2(numAdj + qa.value))}
                   className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors ${
                     qa.value > 0
                       ? 'border-green-200 text-green-600 hover:bg-green-50'
@@ -102,24 +106,26 @@ export default function AdjustHoursModal({ studentInfo, onClose, onSuccess }) {
 
           {/* 调整数量 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">调整数量 *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">调整数量 (支持小数，精度0.01) *</label>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setAdjustment(adjustment - 1)}
+                onClick={() => setAdjustment(r2(numAdj - 1))}
                 className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50"
               >
                 <Minus size={18} className="text-gray-600" />
               </button>
               <input
                 type="number"
+                step="0.01"
                 value={adjustment}
-                onChange={(e) => setAdjustment(parseInt(e.target.value) || 0)}
+                onChange={(e) => setAdjustment(e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
                 className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="0.00"
               />
               <button
                 type="button"
-                onClick={() => setAdjustment(adjustment + 1)}
+                onClick={() => setAdjustment(r2(numAdj + 1))}
                 className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50"
               >
                 <Plus size={18} className="text-gray-600" />
@@ -128,12 +134,12 @@ export default function AdjustHoursModal({ studentInfo, onClose, onSuccess }) {
           </div>
 
           {/* 调整后预览 */}
-          {adjustment !== 0 && (
-            <div className={`p-2.5 rounded-lg ${adjustment > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+          {numAdj !== 0 && (
+            <div className={`p-2.5 rounded-lg ${numAdj > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
               <div className="text-sm">
                 <span className="text-gray-600">调整后：</span>
-                <span className={`font-bold ${adjustment > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {adjustment > 0 ? '+' : ''}{adjustment} 节
+                <span className={`font-bold ${numAdj > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {numAdj > 0 ? '+' : ''}{numAdj} 节
                 </span>
               </div>
               <div className="text-xs text-gray-500 mt-0.5">

@@ -171,8 +171,8 @@ export default function StudentDetail() {
   };
 
   const totalRemaining = student ? (student.remaining_hours !== undefined && student.remaining_hours !== null
-    ? student.remaining_hours
-    : Math.round(((student.total_hours ?? student.package_summary?.total_hours ?? 0) - (student.used_hours ?? student.package_summary?.used_hours ?? 0)) * 100) / 100) : 0;
+    ? Math.round(parseFloat(student.remaining_hours) * 100) / 100
+    : Math.round(((parseFloat(student.total_hours ?? student.package_summary?.total_hours) || 0) - (parseFloat(student.used_hours ?? student.package_summary?.used_hours) || 0)) * 100) / 100) : 0;
   const totalSpent = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
   // 获取第一个活跃的课时包（用于调整）
@@ -289,7 +289,7 @@ export default function StudentDetail() {
         {/* 快速统计 */}
         <div className="grid grid-cols-5 gap-4 mt-6 pt-6 border-t border-gray-100">
           <div className="text-center">
-            <div className="text-2xl font-bold text-gray-800">{student?.total_hours ?? student?.package_summary?.total_hours ?? 0}</div>
+            <div className="text-2xl font-bold text-gray-800">{Math.round((parseFloat(student?.total_hours ?? student?.package_summary?.total_hours) || 0) * 100) / 100}</div>
             <div className="text-sm text-gray-500">总课时</div>
           </div>
           <div className="text-center">
@@ -354,7 +354,9 @@ export default function StudentDetail() {
                 {packages.map(pkg => (
                   <div key={pkg.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
                     <span className="text-gray-600">{pkg.name || `套餐 #${pkg.id}`}</span>
-                    <span className="font-medium text-primary-600">{pkg.remaining}/{pkg.total}</span>
+                    <span className="font-medium text-primary-600">
+                      {Math.round((parseFloat(pkg.remaining) || 0) * 100) / 100}/{Math.round((parseFloat(pkg.total) || 0) * 100) / 100}
+                    </span>
                   </div>
                 ))}
               </div>

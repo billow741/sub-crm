@@ -414,8 +414,9 @@ students.patch('/:id/adjust-hours', validateParams(idParamSchema), async (c) => 
     return c.json(error('NOT_FOUND', '学生不存在'), 404);
   }
 
-  const newTotal = Math.max(0, (student.total_hours || 0) + adjustment);
-  const newRemaining = newTotal - (student.used_hours || 0);
+  const adjNum = r2(parseFloat(adjustment) || 0);
+  const newTotal = r2(Math.max(0, (student.total_hours || 0) + adjNum));
+  const newRemaining = r2(newTotal - (student.used_hours || 0));
 
   await DB.prepare('UPDATE students SET total_hours = ?, updated_at = ? WHERE id = ?')
     .bind(newTotal, new Date().toISOString(), id)
@@ -425,14 +426,14 @@ students.patch('/:id/adjust-hours', validateParams(idParamSchema), async (c) => 
   await DB.prepare(`
     INSERT INTO hour_changes (student_id, type, amount, balance_after, description)
     VALUES (?, 'adjust', ?, ?, ?)
-  `).bind(id, adjustment, r2(newTotal - (student.used_hours || 0)), reason || '手动调整').run();
+  `).bind(id, adjNum, newRemaining, reason || '手动调整').run();
   return c.json(success({
     id: student.id,
     name: student.name,
     previous_total: r2(student.total_hours || 0),
-    adjustment: r2(adjustment),
-    new_total: r2(newTotal),
-    remaining_hours: r2(newTotal - (student.used_hours || 0)),
+    adjustment: adjNum,
+    new_total: newTotal,
+    remaining_hours: newRemaining,
     reason: reason || '手动调整'
   }));
 });

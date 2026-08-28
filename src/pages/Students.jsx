@@ -136,12 +136,10 @@ export default function Students() {
   });
 
   const getStudentRemaining = (student) => {
-    // 优先使用后端返回的已四舍五入 remaining_hours，避免前端浮点数精度问题
     if (student.remaining_hours !== undefined && student.remaining_hours !== null) {
-      return student.remaining_hours;
+      return Math.round(parseFloat(student.remaining_hours) * 100) / 100;
     }
-    // 兼容旧数据：回退计算并四舍五入到 2 位小数
-    return Math.round(((student.total_hours || 0) - (student.used_hours || 0)) * 100) / 100;
+    return Math.round(((parseFloat(student.total_hours) || 0) - (parseFloat(student.used_hours) || 0)) * 100) / 100;
   };
 
   return (

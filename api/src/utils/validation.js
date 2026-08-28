@@ -156,9 +156,9 @@ export const teacherQuerySchema = paginationSchema.extend({
 // Settings Schema
 export const settingsSchema = z.record(z.string());
 
-// 课时调整 Schema（管理员使用）
+// 课时调整 Schema（管理员使用，支持小数，精度0.01）
 export const packageAdjustSchema = z.object({
-  adjustment: z.number().int().refine(v => v !== 0, '调整数量不能为0'),
+  adjustment: z.coerce.number().refine(v => v !== 0, '调整数量不能为0'),
   reason: z.string().min(1, '调整原因不能为空'),
   notes: z.string().optional()
 });
