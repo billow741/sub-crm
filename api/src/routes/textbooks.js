@@ -691,32 +691,37 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     });
   }
 
-  const SINGLE_UNIT_PROMPT = `你是一位顶级的少儿英语教研专家。请仔细阅读并识别提供的课本页面图片，严格按照图片中实际印刷的文字提取本单元的核心词汇、核心句型与语法点。
+  const SINGLE_UNIT_PROMPT = `你是一位顶级的少儿英语教研专家。请仔细阅读并识别提供的课本页面图片，严格按照图片中实际印刷的内容提取本单元的核心词汇、重点句型与语法点。
 
-必须严格返回如下 JSON 结构（严禁包含任何说明文字或 markdown 标记）：
+必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
 {
   "unit_title": "图片中印刷的单元标题",
   "vocab": [
-    { "word": "严格从图片中识别的英文目标单词", "translation": "准确地道的简体中文翻译", "is_core": true, "difficulty": 1 }
+    { "word": "必须严格按图片中实际印刷的英文单词填写 (如 paper, glue)", "translation": "准确地道的简体中文翻译 (如 纸, 胶水)", "is_core": true, "difficulty": 1 }
   ],
   "patterns": [
-    { "pattern": "严格从图片中识别的核心问答句型", "translation": "句型的简体中文翻译", "is_core": true }
+    { "pattern": "核心交际句型 (如 I have paper. / What do you have?)", "translation": "句型的地道简体中文翻译 (如 我有一张纸。/ 你有什么？)", "is_core": true }
   ],
   "grammar": [
-    { "topic": "本单元语法核心知识点", "explanation": "简要中文语法说明" }
+    { "point": "本单元语法焦点 (如 常用物品拥有句型 I have...)", "example": "I have paper. / Do you have glue?" }
   ]
 }
 
-【少儿课本精准提取铁律】：
-1. 🎯 核心词汇提取区域：
-   - 重点查看带有数字编号 (1, 2, 3, 4...) 的词汇区域（如 "A. Listen, point, and say." 或 "A. Listen and point."）。
-   - 必须一字不差地提取印刷在插图正下方的真实英文单词（例如图片中印刷的是 pencil, pen, crayon, marker，就必须精准识别为这四个词，绝不能漏掉，也绝对严禁编造图片中不存在的单词！）。
-2. 💬 核心句型提取区域：
-   - 重点查看带有对话框、人物气泡或黄色/蓝色句型条的区域（如 "B. Listen, ask, and answer." 或 "B. Listen and say."）。
-   - 完整提取该区域印刷的核心问答句型（例如 "What's this? It's a pencil." / "Is it a pen? Yes, it is." 等真实印刷的例句），并翻译成地道简体中文。
-3. 🚫 绝对防臆造与干扰过滤：
-   - 严禁凭空编造课本上没有的单词！
-   - 严禁将题干指令词（如 Listen, Point, Say, Ask, Answer, Sing, Look, Read, Unit, Lesson 等）当作词汇提取。
+【少儿英语重点句型与词汇提取铁律】：
+1. 🎯 核心词汇提取规则：
+   - 查找带有数字编号 (1, 2, 3, 4...) 的核心板块（如 A. Listen, point, and say.）。
+   - 准确提取印刷在每个物品插图正下方的真实英文目标词汇（例如 paper, glue, scissors, paint 或 pencil, pen, crayon, marker），绝不漏词，严禁编造！
+2. 💬 重点句型提取规则（非常重要）：
+   - 重点句型必须是学生用来表达和交流的【核心语言结构（Target Sentence Patterns）】！
+   - 常见的少儿核心句型包括：
+     * 拥有与陈述：I have [paper]. / This is a [pen]. / It's [paint].
+     * 问答与交际：What do you have? - I have [glue]. / What's this? - It's [paper]. / Is it a [marker]? - Yes, it is.
+3. 🚫 绝对黑名单（严禁作为句型提取，违者扣分）：
+   - 绝对严禁提取题干与课堂指令词！例如：
+     ❌ "Listen, point, and say." (这是课堂指令，不是核心句型！)
+     ❌ "Listen and point." / "Listen and say." / "Listen, ask, and answer."
+     ❌ "Listen and number." / "Listen and sing." / "Look and listen."
+     如果页面上只有指令标题和生词，请根据本课核心词汇（如 paper, glue）提炼本课针对该生词的基础句型（如 "I have paper." / "What do you have? - I have glue."）！
 4. 🇨🇳 每一个 word 和 pattern 的 translation 字段都必须翻译为准确地道的【简体中文】，不可留空。`;
 
   // 单元模式 vs 整本书模式
@@ -920,12 +925,33 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       }
     }
 
+    // 过滤题干指令句（如 Listen, point...）
+    const isCommand = (s) => /^(listen|point|say|sing|ask|answer|look|read|circle|write|number)\b/i.test((s || '').trim());
+    let cleanPatterns = (content.patterns || []).filter(p => !isCommand(p.pattern));
+    
+    // 如果过滤后为空，根据核心生词自动生成标准少儿交际句型
+    if (cleanPatterns.length === 0 && (content.vocab || []).length > 0) {
+      const firstWord = content.vocab[0]?.word || 'item';
+      const firstTrans = content.vocab[0]?.translation || '物品';
+      cleanPatterns = [
+        { pattern: `I have ${firstWord}.`, translation: `我有一张/个${firstTrans}。`, is_core: true },
+        { pattern: `What do you have? - I have ${firstWord}.`, translation: `你有什么？- 我有${firstTrans}。`, is_core: true }
+      ];
+    }
+
+    // 规范化语法点结构 (同时兼容 point / topic / example / explanation)
+    const cleanGrammar = (content.grammar || []).map(g => ({
+      point: g.point || g.topic || '重点句型与词汇应用',
+      example: g.example || g.explanation || '掌握本单元核心词汇的陈述与问答表达',
+      is_core: true
+    }));
+
     return c.json({ data: {
       unit_number: num,
       unit_title: content.unit_title || dbUnitTitle || (num === 0 ? 'Welcome' : `Unit ${num}`),
       vocab: content.vocab || [],
-      patterns: content.patterns || [],
-      grammar: content.grammar || [],
+      patterns: cleanPatterns,
+      grammar: cleanGrammar,
       pages_saved: pagesSaved
     }});
   } catch (err) {
