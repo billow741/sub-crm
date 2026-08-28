@@ -858,22 +858,26 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       const prefix1 = `${code}/Unit${num}/`;
       const prefix2 = `${code}/Unit${num}_`;
       const [res1, res2] = await Promise.all([
-        R2.list({ prefix: prefix1, limit: 12 }),
-        R2.list({ prefix: prefix2, limit: 12 })
+        R2.list({ prefix: prefix1, limit: 20 }),
+        R2.list({ prefix: prefix2, limit: 20 })
       ]);
       const allObjs = [...(res1.objects || []), ...(res2.objects || [])]
         .filter(o => /\.(png|jpg|jpeg|webp)$/i.test(o.key))
         .sort((a, b) => a.key.localeCompare(b.key));
 
-      for (const obj of allObjs.slice(0, 1)) {
-        const r2File = await R2.get(obj.key);
-        if (r2File) {
-          const buf = await r2File.arrayBuffer();
-          const ext = obj.key.split('.').pop() || 'jpeg';
+      // 精准选取各 Lesson 核心生词授课页 (第 1 页 Lesson 1 与 第 3 页 Lesson 2)
+      const targetIndices = [0, 2];
+      for (const idx of targetIndices) {
+        if (allObjs[idx]) {
+          const key = allObjs[idx].key;
+          const ext = key.split('.').pop() || 'jpeg';
           imagesToLLM.push({
-            name: obj.key.split('/').pop(),
+            name: key.split('/').pop(),
             type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-            arrayBuffer: async () => buf
+            arrayBuffer: async () => {
+              const file = await R2.get(key);
+              return file ? await file.arrayBuffer() : new ArrayBuffer(0);
+            }
           });
         }
       }
@@ -902,19 +906,29 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
     const llmModel = formData.get('llm_model') || c.req.header('x-llm-model');
     const unitText = formData.get('unit_text') || '';
 
-    const content = await callLLMWithImages(c, imagesToLLM, {
-      bookMode: false,
-      maxPages: 2,
-      baseUrl: llmBaseUrl,
-      apiKey: llmApiKey,
-      model: llmModel,
-      unitText
-    });
+    // 由于 NVIDIA NIM 严格限制单次请求仅能处理 1 张图片，对各 Lesson 生词页分别提取并聚合
+    const groupResults = [];
+    for (let i = 0; i < imagesToLLM.length; i++) {
+      try {
+        const singlePage = [imagesToLLM[i]];
+        const res = await callLLMWithImages(c, singlePage, {
+          bookMode: false,
+          maxPages: 1,
+          baseUrl: llmBaseUrl,
+          apiKey: llmApiKey,
+          model: llmModel,
+          unitText
+        });
+        if (res) groupResults.push(res);
+      } catch (err) {
+        console.warn(`Page ${i} extract warn:`, err.message);
+      }
+    }
 
     // 把这次上传的 PDF 页面图保存到 R2 (path: `${code}/Unit${num}/page-${i}.png`)
     const R2 = c.env.TEXTBOOKS_R2;
     let pagesSaved = 0;
-    if (R2) {
+    if (R2 && images.length > 0) {
       const images_arr = Array.isArray(images) ? images : [images];
       pagesSaved = images_arr.length;
       for (let i = 0; i < images_arr.length; i++) {
@@ -925,31 +939,89 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       }
     }
 
-    // 过滤题干指令句（如 Listen, point...）
+    // 聚合去重全部课的词汇、句型与语法点 (智能兼容各类 LLM 键名 vocab / vocabulary / words)
+    const vocabMap = new Map();
+    const patternMap = new Map();
+    const grammarMap = new Map();
+    let finalUnitTitle = dbUnitTitle || '';
+
     const isCommand = (s) => /^(listen|point|say|sing|ask|answer|look|read|circle|write|number)\b/i.test((s || '').trim());
-    let cleanPatterns = (content.patterns || []).filter(p => !isCommand(p.pattern));
-    
-    // 如果过滤后为空，根据核心生词自动生成标准少儿交际句型
-    if (cleanPatterns.length === 0 && (content.vocab || []).length > 0) {
-      const firstWord = content.vocab[0]?.word || 'item';
-      const firstTrans = content.vocab[0]?.translation || '物品';
+
+    for (const res of groupResults) {
+      if (!res) continue;
+      if (!finalUnitTitle && (res.unit_title || res.title)) finalUnitTitle = res.unit_title || res.title;
+
+      // 智能兼容词汇列表 (vocab / vocabulary / words)
+      const rawVocab = res.vocab || res.vocabulary || res.words || (Array.isArray(res) ? res : []);
+      for (const v of rawVocab) {
+        const cleanWord = (typeof v === 'string' ? v : (v.word || v.name || '')).trim();
+        const cleanTrans = (typeof v === 'object' ? (v.translation || v.chinese || v.meaning || '') : '').trim();
+        if (cleanWord && !vocabMap.has(cleanWord.toLowerCase())) {
+          vocabMap.set(cleanWord.toLowerCase(), {
+            word: cleanWord,
+            translation: cleanTrans || cleanWord,
+            is_core: true,
+            difficulty: v.difficulty || 1
+          });
+        }
+      }
+
+      // 智能兼容句型列表 (patterns / sentence_patterns / sentences)
+      const rawPatterns = res.patterns || res.sentence_patterns || res.sentences || [];
+      for (const p of rawPatterns) {
+        const cleanPat = (typeof p === 'string' ? p : (p.pattern || p.sentence || '')).trim();
+        const cleanTrans = (typeof p === 'object' ? (p.translation || p.chinese || '') : '').trim();
+        if (cleanPat && !isCommand(cleanPat) && !patternMap.has(cleanPat.toLowerCase())) {
+          patternMap.set(cleanPat.toLowerCase(), {
+            pattern: cleanPat,
+            translation: cleanTrans || cleanPat,
+            is_core: true
+          });
+        }
+      }
+
+      // 智能兼容语法点
+      const rawGrammar = res.grammar || res.grammar_points || [];
+      for (const g of rawGrammar) {
+        const pt = (g.point || g.topic || g.title || '').trim();
+        const ex = (g.example || g.explanation || g.desc || '').trim();
+        if (pt && !grammarMap.has(pt.toLowerCase())) {
+          grammarMap.set(pt.toLowerCase(), {
+            point: pt,
+            example: ex || pt,
+            is_core: true
+          });
+        }
+      }
+    }
+
+    const cleanVocab = Array.from(vocabMap.values());
+    let cleanPatterns = Array.from(patternMap.values());
+    let cleanGrammar = Array.from(grammarMap.values());
+
+    // 如果句型为空，根据核心生词自动生成标准少儿交际句型
+    if (cleanPatterns.length === 0 && cleanVocab.length > 0) {
+      const firstWord = cleanVocab[0].word;
+      const firstTrans = cleanVocab[0].translation;
       cleanPatterns = [
         { pattern: `I have ${firstWord}.`, translation: `我有一张/个${firstTrans}。`, is_core: true },
         { pattern: `What do you have? - I have ${firstWord}.`, translation: `你有什么？- 我有${firstTrans}。`, is_core: true }
       ];
     }
 
-    // 规范化语法点结构 (同时兼容 point / topic / example / explanation)
-    const cleanGrammar = (content.grammar || []).map(g => ({
-      point: g.point || g.topic || '重点句型与词汇应用',
-      example: g.example || g.explanation || '掌握本单元核心词汇的陈述与问答表达',
-      is_core: true
-    }));
+    // 规范化语法点结构
+    if (cleanGrammar.length === 0) {
+      cleanGrammar = [{
+        point: '重点句型与词汇综合应用',
+        example: '掌握本单元核心词汇的陈述与问答表达',
+        is_core: true
+      }];
+    }
 
     return c.json({ data: {
       unit_number: num,
-      unit_title: content.unit_title || dbUnitTitle || (num === 0 ? 'Welcome' : `Unit ${num}`),
-      vocab: content.vocab || [],
+      unit_title: finalUnitTitle || (num === 0 ? 'Welcome' : `Unit ${num}`),
+      vocab: cleanVocab,
       patterns: cleanPatterns,
       grammar: cleanGrammar,
       pages_saved: pagesSaved
