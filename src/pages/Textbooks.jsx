@@ -234,18 +234,17 @@ export default function Textbooks() {
         return;
       }
 
-      // 合成 1200px 超清拼图
+      // 合成超清全景拼图 (包含该单元全部 8 页课文)
       if (loadedBlobs.length > 0) {
-        const coreBlobs = loadedBlobs.slice(0, Math.min(4, loadedBlobs.length));
-        const loadedImgs = await Promise.all(coreBlobs.map(b => new Promise(res => {
+        const loadedImgs = await Promise.all(loadedBlobs.map(b => new Promise(res => {
           const img = new Image();
           img.onload = () => res(img);
           img.src = URL.createObjectURL(b);
         })));
 
-        const cols = loadedImgs.length === 1 ? 1 : 2;
+        const cols = loadedImgs.length <= 2 ? loadedImgs.length : (loadedImgs.length <= 4 ? 2 : 4);
         const rows = Math.ceil(loadedImgs.length / cols);
-        const singleW = 1200;
+        const singleW = 800;
         const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
 
         const collageCanvas = document.createElement('canvas');
@@ -261,7 +260,7 @@ export default function Textbooks() {
           cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
         });
 
-        const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.88));
+        const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
         fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
       }
 
@@ -1233,18 +1232,17 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
           fd.append('images', blob, `page-${String(bookPageNum).padStart(2, '0')}.jpg`);
         }
 
-        // 2. 核心：为 AI 视觉模型合成超高清全景拼图 (单页 1200px 宽，保证字迹极其清晰)
+        // 2. 核心：为 AI 视觉模型合成全景全课时拼图 (包含该单元全部切片页面)
         if (pageBlobs.length > 0) {
-          const coreBlobs = pageBlobs.slice(0, Math.min(4, pageBlobs.length));
-          const loadedImgs = await Promise.all(coreBlobs.map(b => new Promise(res => {
+          const loadedImgs = await Promise.all(pageBlobs.map(b => new Promise(res => {
             const img = new Image();
             img.onload = () => res(img);
             img.src = URL.createObjectURL(b.blob);
           })));
 
-          const cols = loadedImgs.length === 1 ? 1 : 2;
+          const cols = loadedImgs.length <= 2 ? loadedImgs.length : (loadedImgs.length <= 4 ? 2 : 4);
           const rows = Math.ceil(loadedImgs.length / cols);
-          const singleW = 1200;
+          const singleW = 800;
           const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
 
           const collageCanvas = document.createElement('canvas');
@@ -1260,7 +1258,7 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
             cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
           });
 
-          const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.88));
+          const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
           fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
         }
 

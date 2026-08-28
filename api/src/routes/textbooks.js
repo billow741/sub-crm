@@ -695,46 +695,47 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     });
   }
 
-  const SINGLE_UNIT_PROMPT = `Extract vocabulary words and sentence patterns from this textbook image into JSON.
+  const SINGLE_UNIT_PROMPT = `你是一位顶级的少儿英语教研专家。请仔细分析本单元的全部课本页面（包含 Lesson 1 到 Lesson 4 的全部课文），提取该单元的所有核心词汇与核心句型，并务必将每个词汇和句型翻译成准确地道的【简体中文】。
 
-CRITICAL INSTRUCTION:
-Do NOT describe the image. Do NOT write any introduction or explanation.
-Output ONLY a valid JSON object starting with { and ending with }.
-
-Required JSON Structure:
+必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
 {
-  "unit_title": "Art Class",
+  "unit_title": "单元标题 (如 Art Class)",
   "vocab": [
     { "word": "paper", "translation": "纸", "is_core": true, "difficulty": 1 },
     { "word": "glue", "translation": "胶水", "is_core": true, "difficulty": 1 },
     { "word": "scissors", "translation": "剪刀", "is_core": true, "difficulty": 1 },
-    { "word": "paint", "translation": "颜料", "is_core": true, "difficulty": 1 }
+    { "word": "paint", "translation": "颜料", "is_core": true, "difficulty": 1 },
+    { "word": "pen", "translation": "钢笔", "is_core": true, "difficulty": 1 },
+    { "word": "pencil", "translation": "铅笔", "is_core": true, "difficulty": 1 },
+    { "word": "eraser", "translation": "橡皮", "is_core": true, "difficulty": 1 },
+    { "word": "ruler", "translation": "尺子", "is_core": true, "difficulty": 1 }
   ],
   "patterns": [
-    { "pattern": "What's this? - It's paper.", "translation": "这是什么？- 这是纸。", "is_core": true }
+    { "pattern": "What's this? - It's paper.", "translation": "这是什么？- 这是纸。", "is_core": true },
+    { "pattern": "Is it a pen? - Yes, it is.", "translation": "它是一支钢笔吗？- 是的，它是。", "is_core": true }
   ],
   "grammar": [
-    { "topic": "Classroom objects", "explanation": "学习常见文具与手工工具" }
+    { "topic": "常见文具与工具识别", "explanation": "掌握单数物品提问与回答句型" }
   ]
 }
 
-Rules:
-1. Extract ALL key target vocabulary words visible in the lessons.
-2. Provide accurate, natural Simplified Chinese translations for every word and sentence pattern.
-3. Extract core dialogue / sentence patterns.
-4. Output MUST be strictly valid raw JSON only.`;
+【核心提取要求】：
+1. 完整提取整个单元全部课时（Lesson 1, 2, 3, 4）的重点词汇（通常 8~16 个单词），不要只看第一页！
+2. translation 字段【必须是简体中文翻译】，绝不可留空，绝不可直接写英文！
+3. 提取核心句型（问句与答句完整配对，必须附带简体中文翻译）。
+4. 严格输出标准 JSON 字符串。`;
 
   // 单元模式 vs 整本书模式
   let promptText = opts.bookMode
-    ? `You are given pages from a language textbook. Extract vocabulary, patterns, and grammar PER UNIT. Return ONLY a JSON array of units.`
+    ? `You are given pages from a language textbook. Extract vocabulary, patterns, and grammar PER UNIT. Every item MUST have accurate Simplified Chinese translations. Return ONLY a JSON array of units.`
     : SINGLE_UNIT_PROMPT;
 
   if (opts.unitText) {
-    promptText += `\n\n=== TEXT LAYER CONTENT FROM THESE PAGES ===\n${opts.unitText}\n===========================================`;
+    promptText += `\n\n=== 课本文本层内容 (包含该单元各课全部单词与对话) ===\n${opts.unitText}\n======================================================`;
   }
 
   const userContent = [
-    { type: 'text', text: `${promptText}\n\nOutput ONLY raw JSON now:` },
+    { type: 'text', text: `${promptText}\n\n请立即输出纯 JSON 数据：` },
     ...imageContents
   ];
 
@@ -752,7 +753,7 @@ Rules:
     return resp;
   }
 
-  // 自动二级提纯函数：将自然语言描述提纯为标准 JSON
+  // 自动二级提纯函数：将自然语言描述提纯为带中文翻译的标准 JSON
   async function refineToJSON(m, rawText) {
     try {
       const resp = await fetch(`${baseUrl}/chat/completions`, {
@@ -763,7 +764,7 @@ Rules:
           messages: [
             {
               role: 'user',
-              content: `Convert the following textbook text/notes into a strict JSON object with fields: "unit_title", "vocab" (array of {word, translation, is_core, difficulty}), "patterns" (array of {pattern, translation, is_core}), "grammar" (array of {topic, explanation}).\n\nText:\n${rawText}\n\nReturn ONLY the JSON object starting with { and ending with }. No commentary.`
+              content: `请将以下教材分析内容整理为严格的 JSON 对象，必须包含 "unit_title", "vocab" (数组，包含英文 "word" 和简体中文翻译 "translation", is_core: true, difficulty: 1), "patterns" (数组，包含英文 "pattern" 和简体中文翻译 "translation", is_core: true), "grammar" (数组，包含 "topic", "explanation")。\n\n所有 translation 字段必须翻译为准确地道的【简体中文】，不可留空。\n\n原始内容:\n${rawText}\n\n只返回纯 JSON，严禁任何多余文字。`
             }
           ],
           temperature: 0.1,
