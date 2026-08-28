@@ -42,10 +42,10 @@ export default function Textbooks() {
       if (saved) return JSON.parse(saved);
     } catch {}
     return {
-      provider: 'nvidia_qwen',
+      provider: 'nvidia_90b',
       baseUrl: 'https://integrate.api.nvidia.com/v1',
       apiKey: '',
-      model: 'qwen/qwen2.5-vl-72b-instruct'
+      model: 'meta/llama-3.2-90b-vision-instruct'
     };
   });
 
@@ -1738,18 +1738,18 @@ function BooksManageModal({ books, onClose }) {
 // ============================================================
 const LLM_PRESETS = [
   {
-    id: 'nvidia_qwen',
-    name: 'NVIDIA Qwen2.5-VL-72B (首选推荐, 720亿参数超强视觉)',
+    id: 'nvidia_90b',
+    name: 'NVIDIA Llama-3.2-90B Vision (首选推荐, 900亿旗舰视觉多模态)',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
-    model: 'qwen/qwen2.5-vl-72b-instruct',
-    desc: 'NVIDIA 免费提供，超强中英印刷体识别与地道中文翻译，字迹再小也能精准提取'
+    model: 'meta/llama-3.2-90b-vision-instruct',
+    desc: 'NVIDIA 免费提供，900亿参数超强多模态，精准识别微小印刷体英文与排版'
   },
   {
-    id: 'nvidia_llama',
-    name: 'NVIDIA Llama-3.2-Vision',
+    id: 'nvidia_11b',
+    name: 'NVIDIA Llama-3.2-11B Vision (高速轻量版)',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
     model: 'meta/llama-3.2-11b-vision-instruct',
-    desc: 'Meta 11B 多模态视觉模型'
+    desc: 'Meta 11B 视觉模型，响应速度快'
   },
   {
     id: 'zhipu',
