@@ -695,29 +695,34 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     });
   }
 
-  const SINGLE_UNIT_PROMPT = `You are an expert English language educator analyzing textbook pages.
-Your job is to extract all teaching content from the provided textbook page image.
+  const SINGLE_UNIT_PROMPT = `Extract vocabulary words and sentence patterns from this textbook image into JSON.
 
-Return ONLY valid JSON in this exact structure (no markdown fences, no extra text):
+CRITICAL INSTRUCTION:
+Do NOT describe the image. Do NOT write any introduction or explanation.
+Output ONLY a valid JSON object starting with { and ending with }.
+
+Required JSON Structure:
 {
-  "unit_title": "Unit Topic",
+  "unit_title": "Art Class",
   "vocab": [
-    { "word": "pen", "translation": "钢笔", "is_core": true, "difficulty": 1 },
-    { "word": "pencil", "translation": "铅笔", "is_core": true, "difficulty": 1 }
+    { "word": "paper", "translation": "纸", "is_core": true, "difficulty": 1 },
+    { "word": "glue", "translation": "胶水", "is_core": true, "difficulty": 1 },
+    { "word": "scissors", "translation": "剪刀", "is_core": true, "difficulty": 1 },
+    { "word": "paint", "translation": "颜料", "is_core": true, "difficulty": 1 }
   ],
   "patterns": [
-    { "pattern": "What's this? - It's a pen.", "translation": "这是什么？- 这是一支钢笔。", "is_core": true }
+    { "pattern": "What's this? - It's paper.", "translation": "这是什么？- 这是纸。", "is_core": true }
   ],
   "grammar": [
-    { "topic": "Indefinite article a/an", "explanation": "使用 a 修饰辅音开头的单数可数名词" }
+    { "topic": "Classroom objects", "explanation": "学习常见文具与手工工具" }
   ]
 }
 
 Rules:
-1. Extract ALL core target vocabulary words clearly printed on the lessons.
+1. Extract ALL key target vocabulary words visible in the lessons.
 2. Provide accurate, natural Simplified Chinese translations for every word and sentence pattern.
-3. Extract core dialogue and sentence patterns.
-4. Return ONLY the raw JSON string.`;
+3. Extract core dialogue / sentence patterns.
+4. Output MUST be strictly valid raw JSON only.`;
 
   // 单元模式 vs 整本书模式
   let promptText = opts.bookMode
@@ -729,7 +734,7 @@ Rules:
   }
 
   const userContent = [
-    { type: 'text', text: `${promptText}\n\nPlease analyze the textbook image and text layer carefully, and extract ALL vocabulary words, sentence patterns, and grammar points with simplified Chinese translations in valid JSON.` },
+    { type: 'text', text: `${promptText}\n\nOutput ONLY raw JSON now:` },
     ...imageContents
   ];
 
@@ -747,6 +752,35 @@ Rules:
     return resp;
   }
 
+  // 自动二级提纯函数：将自然语言描述提纯为标准 JSON
+  async function refineToJSON(m, rawText) {
+    try {
+      const resp = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: m,
+          messages: [
+            {
+              role: 'user',
+              content: `Convert the following textbook text/notes into a strict JSON object with fields: "unit_title", "vocab" (array of {word, translation, is_core, difficulty}), "patterns" (array of {pattern, translation, is_core}), "grammar" (array of {topic, explanation}).\n\nText:\n${rawText}\n\nReturn ONLY the JSON object starting with { and ending with }. No commentary.`
+            }
+          ],
+          temperature: 0.1,
+          max_tokens: 2048
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const text = data.choices?.[0]?.message?.content || '';
+        return cleanAndParseJson(text);
+      }
+    } catch (e) {
+      console.warn('refineToJSON error:', e);
+    }
+    return null;
+  }
+
   // 按优先级尝试所有模型,429 限流就 fallback
   const modelsToTry = [model, ...fallbackModels.filter(m => m !== model)];
   let lastError = '';
@@ -762,7 +796,11 @@ Rules:
     if (resp.ok) {
       const data = await resp.json();
       let raw = data.choices?.[0]?.message?.content || '';
-      const parsed = cleanAndParseJson(raw);
+      let parsed = cleanAndParseJson(raw);
+      if (!parsed && raw.trim().length > 0) {
+        // 如果视觉模型输出了大段描述，启动二级智能提纯
+        parsed = await refineToJSON(m, raw);
+      }
       if (parsed) return parsed;
       throw new Error(`大模型返回了非标准 JSON: ${raw.substring(0, 200)}`);
     }
@@ -777,7 +815,10 @@ Rules:
         if (resp.ok) {
           const data = await resp.json();
           let raw = data.choices?.[0]?.message?.content || '';
-          const parsed = cleanAndParseJson(raw);
+          let parsed = cleanAndParseJson(raw);
+          if (!parsed && raw.trim().length > 0) {
+            parsed = await refineToJSON(m, raw);
+          }
           if (parsed) return parsed;
           throw new Error(`大模型返回了非标准 JSON: ${raw.substring(0, 200)}`);
         }
