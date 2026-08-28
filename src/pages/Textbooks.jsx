@@ -42,10 +42,10 @@ export default function Textbooks() {
       if (saved) return JSON.parse(saved);
     } catch {}
     return {
-      provider: 'nvidia',
+      provider: 'nvidia_qwen',
       baseUrl: 'https://integrate.api.nvidia.com/v1',
       apiKey: '',
-      model: 'google/gemma-3n-e4b-it'
+      model: 'qwen/qwen2.5-vl-72b-instruct'
     };
   });
 
@@ -1760,18 +1760,18 @@ function BooksManageModal({ books, onClose }) {
 // ============================================================
 const LLM_PRESETS = [
   {
-    id: 'nvidia',
-    name: 'NVIDIA NIM (推荐, 免费视觉多模态)',
-    baseUrl: 'https://integrate.api.nvidia.com/v1',
-    model: 'meta/llama-3.2-11b-vision-instruct',
-    desc: '免费提供 1000 次调用额度，强大多模态视觉切片识别'
-  },
-  {
     id: 'nvidia_qwen',
-    name: 'NVIDIA Qwen2.5-VL',
+    name: 'NVIDIA Qwen2.5-VL-72B (首选推荐, 720亿参数超强视觉)',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
     model: 'qwen/qwen2.5-vl-72b-instruct',
-    desc: 'NVIDIA 平台上的 Qwen2.5 视觉旗舰大模型，中英双语极准'
+    desc: 'NVIDIA 免费提供，超强中英印刷体识别与地道中文翻译，字迹再小也能精准提取'
+  },
+  {
+    id: 'nvidia_llama',
+    name: 'NVIDIA Llama-3.2-Vision',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    model: 'meta/llama-3.2-11b-vision-instruct',
+    desc: 'Meta 11B 多模态视觉模型'
   },
   {
     id: 'zhipu',

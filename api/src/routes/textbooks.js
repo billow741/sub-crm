@@ -658,7 +658,7 @@ textbooks.post('/test-llm', async (c) => {
 async function callLLMWithImages(c, imageFiles, opts = {}) {
   const baseUrl = opts.baseUrl || c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
   const apiKey = opts.apiKey || c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
-  const model = opts.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'meta/llama-3.2-11b-vision-instruct';
+  const model = opts.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'qwen/qwen2.5-vl-72b-instruct';
   const fallbackModels = [model, 'qwen/qwen2.5-vl-72b-instruct', 'meta/llama-3.2-11b-vision-instruct'];
 
   if (!apiKey) {
@@ -695,35 +695,33 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     });
   }
 
-  const SINGLE_UNIT_PROMPT = `你是一位顶级的少儿英语教研专家。请仔细分析本单元的全部课本页面（包含 Lesson 1 到 Lesson 4 的全部课文），提取该单元的所有核心词汇与核心句型，并务必将每个词汇和句型翻译成准确地道的【简体中文】。
+  const SINGLE_UNIT_PROMPT = `你是一位顶级的少儿英语教研专家。请仔细阅读并识别提供的课本页面图片，严格按照图片中实际印刷的文字提取本单元的核心词汇、核心句型与语法点。
 
-必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
+必须严格返回如下 JSON 结构（严禁包含任何说明文字或 markdown 标记）：
 {
-  "unit_title": "单元标题 (如 Art Class)",
+  "unit_title": "图片中印刷的单元标题",
   "vocab": [
-    { "word": "paper", "translation": "纸", "is_core": true, "difficulty": 1 },
-    { "word": "glue", "translation": "胶水", "is_core": true, "difficulty": 1 },
-    { "word": "scissors", "translation": "剪刀", "is_core": true, "difficulty": 1 },
-    { "word": "paint", "translation": "颜料", "is_core": true, "difficulty": 1 },
-    { "word": "pen", "translation": "钢笔", "is_core": true, "difficulty": 1 },
-    { "word": "pencil", "translation": "铅笔", "is_core": true, "difficulty": 1 },
-    { "word": "eraser", "translation": "橡皮", "is_core": true, "difficulty": 1 },
-    { "word": "ruler", "translation": "尺子", "is_core": true, "difficulty": 1 }
+    { "word": "严格从图片中识别的英文目标单词", "translation": "准确地道的简体中文翻译", "is_core": true, "difficulty": 1 }
   ],
   "patterns": [
-    { "pattern": "What's this? - It's paper.", "translation": "这是什么？- 这是纸。", "is_core": true },
-    { "pattern": "Is it a pen? - Yes, it is.", "translation": "它是一支钢笔吗？- 是的，它是。", "is_core": true }
+    { "pattern": "严格从图片中识别的核心问答句型", "translation": "句型的简体中文翻译", "is_core": true }
   ],
   "grammar": [
-    { "topic": "常见文具与工具识别", "explanation": "掌握单数物品提问与回答句型" }
+    { "topic": "本单元语法核心知识点", "explanation": "简要中文语法说明" }
   ]
 }
 
-【核心提取要求】：
-1. 完整提取整个单元全部课时（Lesson 1, 2, 3, 4）的重点词汇（通常 8~16 个单词），不要只看第一页！
-2. translation 字段【必须是简体中文翻译】，绝不可留空，绝不可直接写英文！
-3. 提取核心句型（问句与答句完整配对，必须附带简体中文翻译）。
-4. 严格输出标准 JSON 字符串。`;
+【少儿课本精准提取铁律】：
+1. 🎯 核心词汇提取区域：
+   - 重点查看带有数字编号 (1, 2, 3, 4...) 的词汇区域（如 "A. Listen, point, and say." 或 "A. Listen and point."）。
+   - 必须一字不差地提取印刷在插图正下方的真实英文单词（例如图片中印刷的是 pencil, pen, crayon, marker，就必须精准识别为这四个词，绝不能漏掉，也绝对严禁编造图片中不存在的单词！）。
+2. 💬 核心句型提取区域：
+   - 重点查看带有对话框、人物气泡或黄色/蓝色句型条的区域（如 "B. Listen, ask, and answer." 或 "B. Listen and say."）。
+   - 完整提取该区域印刷的核心问答句型（例如 "What's this? It's a pencil." / "Is it a pen? Yes, it is." 等真实印刷的例句），并翻译成地道简体中文。
+3. 🚫 绝对防臆造与干扰过滤：
+   - 严禁凭空编造课本上没有的单词！
+   - 严禁将题干指令词（如 Listen, Point, Say, Ask, Answer, Sing, Look, Read, Unit, Lesson 等）当作词汇提取。
+4. 🇨🇳 每一个 word 和 pattern 的 translation 字段都必须翻译为准确地道的【简体中文】，不可留空。`;
 
   // 单元模式 vs 整本书模式
   let promptText = opts.bookMode
