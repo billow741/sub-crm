@@ -707,21 +707,19 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
   ]
 }
 
-【少儿英语重点句型与词汇提取铁律】：
+【少儿英语全单元重点句型与词汇提取铁律】：
 1. 🎯 核心词汇提取规则：
-   - 查找带有数字编号 (1, 2, 3, 4...) 的核心板块（如 A. Listen, point, and say.）。
-   - 准确提取印刷在每个物品插图正下方的真实英文目标词汇（例如 paper, glue, scissors, paint 或 pencil, pen, crayon, marker），绝不漏词，严禁编造！
-2. 💬 重点句型提取规则（非常重要）：
-   - 重点句型必须是学生用来表达和交流的【核心语言结构（Target Sentence Patterns）】！
-   - 常见的少儿核心句型包括：
-     * 拥有与陈述：I have [paper]. / This is a [pen]. / It's [paint].
-     * 问答与交际：What do you have? - I have [glue]. / What's this? - It's [paper]. / Is it a [marker]? - Yes, it is.
+   - 包含各课（Lesson 1、Lesson 2）带有数字编号 (1, 2, 3, 4...) 的核心实物生词（如 paper, glue, scissors, paint / pencil, pen, crayon, marker）；
+   - 包含 Lesson 3 故事拓展词及 Lesson 4 的字母发音拓展词；
+   - 准确提取印刷在插图正下方的真实英文目标词汇，绝不漏词，严禁编造！
+2. 💬 重点句型与功能交际（非常重要）：
+   - 核心语法句型（Lesson 1 & 2）：I have [paper]. / What do you have? - I have [glue]. / What's this? - It's a [pencil].
+   - 故事与日常功能交际用语（Lesson 3 Story & Everyday English）：如 "What's your name? - I'm Danny." / "My name is Emma." / "Nice to meet you." / "This is my friend." 等真实对话中的交际金句！
 3. 🚫 绝对黑名单（严禁作为句型提取，违者扣分）：
    - 绝对严禁提取题干与课堂指令词！例如：
      ❌ "Listen, point, and say." (这是课堂指令，不是核心句型！)
      ❌ "Listen and point." / "Listen and say." / "Listen, ask, and answer."
      ❌ "Listen and number." / "Listen and sing." / "Look and listen."
-     如果页面上只有指令标题和生词，请根据本课核心词汇（如 paper, glue）提炼本课针对该生词的基础句型（如 "I have paper." / "What do you have? - I have glue."）！
 4. 🇨🇳 每一个 word 和 pattern 的 translation 字段都必须翻译为准确地道的【简体中文】，不可留空。`;
 
   // 单元模式 vs 整本书模式
@@ -865,8 +863,8 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
         .filter(o => /\.(png|jpg|jpeg|webp)$/i.test(o.key))
         .sort((a, b) => a.key.localeCompare(b.key));
 
-      // 精准选取各 Lesson 核心生词授课页 (第 1 页 Lesson 1 与 第 3 页 Lesson 2)
-      const targetIndices = [0, 2];
+      // 精准选取核心生词与功能句型页 (Lesson 1生词, Lesson 2生词, Lesson 3日常交际 What's your name)
+      const targetIndices = [0, 2, 5];
       for (const idx of targetIndices) {
         if (allObjs[idx]) {
           const key = allObjs[idx].key;
