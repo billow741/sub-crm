@@ -368,7 +368,7 @@ export default function Schedule() {
         start_time: formData.time,
         end_time: endTime,
         hours: durationToHours(formData.duration),
-        duration: formData.duration,
+        duration: formData.duration ? parseInt(formData.duration) : 50,
         subject: formData.subject,
         notes: formData.notes,
         is_trial: formData.is_trial ? 1 : 0,

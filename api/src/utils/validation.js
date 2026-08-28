@@ -53,22 +53,23 @@ export const packageUpdateSchema = packageSchema.partial();
 
 // Classes Schema
 export const classSchema = z.object({
-  package_id: z.number().int().positive().optional().nullable(),
-  teacher_id: z.number().int().positive().optional().nullable(),
+  student_id: z.coerce.number().int().positive().optional().nullable(),
+  package_id: z.coerce.number().int().positive().optional().nullable(),
+  teacher_id: z.coerce.number().int().positive().optional().nullable(),
   teacher: z.string().max(100).optional().nullable().transform(v => v || null),
   subject: z.string().max(100).optional().nullable().transform(v => v || null),
-  hours: z.number().positive('课时数必须大于0').default(1),
+  hours: z.coerce.number().min(0, '课时数不能为负数').default(1),
   date: z.string().optional(),
   start_time: z.string().optional().nullable().transform(v => v || null),
   end_time: z.string().optional().nullable().transform(v => v || null),
-  duration: z.number().int().positive().optional().nullable(),  // 时长(分钟)，用于自动计算 end_time
+  duration: z.coerce.number().int().positive().optional().nullable(),  // 时长(分钟)，用于自动计算 end_time
   content: z.string().optional().nullable().transform(v => v || null),
   homework: z.string().optional().nullable().transform(v => v || null),
   notes: z.string().optional().nullable().transform(v => v || null),
   class_link: z.string().optional().nullable().transform(v => v || null),
-  is_trial: z.number().int().optional().default(0),
+  is_trial: z.coerce.number().int().optional().default(0),
   status: z.enum(['scheduled', 'completed', 'cancelled', 'absent']).default('completed'),
-  organization_id: z.number().int().positive().optional().nullable(),
+  organization_id: z.coerce.number().int().positive().optional().nullable(),
   // 课后反馈结构化字段 (011 重构: 去星级评分, 加发音/语法纠正)
   fb_lesson_level: z.string().optional().nullable().transform(v => v || null),
   fb_unit: z.string().optional().nullable().transform(v => v || null),
@@ -83,9 +84,9 @@ export const classSchema = z.object({
   fb_next_preview: z.string().optional().nullable().transform(v => v || null),           // 下节课预告(选填)
   // 教材页码引用 (用于家长端嵌入 PDF 页图, 配合 R2 page-img/<code>/<unit>/<page>)
   textbook_code: z.string().optional().nullable().transform(v => v || null),              // 如 EU-S
-  unit_number: z.number().int().optional().nullable(),                                    // 如 1
-  page_from: z.number().int().optional().nullable(),                                       // 起始页
-  page_to: z.number().int().optional().nullable(),                                         // 结束页
+  unit_number: z.coerce.number().int().optional().nullable(),                             // 如 1
+  page_from: z.coerce.number().int().optional().nullable(),                                // 起始页
+  page_to: z.coerce.number().int().optional().nullable(),                                  // 结束页
 });
 
 export const classUpdateSchema = classSchema.partial();

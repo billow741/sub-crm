@@ -77,7 +77,8 @@ export async function request(endpoint, options = {}) {
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.error?.message || `HTTP ${response.status}`);
+    const details = data.error?.details ? `: ${data.error.details.map(d => `${d.field}: ${d.message}`).join(', ')}` : '';
+    throw new Error((data.error?.message || `HTTP ${response.status}`) + details);
   }
   return data;
 }
