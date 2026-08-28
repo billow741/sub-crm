@@ -103,7 +103,17 @@ export default function Textbooks() {
   const selectUnit = async (code, unitNum) => {
     setSelectedUnitNum(unitNum);
     setLoadingDetail(true);
-    setRenderedImages([]);
+    setRenderedImages([]); // 清除本地临时切片
+
+    // 立即彻底重置 unitDetail 为当前单元的独立干净状态，杜绝旧单元数据残留污染
+    const u = bookUnits.find(item => item.unit_number === unitNum);
+    setUnitDetail({
+      unit_number: unitNum,
+      unit_title: u?.unit_title || `Unit ${unitNum}`,
+      vocab: [],
+      patterns: [],
+      grammar: []
+    });
 
     // 1. 获取单元内容
     try {
@@ -111,30 +121,14 @@ export default function Textbooks() {
       if (resp.data) {
         setUnitDetail({
           unit_number: unitNum,
-          unit_title: resp.data.unit_title || '',
+          unit_title: resp.data.unit_title || u?.unit_title || `Unit ${unitNum}`,
           vocab: resp.data.vocab || [],
           patterns: resp.data.patterns || [],
           grammar: resp.data.grammar || []
         });
-      } else {
-        const u = bookUnits.find(item => item.unit_number === unitNum);
-        setUnitDetail({
-          unit_number: unitNum,
-          unit_title: u?.unit_title || `Unit ${unitNum}`,
-          vocab: [],
-          patterns: [],
-          grammar: []
-        });
       }
     } catch (e) {
-      const u = bookUnits.find(item => item.unit_number === unitNum);
-      setUnitDetail({
-        unit_number: unitNum,
-        unit_title: u?.unit_title || `Unit ${unitNum}`,
-        vocab: [],
-        patterns: [],
-        grammar: []
-      });
+      console.warn('Load unit content err:', e);
     }
 
     // 2. 获取该单元在 R2 的切图列表
@@ -168,11 +162,10 @@ export default function Textbooks() {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const numPages = pdf.numPages;
-      const maxPages = Math.min(numPages, 12);
+      const imgs = [];
 
-      const images = [];
-      for (let i = 1; i <= maxPages; i++) {
-        setRenderProgress(`正在切片第 ${i} / ${maxPages} 页...`);
+      for (let i = 1; i <= numPages; i++) {
+        setRenderProgress(`正在渲染第 ${i} / ${numPages} 页...`);
         const page = await pdf.getPage(i);
         const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
@@ -180,21 +173,20 @@ export default function Textbooks() {
         canvas.height = viewport.height;
         const ctx = canvas.getContext('2d');
         await page.render({ canvasContext: ctx, viewport }).promise;
-        const blob = await new Promise(res => canvas.toBlob(res, 'image/png', 0.85));
-        images.push({ blob, url: URL.createObjectURL(blob), pageNum: i });
+
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
+        imgs.push({ blob, url: URL.createObjectURL(blob) });
       }
 
-      setRenderedImages(images);
-      setRenderProgress('');
+      setRenderedImages(imgs);
     } catch (err) {
-      alert('PDF 切片失败: ' + err.message);
-      setRenderProgress('');
+      alert('PDF 解析失败: ' + err.message);
     }
     setRendering(false);
-    e.target.value = '';
+    setRenderProgress('');
   };
 
-  // 触发单单元 AI 视觉多模态识别 (同时保存切图至 R2)
+  // 触发 AI 视觉识别当前单元
   const handleAiExtract = async () => {
     if (!selectedBookCode || selectedUnitNum === null) return;
     if (renderedImages.length === 0 && r2Pages.length === 0) {
@@ -203,6 +195,14 @@ export default function Textbooks() {
     }
 
     setExtracting(true);
+    // 提取开始前，立即清空旧数据，防止新旧数据混淆污染
+    setUnitDetail(prev => ({
+      ...prev,
+      vocab: [],
+      patterns: [],
+      grammar: []
+    }));
+
     try {
       const fd = new FormData();
       const loadedBlobs = [];
@@ -260,13 +260,15 @@ export default function Textbooks() {
 
       if (json.data) {
         const d = json.data;
-        setUnitDetail(prev => ({
-          ...prev,
-          unit_title: d.unit_title || prev.unit_title,
+        const u = bookUnits.find(item => item.unit_number === selectedUnitNum);
+        // 彻底全量赋值，绝不使用 prev 混入旧单元数据
+        setUnitDetail({
+          unit_number: selectedUnitNum,
+          unit_title: d.unit_title || u?.unit_title || `Unit ${selectedUnitNum}`,
           vocab: d.vocab || [],
           patterns: d.patterns || [],
           grammar: d.grammar || []
-        }));
+        });
         loadUnitPages(selectedBookCode, selectedUnitNum);
         alert(`🎉 AI 识别成功！已识别 ${(d.vocab || []).length} 个核心词汇与 ${(d.patterns || []).length} 个句型，请在右侧校对后点击【保存入库】！`);
       } else {

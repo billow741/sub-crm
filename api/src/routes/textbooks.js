@@ -856,11 +856,18 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       const prefix1 = `${code}/Unit${num}/`;
       const prefix2 = `${code}/Unit${num}_`;
       const [res1, res2] = await Promise.all([
-        R2.list({ prefix: prefix1, limit: 20 }),
-        R2.list({ prefix: prefix2, limit: 20 })
+        R2.list({ prefix: prefix1, limit: 30 }),
+        R2.list({ prefix: prefix2, limit: 30 })
       ]);
+      // 严格正则过滤：只保留属于精确当前 Unit${num} 的图片，杜绝 Unit1 误匹配到 Unit10/11/12
       const allObjs = [...(res1.objects || []), ...(res2.objects || [])]
-        .filter(o => /\.(png|jpg|jpeg|webp)$/i.test(o.key))
+        .filter(o => {
+          if (!/\.(png|jpg|jpeg|webp)$/i.test(o.key)) return false;
+          // 必须以 /Unit{num}/ 或 /Unit{num}_ 开头，且后面不能紧跟其他数字（防止 Unit1 匹配到 Unit10）
+          const isSlashMatch = o.key.startsWith(`${code}/Unit${num}/`);
+          const isUnderMatch = o.key.startsWith(`${code}/Unit${num}_`) && !new RegExp(`^${code}/Unit${num}\\d`, 'i').test(o.key);
+          return isSlashMatch || isUnderMatch;
+        })
         .sort((a, b) => a.key.localeCompare(b.key));
 
       // 精准选取核心生词与功能句型页 (Lesson 1生词, Lesson 2生词, Lesson 3日常交际 What's your name)
