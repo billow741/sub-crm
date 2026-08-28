@@ -212,30 +212,8 @@ export default function Textbooks() {
           loadedBlobs.push(img.blob);
           fd.append('images', img.blob, `page-${String(i + 1).padStart(2, '0')}.jpg`);
         });
-      } else {
-        for (const p of r2Pages) {
-          const directUrl = `${API_BASE_URL}/textbooks/page-img/${selectedBookCode}/${selectedUnitNum}/${p.page_num}`;
-          try {
-            const res = await fetch(directUrl, { headers: { 'X-API-Key': API_KEY } });
-            if (res.ok) {
-              const blob = await res.blob();
-              loadedBlobs.push(blob);
-              fd.append('images', blob, `page-${String(p.page_num).padStart(2, '0')}.jpg`);
-            }
-          } catch (fe) {
-            console.warn('Fetch page failed:', fe);
-          }
-        }
-      }
 
-      if (loadedBlobs.length === 0) {
-        alert('未能加载到该单元的切图，请重新上传 PDF 切片后再试');
-        setExtracting(false);
-        return;
-      }
-
-      // 合成超清全景拼图 (包含该单元全部 8 页课文)
-      if (loadedBlobs.length > 0) {
+        // 合成超清全景拼图 (包含该单元全部 8 页课文)
         const loadedImgs = await Promise.all(loadedBlobs.map(b => new Promise(res => {
           const img = new Image();
           img.onload = () => res(img);

@@ -840,11 +840,35 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
   const num = parseInt(c.req.param('num'));
 
   const formData = await c.req.formData();
-  const images = formData.getAll('images').filter(f => f && f.name);
-  const aiVision = formData.get('ai_vision'); // 优先使用合成单图
+  let imagesToLLM = aiVision ? [aiVision] : images;
 
-  if (images.length === 0 && !aiVision) {
-    return c.json({ error: { code: 'BAD_REQUEST', message: '未收到图片数据 (Missing images[])' } }, 400);
+  // 如果前端没有携带图片（例如页面刷新后），自动从 R2 提取该单元已存切图
+  if (imagesToLLM.length === 0) {
+    const R2 = c.env.TEXTBOOKS_R2;
+    if (R2) {
+      const prefix1 = `${code}/Unit${num}/`;
+      const prefix2 = `${code}/Unit${num}_`;
+      const [res1, res2] = await Promise.all([
+        R2.list({ prefix: prefix1, limit: 12 }),
+        R2.list({ prefix: prefix2, limit: 12 })
+      ]);
+      const allObjs = [...(res1.objects || []), ...(res2.objects || [])]
+        .filter(o => /\.(png|jpg|jpeg|webp)$/i.test(o.key))
+        .sort((a, b) => a.key.localeCompare(b.key));
+
+      for (const obj of allObjs.slice(0, 4)) {
+        const r2File = await R2.get(obj.key);
+        if (r2File) {
+          const buf = await r2File.arrayBuffer();
+          const ext = obj.key.split('.').pop() || 'jpeg';
+          imagesToLLM.push(new File([buf], obj.key.split('/').pop(), { type: `image/${ext === 'jpg' ? 'jpeg' : ext}` }));
+        }
+      }
+    }
+  }
+
+  if (imagesToLLM.length === 0) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '未找到本单元切图，请先上传 PDF 切片后再试' } }, 400);
   }
 
   // 查询 DB 中是否已有此 unit
@@ -865,8 +889,6 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
     const llmModel = formData.get('llm_model') || c.req.header('x-llm-model');
     const unitText = formData.get('unit_text') || '';
 
-    // 单 Unit prompt 提取 (若有 ai_vision 单图则用单图，保证 100% 兼容 Llama 等多模态模型)
-    const imagesToLLM = aiVision ? [aiVision] : images;
     const content = await callLLMWithImages(c, imagesToLLM, {
       bookMode: false,
       maxPages: 4,
