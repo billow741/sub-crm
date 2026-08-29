@@ -1137,14 +1137,15 @@ textbooks.get('/unit-pages/:code/:num', async (c) => {
   });
 
   const items = Array.from(pageMap.values()).sort((a, b) => a.page_num - b.page_num);
-  const baseUrl = `https://api.changtian.dpdns.org/api/v1/textbooks/page-img/${code}/${num}`;
+  const origin = new URL(c.req.url).origin;
+  const baseUrl = `${origin}/api/v1/textbooks/page-img/${code}/${num}`;
   
   return c.json({ data: {
     textbook_code: code,
     unit_number: num,
     pages: items.map(it => ({
       ...it,
-      url: `${baseUrl}/${it.page_num}`
+      url: `${baseUrl}/${it.page_num}?key=${encodeURIComponent(it.key)}`
     }))
   }});
 });
@@ -1157,25 +1158,28 @@ textbooks.get('/page-img/:code/:num/:page', async (c) => {
   const page = parseInt(c.req.param('page'));
   if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 未配置' } }, 500);
 
-  // 优先级检索路径 (支持 .jpg, .jpeg, .png, .webp 与多种命名习惯)
-  const exts = ['.jpg', '.jpeg', '.png', '.webp'];
-  const candidateKeys = [];
-  for (const ext of exts) {
-    candidateKeys.push(`${code}/Unit${num}/page-${String(page).padStart(2, '0')}${ext}`);
-    candidateKeys.push(`${code}/Unit${num}/page-${page}${ext}`);
-    candidateKeys.push(`${code}/Unit${num}_page-${String(page).padStart(2, '0')}${ext}`);
-    candidateKeys.push(`${code}/Unit${num}_page-${page}${ext}`);
-    candidateKeys.push(`${code}/Unit${num}/page_${page}${ext}`);
-    candidateKeys.push(`${code}/Unit${num}/page_${String(page).padStart(2, '0')}${ext}`);
+  const queryKey = c.req.query('key');
+  let obj = null;
+  if (queryKey) {
+    obj = await R2.get(queryKey);
   }
 
-  let obj = null;
-  let foundKey = '';
-  for (const k of candidateKeys) {
-    obj = await R2.get(k);
-    if (obj) {
-      foundKey = k;
-      break;
+  if (!obj) {
+    // 优先级检索路径 (支持 .jpg, .jpeg, .png, .webp 与多种命名习惯)
+    const exts = ['.jpg', '.jpeg', '.png', '.webp'];
+    const candidateKeys = [];
+    for (const ext of exts) {
+      candidateKeys.push(`${code}/Unit${num}/page-${String(page).padStart(2, '0')}${ext}`);
+      candidateKeys.push(`${code}/Unit${num}/page-${page}${ext}`);
+      candidateKeys.push(`${code}/Unit${num}_page-${String(page).padStart(2, '0')}${ext}`);
+      candidateKeys.push(`${code}/Unit${num}_page-${page}${ext}`);
+      candidateKeys.push(`${code}/Unit${num}/page_${page}${ext}`);
+      candidateKeys.push(`${code}/Unit${num}/page_${String(page).padStart(2, '0')}${ext}`);
+    }
+
+    for (const k of candidateKeys) {
+      obj = await R2.get(k);
+      if (obj) break;
     }
   }
 
