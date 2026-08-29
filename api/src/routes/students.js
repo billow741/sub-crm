@@ -60,7 +60,7 @@ students.get('/list', validateQuery(studentQuerySchema), async (c) => {
 
   // 查询列表
   const sql = `
-    SELECT id, name, english_name, phone, email, age, grade, parent_name, notes, status, total_hours, used_hours, organization_id, created_at, updated_at FROM students 
+    SELECT id, name, english_name, gender, phone, email, age, grade, parent_name, notes, status, total_hours, used_hours, organization_id, created_at, updated_at FROM students 
     ${whereClause}
     ORDER BY ${safeSortField} ${sortOrder}
     LIMIT ? OFFSET ?
@@ -72,6 +72,7 @@ students.get('/list', validateQuery(studentQuerySchema), async (c) => {
     id: student.id,
     name: student.name,
     english_name: student.english_name,
+    gender: student.gender || null,
     phone: student.phone,
     email: student.email,
     age: student.age,
@@ -103,7 +104,7 @@ students.get('/:id', validateParams(idParamSchema), async (c) => {
 
   // 查询学生信息
   const student = await DB.prepare(`
-    SELECT id, name, english_name, phone, email, age, grade, parent_name, notes, status, total_hours, used_hours, created_at, updated_at FROM students 
+    SELECT id, name, english_name, gender, phone, email, age, grade, parent_name, notes, status, total_hours, used_hours, created_at, updated_at FROM students 
     WHERE id = ?
     
   `).bind(id).first();
@@ -141,6 +142,7 @@ students.get('/:id', validateParams(idParamSchema), async (c) => {
     id: student.id,
     name: student.name,
     english_name: student.english_name,
+    gender: student.gender || null,
     phone: student.phone,
     email: student.email,
     age: student.age,
@@ -183,11 +185,12 @@ students.post('/', validate(studentSchema), async (c) => {
     : (data.organization_id || 1);
 
   const result = await DB.prepare(`
-    INSERT INTO students (name, english_name, phone, email, age, grade, parent_name, notes, status, organization_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO students (name, english_name, gender, phone, email, age, grade, parent_name, notes, status, organization_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     data.name,
     data.english_name || null,
+    data.gender || null,
     data.phone || null,
     data.email || null,
     data.age || null,
@@ -202,6 +205,7 @@ students.post('/', validate(studentSchema), async (c) => {
     id: result.meta.last_row_id,
     name: data.name,
     english_name: data.english_name || null,
+    gender: data.gender || null,
     status: data.status || 'active',
     created_at: new Date().toISOString(),
     _links: {

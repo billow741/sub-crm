@@ -1401,7 +1401,12 @@ async function loadStudentData() {
     var sNameEl = document.getElementById('student-name');
     if (sNameEl) sNameEl.textContent = (student.name || '') + ' 的学习情况';
     var sInfoEl = document.getElementById('student-info');
-    if (sInfoEl) sInfoEl.textContent = (student.english_name ? '英文名: ' + student.english_name : (student.grade ? '等级: ' + student.grade : ''));
+    var sInfoList = [];
+    if (student.english_name) sInfoList.push('英文名: ' + student.english_name);
+    if (student.gender) sInfoList.push('性别: ' + (student.gender === 'male' ? '男' : student.gender === 'female' ? '女' : student.gender));
+    if (student.age) sInfoList.push('年龄: ' + student.age + '岁');
+    if (student.grade) sInfoList.push('等级: ' + student.grade);
+    if (sInfoEl) sInfoEl.textContent = sInfoList.join(' · ');
 
     var hAvEl = document.getElementById('header-avatar');
     if (hAvEl && !hAvEl.querySelector('img')) {

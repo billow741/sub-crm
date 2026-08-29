@@ -19,6 +19,7 @@ export default function Students() {
   const [formData, setFormData] = useState({
     name: '',
     english_name: '',
+    gender: '',
     phone: '',
     email: '',
     age: '',
@@ -69,6 +70,7 @@ export default function Students() {
       const apiData = {
         name: formData.name,
         english_name: formData.english_name || null,
+        gender: formData.gender || null,
         phone: formData.phone || null,
         email: formData.email || null,
         age: formData.age ? parseInt(formData.age) : null,
@@ -86,7 +88,7 @@ export default function Students() {
       }
       setShowModal(false);
       setEditingStudent(null);
-      setFormData({ name: '', english_name: '', phone: '', email: '', age: '', grade: '', parentName: '', notes: '', status: 'active' });
+      setFormData({ name: '', english_name: '', gender: '', phone: '', email: '', age: '', grade: '', parentName: '', notes: '', status: 'active', organization_id: '' });
       loadStudents();
     } catch (error) {
       console.error('保存学生失败:', error);
@@ -101,6 +103,7 @@ export default function Students() {
     setFormData({
       name: student.name || '',
       english_name: student.english_name || '',
+      gender: student.gender || '',
       phone: student.phone || '',
       email: student.email || '',
       age: student.age || '',
@@ -212,11 +215,22 @@ export default function Students() {
                             </span>
                           </div>
                           <div>
-                            <div className="font-medium text-gray-800">{student.name}</div>
+                            <div className="font-medium text-gray-800 flex items-center gap-1.5">
+                              <span>{student.name}</span>
+                              {student.gender && (
+                                <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[11px] font-medium ${
+                                  student.gender === '男' || student.gender === 'male' ? 'bg-blue-50 text-blue-600 border border-blue-200/60' :
+                                  student.gender === '女' || student.gender === 'female' ? 'bg-pink-50 text-pink-600 border border-pink-200/60' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {student.gender === 'male' ? '男' : student.gender === 'female' ? '女' : student.gender}
+                                </span>
+                              )}
+                            </div>
                             {student.english_name && <div className="text-sm text-gray-400">{student.english_name}</div>}
                             <div className="text-sm text-gray-500">
                               {student.grade && `等级: ${student.grade}`}
-                              {student.age && ` | 年龄: ${student.age}`}
+                              {student.age && ` | 年龄: ${student.age}岁`}
                             </div>
                           </div>
                         </Link>
@@ -310,6 +324,31 @@ export default function Students() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">性别</label>
+                  <select
+                    value={formData.gender}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">请选择性别</option>
+                    <option value="男">男</option>
+                    <option value="女">女</option>
+                    <option value="保密">保密</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">年龄</label>
+                  <input
+                    type="number"
+                    value={formData.age}
+                    onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="如：7"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">电话</label>
                   <input
                     type="tel"
@@ -319,11 +358,11 @@ export default function Students() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">年龄</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
                   <input
-                    type="number"
-                    value={formData.age}
-                    onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>

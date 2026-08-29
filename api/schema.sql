@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS students (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   english_name TEXT,
+  gender TEXT,
   phone TEXT,
   email TEXT,
   age INTEGER CHECK (age >= 0 AND age <= 120),

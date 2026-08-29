@@ -157,6 +157,7 @@ function ParentStudentView() {
             <div>
               <h1 className="text-2xl font-bold">{student.name}</h1>
               <div className="text-white/80 text-sm mt-1">
+                {student.gender && `性别: ${student.gender === 'male' ? '男' : student.gender === 'female' ? '女' : student.gender} · `}
                 {student.age && `年龄: ${student.age}岁 · `}
                 {student.grade && `等级: ${student.grade}`}
               </div>

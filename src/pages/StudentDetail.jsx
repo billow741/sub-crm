@@ -256,10 +256,19 @@ export default function StudentDetail() {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-4 mt-1 text-sm text-gray-400">
+              <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                {student.gender && (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                    student.gender === '男' || student.gender === 'male' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' :
+                    student.gender === '女' || student.gender === 'female' ? 'bg-pink-50 text-pink-700 border border-pink-200/60' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    性别: {student.gender === 'male' ? '男' : student.gender === 'female' ? '女' : student.gender}
+                  </span>
+                )}
                 {student.grade && <span>等级: {student.grade}</span>}
-                {student.age && <span>年龄: {student.age}</span>}
-                {student.parentName && <span>家长: {student.parentName}</span>}
+                {student.age && <span>年龄: {student.age}岁</span>}
+                {(student.parent_name || student.parentName) && <span>家长: {student.parent_name || student.parentName}</span>}
               </div>
             </div>
           </div>

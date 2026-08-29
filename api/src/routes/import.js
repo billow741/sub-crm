@@ -63,11 +63,13 @@ importRoute.post('/', async (c) => {
           }
           
           await DB.prepare(`
-            INSERT INTO students (id, name, phone, email, age, grade, parent_name, notes, status, total_hours, used_hours, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO students (id, name, english_name, gender, phone, email, age, grade, parent_name, notes, status, total_hours, used_hours, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).bind(
             student.id,
             student.name,
+            student.english_name || null,
+            student.gender || null,
             student.phone || null,
             student.email || null,
             student.age || null,

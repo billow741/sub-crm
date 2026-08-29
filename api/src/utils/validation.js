@@ -14,6 +14,7 @@ export const paginationSchema = z.object({
 export const studentSchema = z.object({
   name: z.string().min(1, '姓名不能为空').max(100),
   english_name: z.string().max(100).optional().nullable().transform(v => v || null),
+  gender: z.string().max(20).optional().nullable().transform(v => v || null),
   phone: z.string().max(20).optional().nullable().transform(v => v || null),
   email: z.string().email('邮箱格式不正确').optional().nullable().transform(v => v || null),
   age: z.number().int().min(0).max(120).optional().nullable(),

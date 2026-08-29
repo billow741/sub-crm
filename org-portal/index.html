@@ -447,8 +447,8 @@ async function renderStudents(main) {
     students.forEach(s => {
       const rem = (s.total_hours||0)-(s.used_hours||0);
       html += `<tr class="border-b hover:bg-gray-50">
-        <td class="px-6 py-4"><div class="font-medium">${esc(s.name)}${s.english_name ? `<span class="text-gray-400 text-sm ml-1">${esc(s.english_name)}</span>` : ''}</div>
-        <div class="text-sm text-gray-500">${s.grade ? '等级:'+esc(s.grade) : ''}${s.age ? ' | 年龄:'+s.age : ''}</div></td>
+        <td class="px-6 py-4"><div class="font-medium flex items-center gap-1">${esc(s.name)}${s.gender ? `<span class="text-xs px-1.5 py-0.2 rounded ${s.gender==='男'||s.gender==='male'?'bg-blue-50 text-blue-600 border border-blue-200/60':s.gender==='女'||s.gender==='female'?'bg-pink-50 text-pink-600 border border-pink-200/60':'bg-gray-50 text-gray-600'}">${s.gender==='male'?'男':s.gender==='female'?'女':s.gender}</span>` : ''}${s.english_name ? `<span class="text-gray-400 text-sm ml-1">${esc(s.english_name)}</span>` : ''}</div>
+        <div class="text-sm text-gray-500">${s.grade ? '等级:'+esc(s.grade) : ''}${s.age ? ' | 年龄:'+s.age+'岁' : ''}</div></td>
         <td class="px-6 py-4"><div class="text-sm">${esc(s.phone||'')}</div>${s.email ? `<div class="text-sm text-gray-400">${esc(s.email)}</div>` : ''}</td>
         <td class="px-6 py-4"><span class="font-semibold ${rem<3?'text-red-500':rem<10?'text-orange-500':'text-green-500'}">${rem} 节</span></td>
         <td class="px-6 py-4"><span class="status-label ${s.status==='active'?'bg-green-100 text-green-700':s.status==='graduated'?'bg-blue-100 text-blue-700':'bg-gray-100 text-gray-700'}">${s.status==='active'?'学习中':s.status==='graduated'?'已结课':'已暂停'}</span></td>
@@ -485,8 +485,12 @@ function showStudentModal(s=null) {
         <div><label class="block text-sm font-medium mb-1">姓名 *</label><input name="name" required value="${esc(s?.name||'')}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"></div>
         <div><label class="block text-sm font-medium mb-1">英文名 *</label><input name="english_name" required value="${esc(s?.english_name||'')}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"></div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium mb-1">电话</label><input name="phone" value="${esc(s?.phone||'')}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"></div>
+          <div><label class="block text-sm font-medium mb-1">性别</label><select name="gender" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"><option value="">请选择</option><option value="男" ${s?.gender==='男'||s?.gender==='male'?'selected':''}>男</option><option value="女" ${s?.gender==='女'||s?.gender==='female'?'selected':''}>女</option><option value="保密" ${s?.gender==='保密'?'selected':''}>保密</option></select></div>
           <div><label class="block text-sm font-medium mb-1">年龄</label><input name="age" type="number" value="${s?.age||''}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium mb-1">电话</label><input name="phone" value="${esc(s?.phone||'')}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"></div>
+          <div><label class="block text-sm font-medium mb-1">邮箱</label><input name="email" type="email" value="${esc(s?.email||'')}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"></div>
         </div>
         <div><label class="block text-sm font-medium mb-1">等级</label><select name="grade" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"><option value="">请选择</option><option value="Pre-A1" ${s?.grade==='Pre-A1'?'selected':''}>Pre-A1</option><option value="A1" ${s?.grade==='A1'?'selected':''}>A1</option><option value="A2" ${s?.grade==='A2'?'selected':''}>A2</option><option value="B1" ${s?.grade==='B1'?'selected':''}>B1</option><option value="B2" ${s?.grade==='B2'?'selected':''}>B2</option><option value="C1" ${s?.grade==='C1'?'selected':''}>C1</option><option value="C2" ${s?.grade==='C2'?'selected':''}>C2</option></select></div>
         <div><label class="block text-sm font-medium mb-1">邮箱</label><input name="email" type="email" value="${esc(s?.email||'')}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"></div>
