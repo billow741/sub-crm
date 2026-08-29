@@ -789,8 +789,8 @@ export default function StudentDetail() {
                 <input
                   type="number"
                   required
-                  min="0.5"
-                  step="0.5"
+                  min="0.1"
+                  step="0.01"
                   value={classForm.hours}
                   onChange={(e) => setClassForm({ ...classForm, hours: parseFloat(e.target.value) })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"

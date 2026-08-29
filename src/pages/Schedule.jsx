@@ -210,8 +210,22 @@ export default function Schedule() {
     // 从课程的学生反查机构
     const matchedStudent = students.find(s => s.id === schedule.student_id);
     const orgId = matchedStudent?.organization_id || matchedStudent?.organization_ids?.[0] || '';
-    // 优先用 duration，fallback 到 hours * 60
-    const duration = schedule.duration ?? (schedule.hours ? schedule.hours * 60 : 50);
+    
+    // 优先用 duration，若无则智能从 hours 或起止时间推算
+    let duration = schedule.duration;
+    if (!duration) {
+      if (schedule.hours && parseFloat(schedule.hours) <= 0.75) {
+        duration = 25;
+      } else if (schedule.start_time && schedule.end_time) {
+        const [sh, sm] = schedule.start_time.split(':').map(Number);
+        const [eh, em] = schedule.end_time.split(':').map(Number);
+        const diff = (eh * 60 + em) - (sh * 60 + sm);
+        duration = (diff > 0 && diff <= 35) ? 25 : (diff > 0 ? diff : 50);
+      } else {
+        duration = 50;
+      }
+    }
+
     setFormData({
       student_id: schedule.student_id?.toString() || '',
       teacher_id: schedule.teacher_id?.toString() || '',
@@ -289,9 +303,21 @@ export default function Schedule() {
         continue;
       }
 
-      // 计算结束时间
+      // 计算时长与结束时间
       const [sh, sm] = (source.start_time || '00:00').split(':').map(Number);
-      const duration = source.duration || 50;
+      let duration = source.duration;
+      if (!duration) {
+        if (source.hours && parseFloat(source.hours) <= 0.75) {
+          duration = 25;
+        } else if (source.start_time && source.end_time) {
+          const [esh, esm] = source.start_time.split(':').map(Number);
+          const [eeh, eem] = source.end_time.split(':').map(Number);
+          const diff = (eeh * 60 + eem) - (esh * 60 + esm);
+          duration = (diff > 0 && diff <= 35) ? 25 : (diff > 0 ? diff : 50);
+        } else {
+          duration = 50;
+        }
+      }
       const totalMin = sh * 60 + sm + duration;
       const endH = Math.floor(totalMin / 60) % 24;
       const endM = totalMin % 60;
@@ -304,8 +330,8 @@ export default function Schedule() {
         date: item.new_date,
         start_time: source.start_time,
         end_time: endTime,
-        hours: source.hours,
-        duration: source.duration,
+        hours: durationToHours(duration),
+        duration: duration,
         subject: source.subject || '英语',
         notes: source.notes || '',
         is_trial: source.is_trial || 0,

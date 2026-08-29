@@ -186,7 +186,7 @@ function Classes() {
     await classOps.add(newClass.studentId, {
       packageId: newClass.packageId || null,
       date: newClass.date,
-      hours: parseInt(newClass.hours) || 1,
+      hours: parseFloat(newClass.hours) || 1,
       teacher: newClass.teacher,
       notes: newClass.notes
     });

@@ -23,15 +23,37 @@ async function resolveCoefficient(DB, orgId) {
 
 // 根据 data.duration 或 data.hours 计算实际课时数
 async function resolveClassHours(DB, data, orgId) {
-  // 如果有 duration（分钟），按系数计算
+  // 1. 如果前端明确传了 short hours（如 0.66），直接采信
+  if (data.hours !== undefined && data.hours !== null && parseFloat(data.hours) > 0 && parseFloat(data.hours) <= 0.75) {
+    return parseFloat(data.hours);
+  }
+
+  // 2. 如果有 duration（分钟）
   if (data.duration) {
     const dur = parseInt(data.duration);
-    if (dur === 50 || dur === 60) return 1.0;
-    if (dur === 25) return await resolveCoefficient(DB, orgId);
-    return 1.0; // 其他时长默认按1课时
+    if (dur <= 35) { // 25分钟等短课时
+      return await resolveCoefficient(DB, orgId);
+    }
+    if (dur >= 40 && dur <= 75) {
+      return 1.0;
+    }
+    return 1.0; // 默认按1课时
   }
-  // 兼容：前端直接传 hours 的情况
-  return data.hours || 1;
+
+  // 3. 如果没传 duration 但传了 start_time 和 end_time，根据时间差推算
+  if (data.start_time && data.end_time) {
+    try {
+      const [sh, sm] = data.start_time.split(':').map(Number);
+      const [eh, em] = data.end_time.split(':').map(Number);
+      const diffMin = (eh * 60 + em) - (sh * 60 + sm);
+      if (diffMin > 0 && diffMin <= 35) {
+        return await resolveCoefficient(DB, orgId);
+      }
+    } catch (_) {}
+  }
+
+  // 4. 兼容：前端直接传 hours 的情况
+  return data.hours ? parseFloat(data.hours) : 1;
 }
 
 // ── 老师时间冲突检查 ──
