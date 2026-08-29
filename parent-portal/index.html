@@ -926,13 +926,143 @@
       .sp-toggle-btn { font-size: 12px; font-weight: 600; color: var(--sb-blue); display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; background: rgba(75,159,224,0.08); border: none; pointer-events: none; }
       .sp-arrow-icon { transition: transform 0.25s ease; display: inline-block; font-size: 10px; }
       .sp-arrow-icon.open { transform: rotate(180deg); }
-      /* Responsive */
-      @media (max-width: 600px) {
-        .sp-info-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .sp-overview { gap: 8px; }
-        .sp-overview-num { font-size: 22px; }
-        .sp-perf-bars { flex-wrap: wrap; }
-        .sp-perf-bar { min-width: 40%; }
+      /* ===== 课本教材切图缩略图与灯箱 ===== */
+      .tb-thumb-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+      }
+      .tb-thumb-card {
+        width: 100px;
+        background: #ffffff;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        display: flex;
+        flex-direction: column;
+        user-select: none;
+      }
+      .tb-thumb-card:hover {
+        border-color: #3b82f6;
+        transform: translateY(-3px);
+        box-shadow: 0 8px 18px rgba(59, 130, 246, 0.2);
+      }
+      .tb-thumb-img-wrap {
+        width: 100%;
+        height: 120px;
+        background: #f8fafc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        position: relative;
+      }
+      .tb-thumb-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top center;
+        transition: transform 0.25s ease;
+      }
+      .tb-thumb-card:hover .tb-thumb-img {
+        transform: scale(1.06);
+      }
+      .tb-thumb-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.4);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        backdrop-filter: blur(1px);
+        -webkit-backdrop-filter: blur(1px);
+      }
+      .tb-thumb-card:hover .tb-thumb-overlay {
+        opacity: 1;
+      }
+      .tb-thumb-tag {
+        background: #f8fafc;
+        color: #334155;
+        font-size: 11px;
+        font-weight: 700;
+        text-align: center;
+        padding: 4px 0;
+        border-top: 1px solid #e2e8f0;
+      }
+      /* 灯箱 Lightbox */
+      .tb-lightbox {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.88);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        z-index: 10000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: tbFadeIn 0.2s ease;
+      }
+      .tb-lightbox.show {
+        display: flex;
+      }
+      .tb-lightbox-content {
+        position: relative;
+        max-width: 94vw;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .tb-lightbox-img {
+        max-width: 100%;
+        max-height: 82vh;
+        border-radius: 12px;
+        box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+        object-fit: contain;
+        background: #ffffff;
+      }
+      .tb-lightbox-title {
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 600;
+        margin-top: 12px;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      }
+      .tb-lightbox-close {
+        position: absolute;
+        top: -42px;
+        right: -10px;
+        background: rgba(255,255,255,0.25);
+        color: #ffffff;
+        border: none;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+      }
+      .tb-lightbox-close:hover {
+        background: rgba(255,255,255,0.5);
+        transform: scale(1.1);
+      }
+      @keyframes tbFadeIn {
+        from { opacity: 0; transform: scale(0.97); }
+        to { opacity: 1; transform: scale(1); }
       }
       </style>
 </head>
@@ -1086,6 +1216,15 @@
     </div>
   </div>
 </div>
+<!-- 教材切图大图预览灯箱 -->
+<div id="tb-lightbox" class="tb-lightbox" onclick="if(event.target===this||event.target.classList.contains('tb-lightbox-content'))closeTbLightbox()">
+  <div class="tb-lightbox-content">
+    <button class="tb-lightbox-close" type="button" onclick="closeTbLightbox()" title="关闭 (Esc)">✕</button>
+    <img id="tb-lightbox-img" class="tb-lightbox-img" src="" alt="教材原页切图">
+    <div id="tb-lightbox-title" class="tb-lightbox-title"></div>
+  </div>
+</div>
+
 <div id="feedback-modal" class="modal-overlay">
   <div class="modal-card">
     <h2 class="modal-title">上课反馈详情</h2>
@@ -1118,6 +1257,29 @@ var API_BASE = 'https://api.changtian.dpdns.org/api/v1';
 var API_KEY = '***'; // 同登录页
 var STATUS_LABELS = { scheduled: 'Scheduled', completed: 'Completed', cancelled: 'Cancelled', absent: 'Absent' };
 var STATUS_CSS = { scheduled: 'status-scheduled', completed: 'status-completed', cancelled: 'status-cancelled', absent: 'status-absent' };
+
+// ===== 教材切图大图预览灯箱交互 =====
+function openTbLightbox(url, title) {
+  var lb = document.getElementById('tb-lightbox');
+  var img = document.getElementById('tb-lightbox-img');
+  var tt = document.getElementById('tb-lightbox-title');
+  if (lb && img) {
+    img.src = url;
+    if (tt) tt.textContent = title || '教材原页切图';
+    lb.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+}
+function closeTbLightbox() {
+  var lb = document.getElementById('tb-lightbox');
+  if (lb) {
+    lb.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeTbLightbox();
+});
 
 // ===== Simple URL Token Encryption =====
 // Token 来源可能有两套加密参数，尝试解码
@@ -1460,15 +1622,19 @@ function showViewFeedback(idx) {
     html += '<div class="modal-feedback__group"><label>📖 ' + esc(bName || cls.textbook_code) + ' · ' + pageLabel + '</label>';
     if (cls.page_from && cls.page_to) {
       var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
-      html += '<div class="modal-feedback__box"><div class="grid grid-cols-3 gap-1">';
+      html += '<div class="tb-thumb-grid">';
       for (var p = parseInt(cls.page_from); p <= parseInt(cls.page_to); p++) {
         var url = API_TXT + '/textbooks/page-img/' + encodeURIComponent(cls.textbook_code) + '/' + encodeURIComponent(cls.unit_number) + '/' + p;
-        html += '<a href="' + url + '" target="_blank" class="block border rounded overflow-hidden hover:shadow-md" title="第 ' + p + ' 页 (点击放大)">';
-        html += '<img src="' + url + '" alt="第 ' + p + ' 页" class="w-full h-auto" loading="lazy" onerror="this.parentElement.style.display=\'none\'">';
-        html += '<div class="text-xs text-center text-gray-500 bg-white py-0.5">P' + p + '</div>';
-        html += '</a>';
+        var pTitle = esc(bName || cls.textbook_code) + ' · Unit ' + cls.unit_number + ' (第 ' + p + ' 页)';
+        html += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\')" title="点击放大查看第 ' + p + ' 页">';
+        html += '<div class="tb-thumb-img-wrap">';
+        html += '<img src="' + url + '" alt="P' + p + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
+        html += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
+        html += '</div>';
+        html += '<div class="tb-thumb-tag">P' + p + '</div>';
+        html += '</div>';
       }
-      html += '</div></div>';
+      html += '</div>';
     }
     html += '</div>';
   }
@@ -1992,13 +2158,17 @@ function renderStudyProfile(student, allClasses) {
           histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📖 教材：' + escapeHtml(bFullName) + ' · Unit ' + c.unit_number + pLabel + '</div>';
           if (c.page_from && c.page_to) {
             var API_TXT2 = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
-            histHtml += '<div class="sp-feedback-text"><div class="grid grid-cols-3 gap-1">';
+            histHtml += '<div class="sp-feedback-text"><div class="tb-thumb-grid">';
             for (var pidx = parseInt(c.page_from); pidx <= parseInt(c.page_to); pidx++) {
               var purl = API_TXT2 + '/textbooks/page-img/' + encodeURIComponent(c.textbook_code) + '/' + encodeURIComponent(c.unit_number) + '/' + pidx;
-              histHtml += '<a href="' + purl + '" target="_blank" class="block border rounded overflow-hidden hover:shadow-md" title="第 ' + pidx + ' 页 (点击放大)">';
-              histHtml += '<img src="' + purl + '" alt="第 ' + pidx + ' 页" class="w-full h-auto" loading="lazy" onerror="this.parentElement.style.display=\'none\'">';
-              histHtml += '<div class="text-xs text-center text-gray-500 bg-white py-0.5">P' + pidx + '</div>';
-              histHtml += '</a>';
+              var pTitle = escapeHtml(bFullName || c.textbook_code) + ' · Unit ' + c.unit_number + ' (第 ' + pidx + ' 页)';
+              histHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + purl + '\', \'' + pTitle + '\')" title="点击放大查看第 ' + pidx + ' 页">';
+              histHtml += '<div class="tb-thumb-img-wrap">';
+              histHtml += '<img src="' + purl + '" alt="P' + pidx + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
+              histHtml += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
+              histHtml += '</div>';
+              histHtml += '<div class="tb-thumb-tag">P' + pidx + '</div>';
+              histHtml += '</div>';
             }
             histHtml += '</div></div>';
           }

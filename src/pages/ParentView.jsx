@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { User, Calendar, Package, Clock, BookOpen, AlertCircle } from 'lucide-react';
+import { User, Calendar, Package, Clock, BookOpen, AlertCircle, X, ZoomIn } from 'lucide-react';
 import { studentOps, packageOps, classOps, loadData, API_BASE_URL } from '../store';
 
 // 家长端 - 通过学生ID或手机号查询
@@ -99,12 +99,12 @@ function ParentLookup() {
   );
 }
 
-// 家长端 - 查看孩子信息页面
 function ParentStudentView() {
   const { studentId } = useParams();
   const [student, setStudent] = useState(null);
   const [packages, setPackages] = useState([]);
   const [classes, setClasses] = useState([]);
+  const [previewImg, setPreviewImg] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -118,11 +118,17 @@ function ParentStudentView() {
 
   if (!student) {
     return (
-      <div className="min-h-screen bg-orange-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500">未找到学生信息</p>
-          <Link to="/parent" className="text-orange-600 hover:underline mt-2 inline-block">
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-red-600" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-800 mb-2">未找到学生</h1>
+          <p className="text-gray-500 mb-6">请检查学生ID是否正确</p>
+          <Link
+            to="/parent"
+            className="inline-block px-6 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+          >
             返回查询
           </Link>
         </div>
@@ -130,11 +136,11 @@ function ParentStudentView() {
     );
   }
 
-  // 计算统计数据
-  const totalRemaining = packages.reduce((sum, p) => sum + (p.remaining || 0), 0);
-  const totalHours = packages.reduce((sum, p) => sum + (p.total || 0), 0);
-  const usedHours = totalHours - totalRemaining;
-  const completionRate = totalHours > 0 ? Math.round((usedHours / totalHours) * 100) : 0;
+  // 计算课时统计
+  const totalPurchased = packages.reduce((sum, p) => sum + (parseFloat(p.totalHours) || 0), 0);
+  const totalRemaining = packages.reduce((sum, p) => sum + (parseFloat(p.remainingHours) || 0), 0);
+  const usedHours = totalPurchased - totalRemaining;
+  const completionRate = totalPurchased > 0 ? Math.round((usedHours / totalPurchased) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
@@ -167,7 +173,6 @@ function ParentStudentView() {
             学习进度
           </h2>
           
-          {/* 进度条 */}
           <div className="mb-4">
             <div className="flex justify-between text-sm mb-2">
               <span className="text-gray-500">已完成</span>
@@ -204,104 +209,100 @@ function ParentStudentView() {
             课时包状态
           </h2>
           
-          {packages.length > 0 ? (
-            <div className="space-y-4">
-              {packages.map(pkg => (
-                <div key={pkg.id} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h3 className="font-medium text-gray-800">{pkg.name}</h3>
-                      {pkg.expiryDate && (
-                        <p className="text-sm text-gray-500">到期日期: {pkg.expiryDate}</p>
-                      )}
-                    </div>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      pkg.remaining < 3 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
-                    }`}>
-                      {pkg.remaining} 节剩余
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className={`h-2 rounded-full ${pkg.remaining < 3 ? 'bg-red-400' : 'bg-orange-500'}`}
-                      style={{ width: `${(pkg.remaining / pkg.total) * 100}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>已用: {pkg.used} 节</span>
-                    <span>总计: {pkg.total} 节</span>
+          <div className="space-y-3">
+            {packages.map((pkg) => (
+              <div 
+                key={pkg.id}
+                className="p-4 border border-gray-100 rounded-lg flex items-center justify-between"
+              >
+                <div>
+                  <div className="font-medium text-gray-800">{pkg.name}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    购买日期: {pkg.purchaseDate || '-'} · 有效期至: {pkg.expiryDate || '-'}
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-400 text-center py-4">暂无课时包</p>
-          )}
+                <div className="text-right">
+                  <div className="text-lg font-bold text-orange-600">
+                    {pkg.remainingHours} / {pkg.totalHours} 课时
+                  </div>
+                  <div className={`text-xs px-2 py-0.5 rounded-full inline-block mt-1 ${
+                    pkg.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {pkg.status === 'active' ? '使用中' : '已结课'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* 上课记录 */}
+        {/* 最近上课记录 */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-orange-500" />
-            上课记录
+            最近上课记录
           </h2>
           
           {classes.length > 0 ? (
-            <div className="space-y-3">
-              {classes.slice(0, 10).map(cls => (
-                <div key={cls.id} className="flex items-start gap-4 p-3 border-b border-gray-100 last:border-0">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center shrink-0">
-                    <Clock className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-800">{cls.date}</div>
-                    <div className="text-sm text-gray-500">
-                      {cls.hours} 节 · {cls.teacher || '常规课程'}
+            <div className="space-y-4">
+              {classes.slice(0, 10).map((cls) => (
+                <div 
+                  key={cls.id}
+                  className="p-4 border border-gray-100 rounded-lg hover:border-orange-200 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-800">{cls.date}</span>
+                      <span className="text-xs text-gray-500">{cls.time}</span>
                     </div>
-                    {/* 课程信息: 教材+Unit+Page */}
-                    {((cls.textbook_code && cls.unit_number) || cls.fb_unit) && (
-                      <div className="text-xs text-purple-600 mt-1">
-                        📚 {cls.textbook_code || 'EU'} · Unit {cls.unit_number || cls.fb_unit}
-                        {cls.page_from && cls.page_to && ` · 页 ${cls.page_from}-${cls.page_to}`}
+                    <span className="text-xs px-2 py-1 bg-green-50 text-green-600 rounded">
+                      {cls.hours} 课时
+                    </span>
+                  </div>
+                  
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <div>课程: {cls.courseName || student.course}</div>
+                    {cls.teacher && <div>老师: {cls.teacher}</div>}
+                    {cls.content && <div>内容: {cls.content}</div>}
+                    {cls.feedback && (
+                      <div className="text-orange-600 bg-orange-50 p-2 rounded text-xs mt-2">
+                        老师反馈: {cls.feedback}
                       </div>
                     )}
-                    {/* 今日词汇 */}
-                    {cls.fb_vocab && (
-                      <div className="text-xs text-gray-700 mt-1">
-                        <span className="font-medium">今日学: </span>{cls.fb_vocab}
-                      </div>
-                    )}
-                    {/* 句型 */}
-                    {cls.fb_patterns && (
-                      <div className="text-xs text-gray-700 mt-0.5">
-                        <span className="font-medium">句型: </span>{cls.fb_patterns}
-                      </div>
-                    )}
-                    {/* PDF 页面图嵌入 (家长可看到教材真实页面,方便复习) */}
+                    {/* PDF 页面图缩略图嵌入 (可点击灯箱全屏放大) */}
                     {cls.textbook_code && cls.unit_number && cls.page_from && cls.page_to && (
-                      <div className="mt-2">
-                        <div className="text-xs text-gray-500 mb-1">📖 教材第 {cls.page_from}-{cls.page_to} 页 (点击放大查看):</div>
-                        <div className="grid grid-cols-3 gap-1">
+                      <div className="mt-3">
+                        <div className="text-xs font-semibold text-gray-600 mb-1.5 flex items-center gap-1">
+                          📖 教材第 {cls.page_from}-{cls.page_to} 页 (点击放大查看):
+                        </div>
+                        <div className="flex flex-wrap gap-2">
                           {Array.from({ length: Math.max(0, parseInt(cls.page_to) - parseInt(cls.page_from) + 1) }, (_, i) => {
                             const page = parseInt(cls.page_from) + i;
+                            const imgUrl = `${API_BASE_URL}/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`;
+                            const pTitle = `${cls.textbook_code} · Unit ${cls.unit_number} (第 ${page} 页)`;
                             return (
-                              <a
+                              <div
                                 key={page}
-                                href={`${API_BASE_URL}/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block border rounded overflow-hidden hover:shadow-md"
-                                title={`点击看大图: 第 ${page} 页`}
+                                onClick={() => setPreviewImg({ url: imgUrl, title: pTitle })}
+                                className="group relative w-20 bg-white border border-gray-200 rounded-lg overflow-hidden cursor-pointer shadow-sm hover:shadow-md hover:border-blue-500 transition-all transform hover:-translate-y-0.5"
+                                title={`点击放大查看第 ${page} 页`}
                               >
-                                <img
-                                  src={`${API_BASE_URL}/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`}
-                                  alt={`第 ${page} 页`}
-                                  className="w-full h-auto"
-                                  loading="lazy"
-                                  onError={(e) => { e.target.style.display = 'none'; }}
-                                />
-                                <div className="text-xs text-center text-gray-500 bg-white py-0.5">P{page}</div>
-                              </a>
+                                <div className="w-full h-24 bg-gray-50 flex items-center justify-center overflow-hidden relative">
+                                  <img
+                                    src={imgUrl}
+                                    alt={`第 ${page} 页`}
+                                    className="w-full h-full object-cover object-top transition-transform duration-200 group-hover:scale-105"
+                                    loading="lazy"
+                                    onError={(e) => { e.target.closest('.group').style.display = 'none'; }}
+                                  />
+                                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-medium transition-opacity">
+                                    <ZoomIn size={14} className="mr-0.5" /> 放大
+                                  </div>
+                                </div>
+                                <div className="text-[11px] font-semibold text-center text-gray-600 bg-gray-50 py-0.5 border-t border-gray-100">
+                                  P{page}
+                                </div>
+                              </div>
                             );
                           })}
                         </div>
@@ -349,6 +350,37 @@ function ParentStudentView() {
           <p className="mt-1">数据更新时间: {new Date().toLocaleString('zh-CN')}</p>
         </div>
       </div>
+
+      {/* 教材大图预览灯箱 Modal */}
+      {previewImg && (
+        <div
+          className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewImg(null)}
+        >
+          <div
+            className="relative max-w-[92vw] max-h-[90vh] flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setPreviewImg(null)}
+              className="absolute -top-10 -right-2 w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 text-white flex items-center justify-center transition-all"
+              title="关闭 (Esc)"
+            >
+              <X size={18} />
+            </button>
+            <img
+              src={previewImg.url}
+              alt="教材原页大图"
+              className="max-h-[82vh] max-w-full rounded-xl shadow-2xl object-contain bg-white"
+            />
+            {previewImg.title && (
+              <div className="text-white text-sm font-medium mt-3 drop-shadow">
+                {previewImg.title}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
