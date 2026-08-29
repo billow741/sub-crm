@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Calendar, CreditCard, Clock, Plus, Trash2, AlertTriangle, MessageSquare, FileText } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, Calendar, CreditCard, Clock, Plus, Trash2, AlertTriangle, MessageSquare, FileText, Edit, Loader2 } from 'lucide-react';
 import { studentOps, packageOps, classOps, paymentOps, hourChangeOps } from '../store';
 import { request } from '../store/api';
 import AdjustHoursModal from '../components/AdjustHoursModal';
@@ -16,6 +16,20 @@ export default function StudentDetail() {
   const [showClassModal, setShowClassModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(null);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    english_name: '',
+    gender: '',
+    phone: '',
+    email: '',
+    age: '',
+    grade: '',
+    parentName: '',
+    notes: '',
+    status: 'active',
+  });
+  const [submittingEdit, setSubmittingEdit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [hourChanges, setHourChanges] = useState([]);
   const [assessments, setAssessments] = useState([]);
@@ -223,6 +237,50 @@ export default function StudentDetail() {
     absent: 'bg-red-100 text-red-700'
   };
 
+  const handleOpenEdit = () => {
+    if (!student) return;
+    setEditForm({
+      name: student.name || '',
+      english_name: student.english_name || '',
+      gender: student.gender || '',
+      phone: student.phone || '',
+      email: student.email || '',
+      age: student.age || '',
+      grade: student.grade || '',
+      parentName: student.parent_name || student.parentName || '',
+      notes: student.notes || '',
+      status: student.status || 'active',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveStudent = async (e) => {
+    e.preventDefault();
+    try {
+      setSubmittingEdit(true);
+      const apiData = {
+        name: editForm.name,
+        english_name: editForm.english_name || null,
+        gender: editForm.gender || null,
+        phone: editForm.phone || null,
+        email: editForm.email || null,
+        age: editForm.age ? parseInt(editForm.age) : null,
+        grade: editForm.grade || null,
+        parent_name: editForm.parentName || null,
+        notes: editForm.notes || null,
+        status: editForm.status || 'active',
+      };
+      await studentOps.update(id, apiData);
+      const updated = await studentOps.getById(id);
+      if (updated) setStudent(updated);
+      setShowEditModal(false);
+    } catch (err) {
+      alert('保存失败: ' + err.message);
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
+
   return (
     <div className="p-8">
       <button onClick={() => navigate('/students')} className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6">
@@ -256,29 +314,36 @@ export default function StudentDetail() {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
-                {student.gender && (
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                    student.gender === '男' || student.gender === 'male' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' :
-                    student.gender === '女' || student.gender === 'female' ? 'bg-pink-50 text-pink-700 border border-pink-200/60' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    性别: {student.gender === 'male' ? '男' : student.gender === 'female' ? '女' : student.gender}
-                  </span>
-                )}
-                {student.grade && <span>等级: {student.grade}</span>}
-                {student.age && <span>年龄: {student.age}岁</span>}
-                {(student.parent_name || student.parentName) && <span>家长: {student.parent_name || student.parentName}</span>}
+              <div className="flex items-center gap-3 mt-2 flex-wrap text-sm text-gray-500">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                  student.gender === '男' || student.gender === 'male' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' :
+                  student.gender === '女' || student.gender === 'female' ? 'bg-pink-50 text-pink-700 border border-pink-200/60' :
+                  'bg-gray-100 text-gray-500 border border-gray-200'
+                }`}>
+                  性别: {student.gender === 'male' ? '男' : student.gender === 'female' ? '女' : (student.gender || '未设置')}
+                </span>
+                <span>等级: {student.grade || '-'}</span>
+                <span>年龄: {student.age ? `${student.age}岁` : '-'}</span>
+                <span>家长: {student.parent_name || student.parentName || '-'}</span>
               </div>
             </div>
           </div>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            student.status === 'active' ? 'bg-green-100 text-green-700' :
-            student.status === 'inactive' ? 'bg-gray-100 text-gray-700' :
-            'bg-blue-100 text-blue-700'
-          }`}>
-            {student.status === 'active' ? '学习中' : student.status === 'inactive' ? '已暂停' : '已结课'}
-          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleOpenEdit}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 text-xs font-medium rounded-lg transition-colors"
+            >
+              <Edit size={14} />
+              编辑资料
+            </button>
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+              student.status === 'active' ? 'bg-green-100 text-green-700' :
+              student.status === 'inactive' ? 'bg-gray-100 text-gray-700' :
+              'bg-blue-100 text-blue-700'
+            }`}>
+              {student.status === 'active' ? '学习中' : student.status === 'inactive' ? '已暂停' : '已结课'}
+            </span>
+          </div>
         </div>
 
         {/* 课时不足警告 */}
@@ -991,6 +1056,153 @@ export default function StudentDetail() {
           onClose={() => setShowAdjustModal(false)}
           onSuccess={handleAdjustSuccess}
         />
+      )}
+
+      {/* 编辑学生资料弹窗 */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-semibold text-gray-800 mb-6">编辑学生资料</h2>
+            <form onSubmit={handleSaveStudent} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">姓名 *</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">英文名 *</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.english_name}
+                  onChange={(e) => setEditForm({ ...editForm, english_name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="如：Alice"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">性别</label>
+                  <select
+                    value={editForm.gender}
+                    onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">请选择性别</option>
+                    <option value="男">男</option>
+                    <option value="女">女</option>
+                    <option value="保密">保密</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">年龄</label>
+                  <input
+                    type="number"
+                    value={editForm.age}
+                    onChange={(e) => setEditForm({ ...editForm, age: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="如：7"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">等级</label>
+                  <select
+                    value={editForm.grade}
+                    onChange={(e) => setEditForm({ ...editForm, grade: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">请选择等级</option>
+                    <option value="Pre-A1">Pre-A1</option>
+                    <option value="A1">A1</option>
+                    <option value="A2">A2</option>
+                    <option value="B1">B1</option>
+                    <option value="B2">B2</option>
+                    <option value="C1">C1</option>
+                    <option value="C2">C2</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">学习状态</label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="active">学习中</option>
+                    <option value="inactive">已暂停</option>
+                    <option value="graduated">已结课</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">电话</label>
+                  <input
+                    type="tel"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">家长姓名</label>
+                <input
+                  type="text"
+                  value={editForm.parentName}
+                  onChange={(e) => setEditForm({ ...editForm, parentName: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                <textarea
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={submittingEdit}
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingEdit}
+                  className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50"
+                >
+                  {submittingEdit ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> 保存中...
+                    </span>
+                  ) : '保存修改'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
