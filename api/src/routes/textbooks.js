@@ -1160,6 +1160,7 @@ textbooks.get('/page-img/:code/:num/:page', async (c) => {
 
   const queryKey = c.req.query('key');
   let obj = null;
+  const candidateKeys = [];
   if (queryKey) {
     obj = await R2.get(queryKey);
   }
@@ -1167,7 +1168,6 @@ textbooks.get('/page-img/:code/:num/:page', async (c) => {
   if (!obj) {
     // 优先级检索路径 (支持 .jpg, .jpeg, .png, .webp 与多种命名习惯)
     const exts = ['.jpg', '.jpeg', '.png', '.webp'];
-    const candidateKeys = [];
     for (const ext of exts) {
       candidateKeys.push(`${code}/Unit${num}/page-${String(page).padStart(2, '0')}${ext}`);
       candidateKeys.push(`${code}/Unit${num}/page-${page}${ext}`);

@@ -1880,36 +1880,7 @@ function spLoadH2c() {
   });
 }
 
-function spShareCard(btn) {
-  var card = btn.closest('.sp-card');
-  if (!card) return;
-  var orig = card.querySelector('.sp-share-btn');
-  if (orig) orig.style.display = 'none';
-  // Create a wrapper with brand info
-  var wrapper = document.createElement('div');
-  wrapper.style.cssText = 'padding:16px;background:#F7FAFC;border-radius:16px;';
-  var brand = document.createElement('div');
-  brand.style.cssText = 'text-align:center;padding:12px 0 4px;font-size:13px;color:#4B9FE0;font-weight:600;';
-  brand.textContent = 'SunnyBridge 阳光桥在线英语';
-  wrapper.appendChild(card.cloneNode(true));
-  wrapper.appendChild(brand);
-  document.body.appendChild(wrapper);
 
-  spLoadH2c().then(function() {
-    if (!window.html2canvas) { alert('截图功能加载失败，请稍后重试'); cleanup(); return; }
-    html2canvas(wrapper, { scale: 2, backgroundColor: '#F7FAFC', useCORS: true }).then(function(canvas) {
-      var img = canvas.toDataURL('image/png');
-      document.getElementById('sp-share-img').src = img;
-      document.getElementById('sp-share-result').classList.add('show');
-      cleanup();
-    }).catch(function() { alert('截图失败，请稍后重试'); cleanup(); });
-  });
-
-  function cleanup() {
-    if (orig) orig.style.display = '';
-    wrapper.remove();
-  }
-}
 
 function spCountVocab(classes) {
   var words = {};
@@ -2857,6 +2828,11 @@ function spShareCard(btn) {
   var clone = card.cloneNode(true);
   var btns = clone.querySelectorAll('button, .sp-share-btn, .sp-toggle-btn');
   btns.forEach(function(b) { b.style.display = 'none'; });
+
+  // 移除海报不需要的网页交互切图组件与灯箱，避免外部图片资源请求失败阻断海报生成
+  var thumbEls = clone.querySelectorAll('.tb-thumb-grid, .tb-thumb-card, .tb-lightbox, .tb-thumb-img-wrap');
+  thumbEls.forEach(function(el) { el.remove(); });
+
   var collapses = clone.querySelectorAll('.sp-collapse-body');
   collapses.forEach(function(c) {
     c.classList.remove('collapsed');
@@ -2899,8 +2875,13 @@ function spShareCard(btn) {
     html2canvas(posterNode, {
       scale: 2,
       useCORS: true,
+      allowTaint: true,
+      imageTimeout: 4000,
       backgroundColor: '#FFF9F2',
-      logging: false
+      logging: false,
+      ignoreElements: function(el) {
+        return el.classList && (el.classList.contains('tb-thumb-grid') || el.classList.contains('tb-thumb-card') || el.classList.contains('tb-lightbox') || el.classList.contains('sp-toggle-btn') || el.classList.contains('sp-share-btn'));
+      }
     }).then(function(canvas) {
       if (posterNode.parentNode) posterNode.parentNode.removeChild(posterNode);
       try {
