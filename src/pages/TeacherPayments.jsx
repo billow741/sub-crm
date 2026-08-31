@@ -399,23 +399,22 @@ export default function TeacherPayments() {
                     </p>
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    {payment.status === 'paid' ? (
-                      <div className="text-right text-xs bg-success-50 px-3 py-1.5 rounded-lg border border-success-100">
+                  <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+                    {payment.status === 'paid' && (
+                      <div className="text-right text-xs bg-success-50 px-2.5 py-1 rounded-lg border border-success-100">
                         <div className="font-medium text-success-800">{payment.paid_at?.split(' ')[0]}</div>
-                        <div className="text-success-600">{paymentMethodLabels[payment.payment_method]}</div>
+                        <div className="text-success-600 text-[11px]">{paymentMethodLabels[payment.payment_method] || payment.payment_method}</div>
                       </div>
-                    ) : payment.status === 'pending' ? (
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => handleViewDetail(payment.id)}>明细</Button>
+                    {payment.status === 'pending' && (
                       <>
-                        <Button variant="outline" size="sm" onClick={() => handleViewDetail(payment.id)}>明细</Button>
                         <Button variant="primary" size="sm" onClick={() => handlePay(payment.id)}>支付</Button>
-                        <button onClick={() => handleCancel(payment.id)} className="text-gray-400 hover:text-danger-600 ml-2"><Trash2 className="w-4 h-4"/></button>
+                        <button onClick={() => handleCancel(payment.id)} className="text-gray-400 hover:text-danger-600 ml-1 p-1" title="取消结算"><Trash2 className="w-4 h-4"/></button>
                       </>
-                    ) : (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => handleViewDetail(payment.id)}>明细</Button>
-                        <button onClick={() => handleDelete(payment.id)} className="text-gray-400 hover:text-danger-600 ml-2"><Trash2 className="w-4 h-4"/></button>
-                      </>
+                    )}
+                    {payment.status === 'cancelled' && (
+                      <button onClick={() => handleDelete(payment.id)} className="text-gray-400 hover:text-danger-600 ml-1 p-1" title="删除记录"><Trash2 className="w-4 h-4"/></button>
                     )}
                   </div>
                 </div>
@@ -650,6 +649,18 @@ export default function TeacherPayments() {
                 </div>
               ) : detailData ? (
                 <>
+                  {detailData.payment.status === 'paid' && (
+                    <div className="mb-4 bg-success-50 border border-success-200 rounded-xl p-3 flex items-center justify-between text-xs text-success-900">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-success-600 shrink-0" />
+                        <span className="font-bold">已于 {detailData.payment.paid_at?.split(' ')[0]} 完成付款</span>
+                      </div>
+                      <div>
+                        支付方式: <span className="font-semibold">{paymentMethodLabels[detailData.payment.payment_method] || detailData.payment.payment_method || '已付'}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="bg-white border border-gray-100 rounded-xl p-4 mb-6 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <div className="text-xs text-gray-500 mb-1">结算周期</div>
