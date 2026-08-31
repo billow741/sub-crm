@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Book, FileText, Upload, Sparkles, Loader, CheckCircle, XCircle, 
   Trash2, Plus, Edit3, Save, Eye, RefreshCw, AlertCircle, 
-  ExternalLink, Layers, ChevronRight, Check, X, ArrowRight, Play, CheckCheck
+  ExternalLink, Layers, ChevronRight, Check, X, ArrowRight, Play, CheckCheck, BookOpen
 } from 'lucide-react';
 import { request, API_BASE_URL, API_KEY } from '../store/api';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
