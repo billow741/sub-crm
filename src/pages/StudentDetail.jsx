@@ -835,17 +835,31 @@ export default function StudentDetail() {
               {assessments.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {assessments.map(a => (
-                    <div key={a.id} className="border border-gray-100 rounded-xl p-5 hover:border-orange-200 hover:shadow-md transition-all bg-white cursor-pointer" onClick={() => openAssessmentReport(a)}>
+                    <div key={a.id} className="border border-gray-100 rounded-xl p-5 hover:border-orange-200 hover:shadow-md transition-all bg-white cursor-pointer group" onClick={() => setShowAssessmentFeedback(a)}>
                       <div className="flex items-start justify-between mb-3">
-                        <div className="flex flex-col gap-2">
-                          {a.is_trial === 1 && <span className="text-xs px-2.5 py-1 rounded-md font-bold w-fit bg-orange-100 text-orange-800">🎁 体验课评估</span>}
+                        <div className="flex flex-col gap-1.5">
+                          {a.is_trial === 1 && <span className="text-xs px-2.5 py-0.5 rounded-md font-bold w-fit bg-orange-100 text-orange-800">🎁 体验课评估</span>}
                           <span className="text-sm text-gray-500 flex items-center gap-2">
-                            <Calendar className="w-3.5 h-3.5" /> {a.class_date} {(a.start_time||'').substring(0,5)}
+                            <Calendar className="w-3.5 h-3.5 text-gray-400" /> {a.class_date} {(a.start_time||'').substring(0,5)}
                           </span>
                         </div>
-                        <Button variant="ghost" size="sm" className="text-orange-600 hover:text-orange-700 bg-orange-50">
-                          查看PDF
-                        </Button>
+                        <div className="flex items-center gap-1.5">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-orange-600 hover:text-orange-700 bg-orange-50/80 hover:bg-orange-100 text-xs h-7 px-2"
+                            onClick={(e) => { e.stopPropagation(); openAssessmentReport(a); }}
+                          >
+                            PDF
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-primary-600 hover:text-primary-700 bg-primary-50/80 hover:bg-primary-100 text-xs h-7 px-2"
+                          >
+                            查看详情
+                          </Button>
+                        </div>
                       </div>
                       <div className="text-sm text-gray-600 mb-2">教师：{a.teacher_name || '-'} · {a.subject || '英语'}</div>
                       {a.recommended_level && (
@@ -1056,63 +1070,91 @@ export default function StudentDetail() {
       {/* 体验课报告弹窗 */}
       {showAssessmentFeedback && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-2xl shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <Card className="w-full max-w-2xl shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
             <CardHeader className="shrink-0 flex items-center justify-between border-b border-gray-100 bg-white">
-              <h2 className="text-lg font-bold flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-orange-600" />
-                体验课评估报告
-              </h2>
+                <h2 className="text-lg font-bold text-gray-900">📝 体验课评估报告</h2>
+                <span className="text-xs bg-orange-50 text-orange-600 font-bold px-2 py-0.5 rounded-full border border-orange-200">🎁 体验课</span>
+              </div>
               <Button variant="ghost" size="sm" onClick={() => setShowAssessmentFeedback(null)} className="w-8 h-8 p-0 rounded-full">
                 <X className="w-5 h-5 text-gray-400" />
               </Button>
             </CardHeader>
-            <div className="overflow-y-auto p-5 space-y-5">
-              <div className="bg-orange-50/50 rounded-xl p-4 border border-orange-100">
+            
+            <div className="overflow-y-auto p-6 space-y-4">
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><span className="text-gray-500">学生：</span><span className="font-medium text-gray-900">{showAssessmentFeedback.student_name || student.name}</span></div>
                   <div><span className="text-gray-500">教师：</span><span className="font-medium text-gray-900">{showAssessmentFeedback.teacher_name || '-'}</span></div>
-                  <div><span className="text-gray-500">日期：</span><span className="font-medium text-gray-900">{showAssessmentFeedback.class_date}</span></div>
-                  <div><span className="text-gray-500">建议级别：</span><span className="font-bold text-blue-600">{showAssessmentFeedback.recommended_level || '-'}</span></div>
+                  <div><span className="text-gray-500">日期：</span><span className="font-medium text-gray-900">{showAssessmentFeedback.class_date} {(showAssessmentFeedback.start_time||'').substring(0,5)}</span></div>
+                  <div><span className="text-gray-500">科目：</span><span className="font-medium text-gray-900">{showAssessmentFeedback.subject || '英语'}</span></div>
                 </div>
               </div>
 
               {(() => {
                 const a = showAssessmentFeedback;
                 const StarRow = ({ score }) => (
-                  <span className="text-lg tracking-tighter">
-                    {[1,2,3,4,5].map(i => <span key={i} className={i <= (a[score]||0) ? 'text-orange-500' : 'text-gray-200'}>★</span>)}
+                  <span className="text-lg tracking-tight">
+                    {[1,2,3,4,5].map(i => <span key={i} className={i <= (a[score]||0) ? 'text-orange-400' : 'text-gray-200'}>★</span>)}
                   </span>
                 );
                 const dims = [
-                  {title:'🎧 听力评估',items:[['listening_conversation','日常对话理解'],['listening_key_info','关键信息抓取']],comment:'listening_comments'},
-                  {title:'🗣️ 口语评估',items:[['speaking_pronunciation','发音与流利度'],['speaking_communication','表达能力']],comment:'speaking_comments'},
-                  {title:'🌟 课堂表现',items:[['classroom_participation','参与度'],['classroom_focus','专注力'],['classroom_interaction','互动意愿']],comment:'classroom_comments'},
+                  {title:'🗣️ 口语表现',items:[['speaking_pronunciation','发音清晰度'],['speaking_communication','开口主动性']]},
+                  {title:'🎧 理解能力',items:[['listening_conversation','理解与反应']]},
+                  {title:'🌟 课堂表现',items:[['classroom_interaction','参与度与互动']]},
                 ];
                 return (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {dims.map(dim => (
-                      <div key={dim.title} className="border border-gray-100 rounded-xl p-4 shadow-sm">
-                        <div className="font-bold text-gray-800 text-sm mb-3">{dim.title}</div>
-                        <div className="space-y-2">
+                      <div key={dim.title} className="border border-gray-100 rounded-xl p-3.5 bg-white shadow-xs">
+                        <div className="font-bold text-gray-800 text-sm mb-2">{dim.title}</div>
+                        <div className="space-y-1.5">
                           {dim.items.map(item => (
-                            <div key={item[0]} className="flex items-center justify-between">
+                            <div key={item[0]} className="flex items-center justify-between py-0.5">
                               <span className="text-sm text-gray-600">{item[1]}</span>
                               <StarRow score={item[0]} />
                             </div>
                           ))}
                         </div>
-                        {a[dim.comment] && (
-                          <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">{a[dim.comment]}</div>
-                        )}
                       </div>
                     ))}
+
+                    <div className="border border-orange-100 rounded-xl p-4 bg-orange-50/60 space-y-3">
+                      <div className="font-bold text-gray-800 text-sm mb-1">📋 综合评估</div>
+                      {a.recommended_level && (
+                        <div className="mb-2">
+                          <span className="text-sm font-medium text-gray-700">🎓 建议级别：</span>
+                          <span className="ml-1 text-sm bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold">{a.recommended_level}</span>
+                        </div>
+                      )}
+                      {a.strengths && (
+                        <div className="mb-2">
+                          <span className="text-sm font-medium text-gray-700">💪 孩子的亮点</span>
+                          <div className="text-sm text-gray-600 whitespace-pre-wrap mt-1 bg-white/70 p-2.5 rounded-lg border border-orange-100/60">{a.strengths}</div>
+                        </div>
+                      )}
+                      {a.improvements && (
+                        <div className="mb-2">
+                          <span className="text-sm font-medium text-gray-700">📈 建议重点提升</span>
+                          <div className="text-sm text-gray-600 whitespace-pre-wrap mt-1 bg-white/70 p-2.5 rounded-lg border border-orange-100/60">{a.improvements}</div>
+                        </div>
+                      )}
+                      {a.teacher_message && (
+                        <div className="mt-3 p-3 bg-blue-50/80 rounded-lg border border-blue-100">
+                          <span className="text-sm font-medium text-gray-700">💌 老师寄语</span>
+                          <div className="text-sm text-gray-600 whitespace-pre-wrap mt-1">{a.teacher_message}</div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })()}
             </div>
-            <div className="flex justify-between p-4 border-t border-gray-100 bg-gray-50 shrink-0">
-              <Button onClick={() => openAssessmentReport(showAssessmentFeedback)} className="bg-orange-500 hover:bg-orange-600 border-0">
-                <FileText className="w-4 h-4 mr-2" /> 导出打印 PDF
+            
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-3 justify-end shrink-0">
+              <Button onClick={() => openAssessmentReport(showAssessmentFeedback)} className="bg-orange-500 hover:bg-orange-600 border-0 text-white font-medium shadow-sm">
+                <FileText className="w-4 h-4 mr-2" /> 导出 / 打印 PDF
               </Button>
               <Button variant="outline" onClick={() => setShowAssessmentFeedback(null)}>关闭</Button>
             </div>
@@ -1245,16 +1287,16 @@ export default function StudentDetail() {
     html += '</div>';
 
     html += '<div class="info-section">';
-    html += `<div class="info-item"><div class="info-label">学生姓名 / Student Name</div><div class="info-value">${esc(a.student_name||'')}${a.student_english_name?' ('+esc(a.student_english_name)+')':''}</div></div>`;
+    html += `<div class="info-item"><div class="info-label">学生姓名 / Student Name</div><div class="info-value">${esc(a.student_name||student?.name||'')}${a.student_english_name?' ('+esc(a.student_english_name)+')':''}</div></div>`;
     html += `<div class="info-item"><div class="info-label">授课教师 / Teacher</div><div class="info-value">${esc(a.teacher_name||'-')}</div></div>`;
-    html += `<div class="info-item"><div class="info-label">上课日期 / Date & Time</div><div class="info-value">${a.class_date||''} ${(a.start_time||'').substring(0,5)}-${(a.end_time||'').substring(0,5)}</div></div>`;
+    html += `<div class="info-item"><div class="info-label">上课日期 / Date & Time</div><div class="info-value">${a.class_date||''} ${(a.start_time||'').substring(0,5)}${a.end_time ? ' - '+a.end_time.substring(0,5) : ''}</div></div>`;
     html += `<div class="info-item"><div class="info-label">课程科目 / Subject</div><div class="info-value">${esc(a.subject||'英语')}</div></div>`;
     html += '</div>';
 
     const dims = [
-      { icon: '🗣️', title: '口语表现 Speaking Performance', items: [['speaking_pronunciation','发音清晰度'],['speaking_communication','开口意愿']], comments: a.speaking_comments },
-      { icon: '🎧', title: '理解能力 Comprehension', items: [['listening_conversation','指令理解'],['listening_key_info','反应速度']], comments: a.listening_comments },
-      { icon: '🌟', title: '课堂表现 Classroom Performance', items: [['classroom_focus','专注力'],['classroom_interaction','师生互动']], comments: a.classroom_comments }
+      { icon: '🗣️', title: '口语表现 Speaking Performance', items: [['speaking_pronunciation','发音清晰度 Pronunciation Clarity'],['speaking_communication','开口意愿 Willingness to Speak']] },
+      { icon: '🎧', title: '理解能力 Comprehension', items: [['listening_conversation','理解与反应 Comprehension & Response']] },
+      { icon: '🌟', title: '课堂表现 Classroom Performance', items: [['classroom_interaction','参与度与互动 Engagement & Interaction']] }
     ];
 
     html += '<div class="dimensions">';
@@ -1265,7 +1307,6 @@ export default function StudentDetail() {
         const val = a[item[0]] || 0;
         html += `<div class="dim-item"><span class="dim-label">${item[1]}</span>${starHTML(val)}</div>`;
       });
-      if (dim.comments) html += `<div class="dim-comments">评语：${esc(dim.comments)}</div>`;
       html += '</div>';
     });
     html += '</div>';
