@@ -5,6 +5,9 @@ import {
   ExternalLink, Layers, ChevronRight, Check, X, ArrowRight, Play, CheckCheck
 } from 'lucide-react';
 import { request, API_BASE_URL, API_KEY } from '../store/api';
+import { Card, CardHeader, CardContent } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
 
 export default function Textbooks() {
   // 核心数据状态
@@ -423,7 +426,7 @@ export default function Textbooks() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[500px] text-gray-500 gap-2">
-        <Loader className="w-5 h-5 animate-spin text-purple-600" />
+        <Loader className="w-5 h-5 animate-spin text-primary-500" />
         <span>正在加载教材工作台...</span>
       </div>
     );
@@ -432,52 +435,32 @@ export default function Textbooks() {
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col bg-gray-50 overflow-hidden font-sans">
       {/* 顶部工具栏 */}
-      <div className="bg-white border-b px-6 py-3 flex items-center justify-between shadow-xs shrink-0">
+      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0 shadow-sm z-10">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 font-bold">
+          <div className="w-10 h-10 bg-gradient-to-br from-primary-100 to-primary-200 rounded-xl flex items-center justify-center text-primary-700 shadow-inner">
             <Book className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-gray-900 flex items-center gap-2">
+            <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               教材数字化工作台
-              <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-700 font-medium rounded-full border border-purple-200">
+              <Badge variant="primary" className="bg-primary-50 text-primary-700 text-xs px-2 border border-primary-200">
                 SaaS Workbench
-              </span>
+              </Badge>
             </h1>
-            <p className="text-xs text-gray-500">统一标准 R2 存储 · AI 视觉切片提取 · 双语对照闭环</p>
+            <p className="text-xs text-gray-500 font-medium">统一标准 R2 存储 · AI 视觉切片提取 · 双语对照闭环</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {/* AI 视觉模型设置 */}
-          <button
-            type="button"
-            onClick={() => setShowLlmSettingsModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition shadow-2xs cursor-pointer"
-            title="配置视觉大模型 (OpenAI / 智谱 GLM / Qwen / NVIDIA)"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>⚙️ AI 模型设置</span>
-          </button>
-
-          {/* 整本 PDF 批量导入按钮 */}
-          <button
-            type="button"
-            onClick={() => setShowBatchBookModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition shadow-2xs cursor-pointer"
-          >
-            <Book className="w-3.5 h-3.5 text-purple-600" />
-            <span>📖 整本 PDF 批量导入</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowBooksManage(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-2xs cursor-pointer"
-          >
-            <Layers className="w-3.5 h-3.5 text-gray-500" />
-            <span>教材管理</span>
-          </button>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => setShowLlmSettingsModal(true)} className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800">
+            <Sparkles className="w-4 h-4 mr-1.5" /> AI 模型设置
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => setShowBatchBookModal(true)}>
+            <Book className="w-4 h-4 mr-1.5" /> 整本 PDF 批量导入
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowBooksManage(true)}>
+            <Layers className="w-4 h-4 mr-1.5" /> 教材管理
+          </Button>
         </div>
       </div>
 
@@ -485,44 +468,39 @@ export default function Textbooks() {
       <div className="flex-1 flex overflow-hidden">
         
         {/* ================= 第一栏：教材目录列表 (260px) ================= */}
-        <div className="w-64 bg-white border-r flex flex-col shrink-0">
-          <div className="p-3 border-b bg-gray-50/70 flex items-center justify-between">
+        <div className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0 z-0">
+          <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
             <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">教材系列 ({books.length})</span>
-            <button
-              onClick={() => setShowBooksManage(true)}
-              className="text-purple-600 hover:text-purple-800 text-xs flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" /> 添加
-            </button>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setShowBooksManage(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> 添加
+            </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {books.map(b => {
               const isSelected = b.code === selectedBookCode;
               return (
                 <div
                   key={b.code}
                   onClick={() => selectBook(b.code)}
-                  className={`p-3 rounded-xl cursor-pointer transition border text-left ${
+                  className={`p-3 rounded-xl cursor-pointer transition-all border text-left ${
                     isSelected
-                      ? 'bg-purple-50/90 border-purple-300 shadow-xs ring-1 ring-purple-400/30'
-                      : 'bg-white border-gray-200/80 hover:border-purple-200 hover:bg-gray-50/60'
+                      ? 'bg-primary-50/80 border-primary-300 shadow-sm ring-1 ring-primary-500/20'
+                      : 'bg-white border-gray-200 hover:border-primary-300 hover:bg-gray-50 hover:shadow-sm'
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <span className="font-bold text-sm text-gray-900">{b.name}</span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 uppercase">
-                      {b.level || 'A1'}
-                    </span>
+                  <div className="flex items-start justify-between mb-1">
+                    <span className="font-bold text-sm text-gray-900 leading-tight">{b.name}</span>
+                    <Badge variant="secondary" className="text-[10px] bg-gray-100 uppercase py-0.5">{b.level || 'A1'}</Badge>
                   </div>
-                  <div className="text-xs text-gray-500 mt-1 flex items-center justify-between">
-                    <span>{b.code}</span>
-                    <span className="font-medium text-purple-600">{b.unit_count || 0} / {b.total_units} 单元</span>
+                  <div className="text-xs text-gray-500 mt-2 flex items-center justify-between">
+                    <span className="font-medium text-gray-400">{b.code}</span>
+                    <span className="font-bold text-primary-600">{b.unit_count || 0} / {b.total_units} 单元</span>
                   </div>
                   {/* 进度条 */}
-                  <div className="w-full bg-gray-100 h-1 rounded-full mt-2 overflow-hidden">
+                  <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2.5 overflow-hidden">
                     <div
-                      className="bg-purple-500 h-full rounded-full transition-all duration-300"
+                      className="bg-primary-500 h-full rounded-full transition-all duration-500 ease-out"
                       style={{ width: `${Math.min(100, Math.round(((b.unit_count || 0) / (b.total_units || 1)) * 100))}%` }}
                     />
                   </div>
@@ -533,19 +511,21 @@ export default function Textbooks() {
         </div>
 
         {/* ================= 第二栏：单元大纲列表 (280px) ================= */}
-        <div className="w-72 bg-white border-r flex flex-col shrink-0">
-          <div className="p-3 border-b bg-gray-50/70 flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-              {selectedBook ? `${selectedBook.code} 单元列表` : '单元大纲'}
+        <div className="w-72 bg-white border-r border-gray-200 flex flex-col shrink-0 z-0">
+          <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider truncate mr-2">
+              {selectedBook ? `${selectedBook.code} 大纲` : '单元大纲'}
             </span>
-            <span className="text-xs text-gray-500 font-medium">
+            <Badge variant="secondary" className="bg-gray-100 text-[10px]">
               共 {bookUnits.length} 单元
-            </span>
+            </Badge>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
             {loadingUnits ? (
-              <div className="py-8 text-center text-xs text-gray-400">正在加载单元...</div>
+              <div className="py-8 text-center text-xs text-gray-400 flex justify-center items-center gap-2">
+                <Loader className="w-3.5 h-3.5 animate-spin" /> 加载中...
+              </div>
             ) : bookUnits.length === 0 ? (
               <div className="py-8 text-center text-xs text-gray-400">暂无单元数据</div>
             ) : (
@@ -556,33 +536,33 @@ export default function Textbooks() {
                   <div
                     key={u.unit_number}
                     onClick={() => selectUnit(selectedBookCode, u.unit_number)}
-                    className={`p-2.5 rounded-lg cursor-pointer transition flex items-center justify-between border ${
+                    className={`p-3 rounded-xl cursor-pointer transition-all flex items-center justify-between border ${
                       isSelected
-                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm font-medium'
-                        : 'bg-white border-gray-150 text-gray-700 hover:bg-purple-50/50 hover:border-purple-200'
+                        ? 'bg-primary-600 text-white border-primary-600 shadow-md transform scale-[1.02]'
+                        : 'bg-white border-gray-100 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                        isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
                       }`}>
                         U{u.unit_number}
                       </span>
-                      <span className="text-xs truncate" title={u.unit_title || `Unit ${u.unit_number}`}>
+                      <span className={`text-xs font-medium truncate ${isSelected ? 'text-white' : 'text-gray-900'}`} title={u.unit_title || `Unit ${u.unit_number}`}>
                         {u.unit_title || `Unit ${u.unit_number}`}
                       </span>
                     </div>
 
-                    <div className="shrink-0 flex items-center gap-1.5">
+                    <div className="shrink-0 flex items-center pl-2">
                       {hasContent ? (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
-                          isSelected ? 'bg-green-400/30 text-green-100' : 'bg-green-100 text-green-700'
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                          isSelected ? 'bg-white/20 text-white border border-white/20' : 'bg-success-50 text-success-700 border border-success-200'
                         }`}>
-                          <CheckCircle className="w-2.5 h-2.5" /> 已录入
+                          <CheckCircle className="w-3 h-3" /> 已录入
                         </span>
                       ) : (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                          isSelected ? 'bg-white/20 text-white/80' : 'bg-gray-100 text-gray-400'
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                          isSelected ? 'bg-white/10 text-white/80 border-white/20' : 'bg-gray-50 text-gray-400 border-gray-200'
                         }`}>
                           待录入
                         </span>
@@ -596,129 +576,129 @@ export default function Textbooks() {
         </div>
 
         {/* ================= 第三栏：右侧主工作台 (自适应) ================= */}
-        <div className="flex-1 flex flex-col bg-gray-50/50 overflow-hidden">
+        <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden z-0 relative shadow-inner">
           {selectedUnitNum === null || !unitDetail ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 space-y-2">
-              <FileText className="w-12 h-12 text-gray-300 stroke-1" />
-              <p className="text-sm">请在左侧选择需要编辑与提取的教材单元</p>
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 space-y-3">
+              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100">
+                <FileText className="w-8 h-8 text-gray-300" />
+              </div>
+              <p className="text-sm font-medium">请在左侧选择需要编辑与提取的教材单元</p>
             </div>
           ) : (
             <>
               {/* 工作区 Header */}
-              <div className="bg-white border-b px-6 py-3 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-bold text-gray-900">
+              <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0 shadow-sm z-10">
+                <div className="flex items-center gap-4">
+                  <Badge variant="secondary" className="font-mono text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded-lg">
                     {selectedBookCode} · Unit {selectedUnitNum}
-                  </span>
+                  </Badge>
                   <input
                     type="text"
                     value={unitDetail.unit_title || ''}
                     onChange={(e) => setUnitDetail({ ...unitDetail, unit_title: e.target.value })}
                     placeholder="单元标题 (如: Art Class / Animals)"
-                    className="px-2.5 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 w-48 font-medium"
+                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 w-64 font-bold text-gray-900 bg-gray-50 hover:bg-white transition-colors"
                   />
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
                     onClick={handleAiExtract}
                     disabled={extracting || (renderedImages.length === 0 && r2Pages.length === 0)}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition disabled:opacity-50 cursor-pointer border border-purple-500"
+                    className="border-primary-200 text-primary-700 hover:bg-primary-50 hover:border-primary-300 transition-all font-bold shadow-sm"
                     title="根据左侧已存切图，调用 AI 视觉大模型重新提取并翻译词汇与句型"
                   >
-                    {extracting ? <Loader className="w-4 h-4 animate-spin text-white" /> : <Sparkles className="w-4 h-4 text-yellow-300" />}
-                    <span className="text-white font-bold">{extracting ? '正在 AI 视觉提取...' : '✨ 重新 AI 提取本单元'}</span>
-                  </button>
+                    {extracting ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2 text-yellow-500" />}
+                    {extracting ? '正在 AI 视觉提取...' : '✨ 重新 AI 提取本单元'}
+                  </Button>
 
-                  <button
-                    type="button"
+                  <Button
+                    variant="success"
                     onClick={handleSaveUnitContent}
                     disabled={saving}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition disabled:opacity-50 cursor-pointer shadow-xs"
+                    className="font-bold shadow-sm transition-all hover:shadow-md"
                   >
-                    {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    <span>{saving ? '保存中...' : '💾 保存入库'}</span>
-                  </button>
+                    {saving ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                    {saving ? '保存中...' : '💾 保存入库'}
+                  </Button>
                 </div>
               </div>
 
               {/* 工作区内容双栏分屏 (左切图预览，右词汇句型) */}
-              <div className="flex-1 flex overflow-hidden p-4 gap-4">
+              <div className="flex-1 flex overflow-hidden p-6 gap-6">
                 
                 {/* 1. 左半屏：PDF 上传与 R2 切图管理 */}
-                <div className="w-1/2 bg-white rounded-xl border border-gray-200/80 shadow-2xs flex flex-col overflow-hidden">
-                  <div className="p-3 border-b bg-gray-50/70 flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-gray-700">📄 课本原图切片</span>
-                      <span className="text-[11px] text-gray-500 font-medium">
-                        (R2 已存: {r2Pages.length} 页{renderedImages.length > 0 ? ` · 待上传: ${renderedImages.length} 页` : ''})
-                      </span>
-                    </div>
+                <Card className="w-1/2 flex flex-col overflow-hidden border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+                  <CardHeader className="bg-gray-50/80 border-b border-gray-100 py-3 px-4 shrink-0">
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-gray-500" /> 课本原图切片
+                        </span>
+                        <Badge variant="secondary" className="text-[10px] bg-white border border-gray-200">
+                          R2 已存: {r2Pages.length} 页 {renderedImages.length > 0 ? `· 待存: ${renderedImages.length}` : ''}
+                        </Badge>
+                      </div>
 
-                    <div className="flex items-center gap-1.5">
-                      {r2Pages.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={handleClearAllPages}
-                          className="flex items-center gap-1 px-2 py-1 text-[11px] text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition"
-                          title="一键清空本单元所有切图 (重新切片)"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          <span>清空切图</span>
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {r2Pages.length > 0 && (
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={handleClearAllPages}
+                            className="text-danger-600 hover:text-danger-700 hover:bg-danger-50 px-2 h-7"
+                            title="一键清空本单元所有切图 (重新切片)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-1" /> 清空切图
+                          </Button>
+                        )}
 
-                      <label className="flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded border border-purple-200 hover:bg-purple-100 cursor-pointer transition">
-                        <Upload className="w-3 h-3" />
-                        <span>{rendering ? renderProgress : '上传 PDF 切片'}</span>
-                        <input
-                          type="file"
-                          accept="application/pdf"
-                          onChange={handlePdfUpload}
-                          className="hidden"
-                          disabled={rendering}
-                        />
-                      </label>
+                        <label className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 text-primary-700 text-xs font-bold rounded-lg border border-primary-200 hover:bg-primary-100 cursor-pointer transition-colors shadow-sm">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{rendering ? renderProgress : '上传 PDF 切片'}</span>
+                          <input
+                            type="file" accept="application/pdf"
+                            onChange={handlePdfUpload} className="hidden" disabled={rendering}
+                          />
+                        </label>
+                      </div>
                     </div>
-                  </div>
+                  </CardHeader>
 
                   {/* 切图网格 */}
-                  <div className="flex-1 overflow-y-auto p-4">
+                  <div className="flex-1 overflow-y-auto p-5 bg-white">
                     {loadingPages ? (
-                      <div className="py-12 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
-                        <Loader className="w-4 h-4 animate-spin text-purple-600" />
+                      <div className="py-20 text-center text-sm text-gray-400 flex flex-col items-center justify-center gap-3">
+                        <Loader className="w-6 h-6 animate-spin text-primary-500" />
                         <span>正在检索 R2 切图...</span>
                       </div>
                     ) : renderedImages.length > 0 ? (
                       <div>
-                        <div className="text-xs font-bold text-purple-700 mb-2 flex items-center gap-1">
-                          <span>✨ 本地新切片 ({renderedImages.length} 页) — 点击右上角 AI 识别即可一键入库:</span>
+                        <div className="text-sm font-bold text-primary-700 mb-4 flex items-center gap-2 bg-primary-50 p-3 rounded-xl border border-primary-100">
+                          <Sparkles className="w-4 h-4 text-primary-500" />
+                          <span>本地新切片 ({renderedImages.length} 页) — 点击右上角 AI 识别即可一键入库</span>
                         </div>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                           {renderedImages.map((img, i) => (
-                            <div key={i} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-2xs flex flex-col group">
+                            <div key={i} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow group flex flex-col">
                               <div
                                 onClick={() => setPreviewImageModal(img.url)}
-                                className="relative h-28 bg-gray-50 flex items-center justify-center cursor-pointer overflow-hidden"
+                                className="relative h-32 bg-gray-50 flex items-center justify-center cursor-pointer overflow-hidden"
                               >
                                 <img src={img.url} alt={`P${i + 1}`} className="w-full h-full object-contain" />
-                                <div className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-medium gap-1 pointer-events-none">
-                                  <Eye className="w-3.5 h-3.5" /> 放大
+                                <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-sm font-bold gap-2 pointer-events-none backdrop-blur-sm">
+                                  <Eye className="w-4 h-4" /> 放大预览
                                 </div>
                               </div>
-                              <div className="px-2 py-1 bg-gray-50/90 border-t border-gray-100 flex items-center justify-between text-[11px]">
-                                <span className="font-medium text-gray-600">第 {i + 1} 页</span>
+                              <div className="px-3 py-2 bg-white border-t border-gray-100 flex items-center justify-between">
+                                <span className="font-bold text-gray-700 text-xs">第 {i + 1} 页</span>
                                 <button
                                   type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRenderedImages(prev => prev.filter((_, idx) => idx !== i));
-                                  }}
-                                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition cursor-pointer"
+                                  onClick={(e) => { e.stopPropagation(); setRenderedImages(prev => prev.filter((_, idx) => idx !== i)); }}
+                                  className="p-1.5 text-gray-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors cursor-pointer"
                                   title="移除此切片"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
                               </div>
                             </div>
@@ -726,122 +706,129 @@ export default function Textbooks() {
                         </div>
                       </div>
                     ) : r2Pages.length > 0 ? (
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                         {r2Pages.map(p => (
-                          <div key={p.key || p.page_num} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-2xs flex flex-col hover:border-purple-300 transition group">
-                            {/* 图片区域 (点击放大) */}
+                          <div key={p.key || p.page_num} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md hover:border-primary-300 transition-all group flex flex-col">
                             <div
                               onClick={() => setPreviewImageModal(p.url)}
-                              className="relative h-28 bg-gray-50 flex items-center justify-center cursor-pointer overflow-hidden"
+                              className="relative h-32 bg-gray-50 flex items-center justify-center cursor-pointer overflow-hidden"
                             >
                               <img src={p.url} alt={`Page ${p.page_num}`} className="w-full h-full object-contain" />
-                              <div className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-medium gap-1 pointer-events-none">
-                                <Eye className="w-3.5 h-3.5" /> 放大
+                              <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-sm font-bold gap-2 pointer-events-none backdrop-blur-sm">
+                                <Eye className="w-4 h-4" /> 放大预览
                               </div>
                             </div>
-
-                            {/* 底部独立控制栏 (完全脱离遮罩，绝对可点) */}
-                            <div className="px-2 py-1 bg-gray-50/90 border-t border-gray-100 flex items-center justify-between">
-                              <span className="text-[11px] font-bold text-gray-700">P{p.page_num}</span>
+                            <div className="px-3 py-2 bg-white border-t border-gray-100 flex items-center justify-between">
+                              <span className="text-xs font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">P {p.page_num}</span>
                               <button
                                 type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeletePageImg(p);
-                                }}
-                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition cursor-pointer"
-                                title={`删除第 ${p.page_num} 页 (${p.key || ''})`}
+                                onClick={(e) => { e.stopPropagation(); handleDeletePageImg(p); }}
+                                className="p-1.5 text-gray-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors cursor-pointer"
+                                title={`删除第 ${p.page_num} 页`}
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="py-16 text-center text-gray-400 space-y-2">
-                        <Upload className="w-8 h-8 text-gray-300 mx-auto" />
-                        <p className="text-xs">该单元在 R2 空间暂无切图</p>
-                        <p className="text-[11px] text-gray-400">点击右上角「上传 PDF 切片」自动切图并 AI 提取</p>
+                      <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4">
+                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100 shadow-inner">
+                          <Upload className="w-8 h-8 text-gray-300" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-600 mb-1">该单元暂无切片图片</p>
+                          <p className="text-xs text-gray-400">点击右上角「上传 PDF 切片」自动切图并 AI 提取</p>
+                        </div>
                       </div>
                     )}
                   </div>
-                </div>
+                </Card>
 
                 {/* 2. 右半屏：结构化教学内容编辑 (Tabs) */}
-                <div className="w-1/2 bg-white rounded-xl border border-gray-200/80 shadow-2xs flex flex-col overflow-hidden">
+                <Card className="w-1/2 flex flex-col overflow-hidden border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300 bg-white">
                   {/* Tabs */}
-                  <div className="flex items-center justify-between border-b bg-gray-50/70 px-3 shrink-0">
-                    <div className="flex gap-1">
+                  <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 px-4 pt-2 shrink-0">
+                    <div className="flex gap-4">
                       <button
                         type="button"
                         onClick={() => setActiveTab('vocab')}
-                        className={`px-3 py-2 text-xs font-bold border-b-2 transition ${
+                        className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
                           activeTab === 'vocab'
-                            ? 'border-purple-600 text-purple-700'
-                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                            ? 'border-primary-600 text-primary-700'
+                            : 'border-transparent text-gray-500 hover:text-gray-800'
                         }`}
                       >
-                        🔤 核心词汇 ({(unitDetail.vocab || []).length})
+                        🔤 核心词汇 
+                        <Badge variant={activeTab === 'vocab' ? 'primary' : 'secondary'} className="px-1.5 py-0 text-[10px]">
+                          {(unitDetail.vocab || []).length}
+                        </Badge>
                       </button>
                       <button
                         type="button"
                         onClick={() => setActiveTab('patterns')}
-                        className={`px-3 py-2 text-xs font-bold border-b-2 transition ${
+                        className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
                           activeTab === 'patterns'
-                            ? 'border-purple-600 text-purple-700'
-                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                            ? 'border-primary-600 text-primary-700'
+                            : 'border-transparent text-gray-500 hover:text-gray-800'
                         }`}
                       >
-                        💬 重点句型 ({(unitDetail.patterns || []).length})
+                        💬 重点句型
+                        <Badge variant={activeTab === 'patterns' ? 'primary' : 'secondary'} className="px-1.5 py-0 text-[10px]">
+                          {(unitDetail.patterns || []).length}
+                        </Badge>
                       </button>
                       <button
                         type="button"
                         onClick={() => setActiveTab('grammar')}
-                        className={`px-3 py-2 text-xs font-bold border-b-2 transition ${
+                        className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
                           activeTab === 'grammar'
-                            ? 'border-purple-600 text-purple-700'
-                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                            ? 'border-primary-600 text-primary-700'
+                            : 'border-transparent text-gray-500 hover:text-gray-800'
                         }`}
                       >
-                        📐 语法焦点 ({(unitDetail.grammar || []).length})
+                        📐 语法焦点
+                        <Badge variant={activeTab === 'grammar' ? 'primary' : 'secondary'} className="px-1.5 py-0 text-[10px]">
+                          {(unitDetail.grammar || []).length}
+                        </Badge>
                       </button>
                     </div>
 
-                    <div>
+                    <div className="pb-2">
                       {activeTab === 'vocab' && (
-                        <button type="button" onClick={addVocabItem} className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-0.5">
-                          <Plus className="w-3.5 h-3.5" /> 添加单词
-                        </button>
+                        <Button variant="ghost" size="sm" onClick={addVocabItem} className="h-8 text-primary-600 hover:bg-primary-50">
+                          <Plus className="w-4 h-4 mr-1" /> 添加词汇
+                        </Button>
                       )}
                       {activeTab === 'patterns' && (
-                        <button type="button" onClick={addPatternItem} className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-0.5">
-                          <Plus className="w-3.5 h-3.5" /> 添加句型
-                        </button>
+                        <Button variant="ghost" size="sm" onClick={addPatternItem} className="h-8 text-primary-600 hover:bg-primary-50">
+                          <Plus className="w-4 h-4 mr-1" /> 添加句型
+                        </Button>
                       )}
                       {activeTab === 'grammar' && (
-                        <button type="button" onClick={addGrammarItem} className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-0.5">
-                          <Plus className="w-3.5 h-3.5" /> 添加语法
-                        </button>
+                        <Button variant="ghost" size="sm" onClick={addGrammarItem} className="h-8 text-primary-600 hover:bg-primary-50">
+                          <Plus className="w-4 h-4 mr-1" /> 添加语法
+                        </Button>
                       )}
                     </div>
                   </div>
 
                   {/* Tab 内容区 */}
-                  <div className="flex-1 overflow-y-auto p-4">
+                  <div className="flex-1 overflow-y-auto p-5 bg-slate-50/30">
                     {/* 词汇列表 */}
                     {activeTab === 'vocab' && (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {(unitDetail.vocab || []).length === 0 ? (
-                          <div className="py-12 text-center text-xs text-gray-400">暂无词汇数据，可点击「添加单词」或「AI 视觉提取」</div>
+                          <div className="py-20 text-center text-sm text-gray-400">暂无词汇数据，请点击「添加词汇」或「AI 视觉提取」</div>
                         ) : (
                           (unitDetail.vocab || []).map((v, i) => (
-                            <div key={i} className="flex items-center gap-2 p-2 bg-gray-50/70 border border-gray-200/80 rounded-lg">
+                            <div key={i} className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow group">
                               <button
                                 type="button"
                                 onClick={() => updateVocabItem(i, 'is_core', !v.is_core)}
-                                className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                                  v.is_core ? 'bg-amber-100 text-amber-800' : 'bg-gray-200 text-gray-500'
+                                className={`text-xs px-2 py-1 rounded-lg font-bold transition-colors ${
+                                  v.is_core ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-gray-100 text-gray-500 border border-gray-200'
                                 }`}
                                 title="切换是否为核心重点词"
                               >
@@ -853,7 +840,7 @@ export default function Textbooks() {
                                 value={v.word || ''}
                                 onChange={(e) => updateVocabItem(i, 'word', e.target.value)}
                                 placeholder="英文单词"
-                                className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded bg-white font-medium"
+                                className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-bold text-gray-900 transition-colors"
                               />
 
                               <input
@@ -861,15 +848,15 @@ export default function Textbooks() {
                                 value={v.translation || ''}
                                 onChange={(e) => updateVocabItem(i, 'translation', e.target.value)}
                                 placeholder="中文释义"
-                                className="w-28 px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600"
+                                className="w-40 px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none text-gray-700 transition-colors"
                               />
 
                               <button
                                 type="button"
                                 onClick={() => removeVocabItem(i)}
-                                className="text-gray-400 hover:text-red-600 p-1"
+                                className="p-2 text-gray-300 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
                           ))
@@ -879,20 +866,20 @@ export default function Textbooks() {
 
                     {/* 句型列表 */}
                     {activeTab === 'patterns' && (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {(unitDetail.patterns || []).length === 0 ? (
-                          <div className="py-12 text-center text-xs text-gray-400">暂无句型数据，可点击「添加句型」或「AI 视觉提取」</div>
+                          <div className="py-20 text-center text-sm text-gray-400">暂无句型数据，请点击「添加句型」或「AI 视觉提取」</div>
                         ) : (
                           (unitDetail.patterns || []).map((p, i) => (
-                            <div key={i} className="p-2.5 bg-gray-50/70 border border-gray-200/80 rounded-lg space-y-1.5">
+                            <div key={i} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow space-y-3 group relative">
                               <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-bold text-gray-500">句型 {i + 1}</span>
+                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 font-bold">句型 {i + 1}</Badge>
                                 <button
                                   type="button"
                                   onClick={() => removePatternItem(i)}
-                                  className="text-gray-400 hover:text-red-600"
+                                  className="p-1.5 text-gray-300 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
                               </div>
                               <input
@@ -900,14 +887,14 @@ export default function Textbooks() {
                                 value={p.pattern || ''}
                                 onChange={(e) => updatePatternItem(i, 'pattern', e.target.value)}
                                 placeholder="英文句型 (如: I have a pencil.)"
-                                className="w-full px-2.5 py-1 text-xs border border-gray-300 rounded bg-white font-medium"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-bold text-gray-900 transition-colors"
                               />
                               <input
                                 type="text"
                                 value={p.translation || ''}
                                 onChange={(e) => updatePatternItem(i, 'translation', e.target.value)}
                                 placeholder="中文翻译 (如: 我有一支铅笔。)"
-                                className="w-full px-2.5 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none text-gray-700 transition-colors"
                               />
                             </div>
                           ))
@@ -917,20 +904,20 @@ export default function Textbooks() {
 
                     {/* 语法列表 */}
                     {activeTab === 'grammar' && (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {(unitDetail.grammar || []).length === 0 ? (
-                          <div className="py-12 text-center text-xs text-gray-400">暂无语法数据，可点击「添加语法」或「AI 视觉提取」</div>
+                          <div className="py-20 text-center text-sm text-gray-400">暂无语法数据，请点击「添加语法」或「AI 视觉提取」</div>
                         ) : (
                           (unitDetail.grammar || []).map((g, i) => (
-                            <div key={i} className="p-2.5 bg-gray-50/70 border border-gray-200/80 rounded-lg space-y-1.5">
+                            <div key={i} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow space-y-3 group relative">
                               <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-bold text-gray-500">语法点 {i + 1}</span>
+                                <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-100 font-bold">语法点 {i + 1}</Badge>
                                 <button
                                   type="button"
                                   onClick={() => removeGrammarItem(i)}
-                                  className="text-gray-400 hover:text-red-600"
+                                  className="p-1.5 text-gray-300 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
                               </div>
                               <input
@@ -938,14 +925,14 @@ export default function Textbooks() {
                                 value={g.point || ''}
                                 onChange={(e) => updateGrammarItem(i, 'point', e.target.value)}
                                 placeholder="语法要点 (如: Simple Present / Countable Nouns)"
-                                className="w-full px-2.5 py-1 text-xs border border-gray-300 rounded bg-white font-medium"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-bold text-gray-900 transition-colors"
                               />
                               <input
                                 type="text"
                                 value={g.example || ''}
                                 onChange={(e) => updateGrammarItem(i, 'example', e.target.value)}
                                 placeholder="例句 (如: Do you have paper? Yes, I do.)"
-                                className="w-full px-2.5 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none text-gray-700 transition-colors"
                               />
                             </div>
                           ))
@@ -953,7 +940,7 @@ export default function Textbooks() {
                       </div>
                     )}
                   </div>
-                </div>
+                </Card>
 
               </div>
             </>
@@ -965,17 +952,17 @@ export default function Textbooks() {
       {/* 图片放大灯箱 Modal */}
       {previewImageModal && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setPreviewImageModal(null)}
         >
-          <div className="relative max-w-4xl max-h-[90vh] bg-white rounded-lg overflow-hidden p-2" onClick={e => e.stopPropagation()}>
+          <div className="relative max-w-5xl max-h-[95vh] bg-white rounded-2xl overflow-hidden p-2 shadow-2xl" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setPreviewImageModal(null)}
-              className="absolute top-3 right-3 bg-black/60 text-white rounded-full p-1.5 hover:bg-black/80"
+              className="absolute top-4 right-4 bg-black/60 text-white rounded-full p-2 hover:bg-black/90 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
-            <img src={previewImageModal} alt="Preview" className="max-h-[85vh] w-auto mx-auto object-contain" />
+            <img src={previewImageModal} alt="Preview" className="max-h-[90vh] w-auto mx-auto object-contain rounded-xl" />
           </div>
         </div>
       )}
@@ -1342,70 +1329,70 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
   const successCount = outline.filter(u => u.status === 'success').length;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <Card className="w-full max-w-5xl shadow-2xl border-0 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Header */}
-        <div className="px-6 py-3.5 border-b bg-purple-50/70 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 font-bold">
-              <Sparkles className="w-4 h-4" />
+        <CardHeader className="bg-white border-b border-gray-100 flex items-center justify-between py-4 px-6 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center text-primary-700 font-bold shadow-inner border border-primary-200">
+              <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-gray-900">
-                目录大纲驱动 · 印刷页码精准对齐导入 — {bookName} ({bookCode})
+              <h2 className="text-base font-bold text-gray-900 leading-tight">
+                批量导入大纲 — {bookName} ({bookCode})
               </h2>
-              <p className="text-xs text-gray-500">按真实课本目录切片 · 切图页码与印刷页码 100% 绝对对齐 · 零错位</p>
+              <p className="text-xs text-gray-500 mt-1 font-medium">按真实课本目录切片 · 零错位对齐</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+          <Button variant="ghost" size="sm" onClick={onClose} className="w-8 h-8 p-0 rounded-full bg-gray-50 hover:bg-gray-100">
+            <X className="w-5 h-5 text-gray-500" />
+          </Button>
+        </CardHeader>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+        <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-gray-50/50">
           {/* 1. 上传整本 PDF */}
           {!pdfDoc ? (
-            <div className="border-2 border-dashed border-purple-200 rounded-2xl p-8 text-center bg-purple-50/30 hover:bg-purple-50/60 transition">
-              <Upload className="w-10 h-10 text-purple-400 mx-auto mb-3" />
-              <div className="text-sm font-bold text-gray-800 mb-1">请选择《{bookName}》整本原版 PDF 文件</div>
-              <p className="text-xs text-gray-500 mb-4">系统将结合目录大纲自动按各 Unit 精准切片，并让切图页码与课本印刷页码完全对应</p>
-              <label className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white text-xs font-semibold rounded-xl hover:bg-purple-700 cursor-pointer shadow-sm">
-                <span>📁 浏览本地 PDF 文件</span>
+            <div className="border-2 border-dashed border-primary-200 rounded-2xl p-12 text-center bg-white hover:border-primary-400 hover:bg-primary-50/50 transition-all cursor-pointer">
+              <Upload className="w-12 h-12 text-primary-300 mx-auto mb-4" />
+              <div className="text-lg font-bold text-gray-900 mb-2">选择《{bookName}》原版 PDF 文件</div>
+              <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">系统将结合目录大纲自动按各 Unit 精准切片，并确保切图页码与课本印刷页码完全对应。</p>
+              <label className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white text-sm font-bold rounded-xl hover:bg-primary-700 cursor-pointer shadow-md hover:shadow-lg transition-all">
+                <FileText className="w-4 h-4" />
+                <span>浏览本地文件</span>
                 <input type="file" accept="application/pdf" onChange={handleSelectBookPdf} className="hidden" />
               </label>
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-6">
               {/* 2. 核心：页码偏移量校准器 (Offset) */}
-              <div className="p-4 bg-linear-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl flex items-center justify-between">
-                <div className="space-y-1">
-                  <div className="text-xs font-bold text-purple-950 flex items-center gap-2">
-                    <span>🎯 页码偏移量校准 (Page Offset)</span>
-                    <span className="px-2 py-0.5 bg-purple-200 text-purple-800 rounded text-[11px]">
-                      当前偏移: +{pageOffset}
-                    </span>
+              <div className="p-5 bg-white border border-gray-200 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-6 shadow-sm">
+                <div className="space-y-2 flex-1">
+                  <div className="text-sm font-bold text-gray-900 flex items-center gap-3">
+                    <span className="flex items-center gap-2"><Layers className="w-5 h-5 text-primary-500" /> 页码偏移量校准</span>
+                    <Badge variant="primary" className="text-xs">当前偏移: +{pageOffset}</Badge>
                   </div>
-                  <p className="text-[11px] text-purple-800">
-                    计算公式：<b>PDF 真实页码 = 课本印刷页码 + {pageOffset}</b>（例如 Welcome 印刷第 2 页 对应 PDF 第 {2 + pageOffset} 页）
+                  <p className="text-xs text-gray-500 leading-relaxed bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    计算公式：<b>PDF 真实页码 = 课本印刷页码 + {pageOffset}</b><br/>
+                    示例：Welcome 印刷第 2 页，在 PDF 中位于第 {2 + pageOffset} 页
                   </p>
                 </div>
 
                 {/* 调节按钮与微调器 */}
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center border border-purple-300 rounded-lg bg-white overflow-hidden shadow-2xs">
+                <div className="flex items-center gap-6">
+                  <div className="flex items-center border border-gray-200 rounded-xl bg-gray-50 overflow-hidden shadow-inner">
                     <button
                       type="button"
                       onClick={() => handleOffsetChange(pageOffset - 1)}
-                      className="px-3 py-1.5 text-xs text-purple-700 hover:bg-purple-50 font-bold border-r"
+                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 font-bold border-r border-gray-200 transition-colors"
                     >
                       -1
                     </button>
-                    <span className="px-3 py-1 text-xs font-bold text-gray-800">+{pageOffset}</span>
+                    <span className="px-5 py-2 text-sm font-bold text-primary-700 bg-white min-w-[3rem] text-center">+{pageOffset}</span>
                     <button
                       type="button"
                       onClick={() => handleOffsetChange(pageOffset + 1)}
-                      className="px-3 py-1.5 text-xs text-purple-700 hover:bg-purple-50 font-bold border-l"
+                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 font-bold border-l border-gray-200 transition-colors"
                     >
                       +1
                     </button>
@@ -1413,11 +1400,11 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
 
                   {/* 缩略图肉眼核对 */}
                   {previewThumbnail && (
-                    <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border shadow-2xs">
-                      <img src={previewThumbnail} alt="Preview" className="h-12 w-auto object-contain rounded border" />
-                      <div className="text-[10px] text-gray-500 text-left">
-                        <div>已定位至 PDF 第 <b>{previewingPdfPage}</b> 页</div>
-                        <div className="text-green-600 font-medium">✓ 核对是否为 Welcome 页</div>
+                    <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-xl border border-gray-200 shrink-0">
+                      <img src={previewThumbnail} alt="Preview" className="h-16 w-auto object-contain rounded border border-gray-200 shadow-sm bg-white" />
+                      <div className="text-xs text-gray-600 text-left">
+                        <div className="font-medium mb-1">PDF 第 <b>{previewingPdfPage}</b> 页</div>
+                        <div className="text-success-600 font-bold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> 请核对内容</div>
                       </div>
                     </div>
                   )}
@@ -1425,61 +1412,59 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
               </div>
 
               {/* 3. 单元目录大纲表格 */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-bold text-gray-800 flex items-center gap-2">
-                    <span>📖 单元精准切片大纲 ({outline.length} 单元)</span>
-                    <button
-                      type="button"
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-sm font-bold text-gray-900 flex items-center gap-3">
+                    <span>📖 单元精准切片大纲</span>
+                    <Badge variant="secondary" className="bg-gray-100">{outline.length} 单元</Badge>
+                    <Button
+                      variant="ghost" size="sm"
                       onClick={() => {
                         const allSelected = outline.every(u => u.selected);
                         setOutline(prev => prev.map(u => ({ ...u, selected: !allSelected })));
                       }}
-                      className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+                      className="h-6 text-xs text-primary-600 hover:bg-primary-50 ml-2"
                     >
                       {outline.every(u => u.selected) ? '取消全选' : '全选'}
-                    </button>
+                    </Button>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={addOutlineUnit}
-                      className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" /> 添加单元
-                    </button>
+                  <div className="flex items-center gap-3">
+                    <Button variant="outline" size="sm" onClick={addOutlineUnit}>
+                      <Plus className="w-4 h-4 mr-1" /> 添加单元
+                    </Button>
 
-                    <button
-                      type="button"
+                    <Button
+                      variant="primary" size="sm"
                       onClick={handleStartOutlineExtraction}
                       disabled={processing}
-                      className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-700 transition disabled:opacity-50 shadow-xs cursor-pointer"
+                      className="shadow-sm"
                     >
-                      {processing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-                      <span>{processing ? '正在精准切片提取...' : '🚀 开始按大纲切片提取'}</span>
-                    </button>
+                      {processing ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+                      {processing ? '提取中...' : '🚀 开始按大纲切片'}
+                    </Button>
                   </div>
                 </div>
 
                 {statusMsg && (
-                  <div className="text-xs text-purple-700 bg-purple-50/70 p-2 rounded-lg mb-2 font-medium">
+                  <div className="text-sm text-primary-800 bg-primary-50 border border-primary-100 p-3 rounded-xl mb-4 font-medium flex items-center gap-2">
+                    <Loader className="w-4 h-4 animate-spin shrink-0" />
                     {statusMsg}
                   </div>
                 )}
 
                 {/* 表格 */}
-                <div className="border rounded-xl overflow-hidden bg-white shadow-2xs">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-gray-50 border-b text-gray-600">
+                <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold">
                       <tr>
-                        <th className="p-2.5 w-10 text-center">选</th>
-                        <th className="p-2.5 w-16">Unit</th>
-                        <th className="p-2.5">单元标题 (Title)</th>
-                        <th className="p-2.5 w-32">课本印刷页码</th>
-                        <th className="p-2.5 w-32">对应 PDF 页码</th>
-                        <th className="p-2.5 w-28 text-center">提取状态</th>
-                        <th className="p-2.5 w-36">知识点概况</th>
+                        <th className="px-4 py-3 w-12 text-center">选</th>
+                        <th className="px-4 py-3 w-20">Unit</th>
+                        <th className="px-4 py-3">单元标题</th>
+                        <th className="px-4 py-3 w-40">印刷页码</th>
+                        <th className="px-4 py-3 w-40 text-center">对应 PDF</th>
+                        <th className="px-4 py-3 w-32 text-center">状态</th>
+                        <th className="px-4 py-3 w-40">提取结果</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -1489,73 +1474,68 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
                         const isProcessingThis = currentProcessingUnit === u.unit_number;
 
                         return (
-                          <tr key={idx} className={isProcessingThis ? 'bg-purple-50/80 font-medium' : 'hover:bg-gray-50/60'}>
-                            <td className="p-2.5 text-center">
+                          <tr key={idx} className={`${isProcessingThis ? 'bg-primary-50/50' : 'hover:bg-gray-50'} transition-colors`}>
+                            <td className="px-4 py-3 text-center">
                               <input
                                 type="checkbox"
                                 checked={u.selected}
                                 onChange={e => updateOutlineItem(idx, 'selected', e.target.checked)}
-                                className="rounded text-purple-600 focus:ring-purple-500"
+                                className="rounded text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
                               />
                             </td>
-                            <td className="p-2.5 font-bold text-gray-900">U{u.unit_number}</td>
-                            <td className="p-2.5">
+                            <td className="px-4 py-3 font-bold text-gray-900">U{u.unit_number}</td>
+                            <td className="px-4 py-3">
                               <input
                                 type="text"
                                 value={u.unit_title}
                                 onChange={e => updateOutlineItem(idx, 'unit_title', e.target.value)}
-                                className="w-full px-2 py-1 border rounded text-xs bg-white"
+                                className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none transition-shadow"
                               />
                             </td>
-                            <td className="p-2.5">
-                              <div className="flex items-center gap-1">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
                                 <input
                                   type="number"
                                   value={u.page_from}
                                   onChange={e => updateOutlineItem(idx, 'page_from', parseInt(e.target.value) || 0)}
-                                  className="w-12 px-1.5 py-1 border rounded text-xs text-center"
+                                  className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-primary-500 focus:outline-none"
                                 />
-                                <span>-</span>
+                                <span className="text-gray-400">-</span>
                                 <input
                                   type="number"
                                   value={u.page_to}
                                   onChange={e => updateOutlineItem(idx, 'page_to', parseInt(e.target.value) || 0)}
-                                  className="w-12 px-1.5 py-1 border rounded text-xs text-center"
+                                  className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-primary-500 focus:outline-none"
                                 />
-                                <span className="text-gray-400 text-[10px]">页</span>
                               </div>
                             </td>
-                            <td className="p-2.5 text-gray-500 font-medium">
+                            <td className="px-4 py-3 text-gray-500 font-bold text-center bg-gray-50/50">
                               第 {pdfFrom} - {pdfTo} 页
                             </td>
-                            <td className="p-2.5 text-center">
+                            <td className="px-4 py-3 text-center">
                               {u.status === 'processing' ? (
-                                <span className="text-purple-600 flex items-center justify-center gap-1 font-medium">
-                                  <Loader className="w-3 h-3 animate-spin" /> 提取中
-                                </span>
+                                <Badge variant="primary" className="bg-primary-100 text-primary-700 animate-pulse">提取中</Badge>
                               ) : u.status === 'success' ? (
-                                <span className="text-green-600 font-semibold flex items-center justify-center gap-0.5">
-                                  <Check className="w-3.5 h-3.5" /> 已就绪
-                                </span>
+                                <Badge variant="success">已就绪</Badge>
                               ) : u.status === 'error' ? (
-                                <div className="text-red-500 font-medium flex flex-col items-center">
-                                  <span>❌ 失败</span>
-                                  {u.errorMsg && <span className="text-[9px] text-red-600 max-w-[120px] truncate" title={u.errorMsg}>{u.errorMsg}</span>}
+                                <div className="flex flex-col items-center gap-1">
+                                  <Badge variant="danger">失败</Badge>
                                 </div>
                               ) : (
-                                <span className="text-gray-400">待处理</span>
+                                <span className="text-gray-400 text-xs font-medium">待处理</span>
                               )}
                             </td>
-                            <td className="p-2.5 text-gray-600 text-[11px]">
+                            <td className="px-4 py-3 text-xs">
                               {u.status === 'success' ? (
-                                <span className="text-purple-700 font-medium">
-                                  {u.vocabCount} 词汇 · {u.patternCount} 句型
-                                </span>
+                                <div className="flex flex-col gap-1 text-gray-600 font-medium bg-gray-50 p-1.5 rounded-lg border border-gray-100">
+                                  <span>{u.vocabCount} 词汇</span>
+                                  <span>{u.patternCount} 句型</span>
+                                </div>
                               ) : u.errorMsg ? (
-                                <span className="text-red-500 text-[10px]" title={u.errorMsg}>
-                                  {u.errorMsg.substring(0, 30)}...
+                                <span className="text-danger-600 block max-w-[120px] truncate" title={u.errorMsg}>
+                                  {u.errorMsg}
                                 </span>
-                              ) : '-'}
+                              ) : <span className="text-gray-300">-</span>}
                             </td>
                           </tr>
                         );
@@ -1569,24 +1549,24 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3.5 border-t bg-gray-50 flex items-center justify-between shrink-0">
-          <button onClick={onClose} className="px-4 py-1.5 text-xs text-gray-600 hover:text-gray-800">
-            关闭
-          </button>
+        <div className="px-6 py-4 border-t border-gray-100 bg-white flex items-center justify-between shrink-0">
+          <Button variant="outline" onClick={onClose}>
+            关闭窗口
+          </Button>
 
           {successCount > 0 && (
-            <button
-              type="button"
+            <Button
+              variant="success"
               onClick={handleCommitAll}
               disabled={savingAll}
-              className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white text-xs font-bold rounded-xl hover:bg-green-700 transition disabled:opacity-50 shadow-md cursor-pointer"
+              className="px-6 shadow-md"
             >
-              {savingAll ? <Loader className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
-              <span>{savingAll ? '正在入库...' : `💾 全部保存入库 (${successCount} 个单元)`}</span>
-            </button>
+              {savingAll ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <CheckCheck className="w-4 h-4 mr-2" />}
+              {savingAll ? '正在入库...' : `💾 全部保存入库 (${successCount} 单元)`}
+            </Button>
           )}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -1629,48 +1609,51 @@ function BooksManageModal({ books, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-xl flex flex-col max-h-[85vh]">
-        <div className="px-6 py-4 border-b flex items-center justify-between bg-gray-50">
-          <h2 className="text-base font-bold text-gray-900">📚 教材目录管理</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl shadow-2xl border-0 overflow-hidden flex flex-col max-h-[85vh]">
+        <CardHeader className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Layers className="w-5 h-5 text-primary-600" />
+            教材目录管理
+          </h2>
+          <Button variant="ghost" size="sm" onClick={onClose} className="w-8 h-8 p-0 rounded-full">
+            <X className="w-5 h-5 text-gray-400" />
+          </Button>
+        </CardHeader>
 
-        <div className="p-6 overflow-y-auto space-y-6">
-          <form onSubmit={handleSaveBook} className="p-4 bg-purple-50/60 border border-purple-200 rounded-xl space-y-3">
-            <div className="text-xs font-bold text-purple-900">
+        <div className="p-6 overflow-y-auto space-y-6 bg-gray-50/50">
+          <form onSubmit={handleSaveBook} className="p-5 bg-white border border-gray-200 rounded-xl space-y-4 shadow-sm">
+            <div className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
               {editingCode ? `编辑教材: ${editingCode}` : '➕ 新增教材'}
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-[11px] text-gray-600 mb-1">教材代码 (Code)</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">教材代码 (Code)</label>
                 <input
                   type="text"
                   disabled={!!editingCode}
                   value={form.code}
                   onChange={e => setForm({ ...form, code: e.target.value })}
                   placeholder="如 EU-L4"
-                  className="w-full px-2.5 py-1.5 text-xs border rounded bg-white font-bold"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-bold text-gray-900 disabled:opacity-60"
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-gray-600 mb-1">教材全称</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">教材全称</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={e => setForm({ ...form, name: e.target.value })}
                   placeholder="如 Everybody Up 4"
-                  className="w-full px-2.5 py-1.5 text-xs border rounded bg-white"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-gray-600 mb-1">CEFR 等级</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">CEFR 等级</label>
                 <select
                   value={form.level}
                   onChange={e => setForm({ ...form, level: e.target.value })}
-                  className="w-full px-2.5 py-1.5 text-xs border rounded bg-white"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
                 >
                   <option value="Pre-A1">Pre-A1</option>
                   <option value="A1">A1</option>
@@ -1681,56 +1664,64 @@ function BooksManageModal({ books, onClose }) {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="flex justify-end gap-2 pt-2">
               {editingCode && (
-                <button
-                  type="button"
+                <Button
+                  variant="outline" size="sm"
                   onClick={() => {
                     setEditingCode(null);
                     setForm({ code: '', name: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
                   }}
-                  className="px-3 py-1 text-xs text-gray-600 bg-white border rounded"
                 >
                   取消
-                </button>
+                </Button>
               )}
-              <button type="submit" className="px-4 py-1 text-xs font-semibold bg-purple-600 text-white rounded hover:bg-purple-700">
-                {editingCode ? '更新' : '添加'}
-              </button>
+              <Button type="submit" size="sm">
+                {editingCode ? '更新配置' : '确认添加'}
+              </Button>
             </div>
           </form>
 
-          <div className="space-y-2">
-            <div className="text-xs font-bold text-gray-700">现有教材列表</div>
-            {list.map(b => (
-              <div key={b.code} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 text-xs">
-                <div>
-                  <span className="font-bold text-gray-900 mr-2">{b.name}</span>
-                  <span className="text-gray-500 mr-2">({b.code})</span>
-                  <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px]">{b.level}</span>
+          <div className="space-y-3">
+            <div className="text-sm font-bold text-gray-900 px-1">现有教材列表 ({list.length})</div>
+            <div className="grid gap-2">
+              {list.map(b => (
+                <div key={b.code} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl hover:shadow-md transition-shadow group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center text-primary-600">
+                      <Book className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-gray-900 text-sm">{b.name}</span>
+                        <Badge variant="secondary" className="px-1.5 py-0 text-[10px] bg-gray-100 uppercase">{b.level}</Badge>
+                      </div>
+                      <div className="text-xs text-gray-500 font-mono">{b.code}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => {
+                        setEditingCode(b.code);
+                        setForm({ code: b.code, name: b.name, level: b.level || 'A1', publisher: b.publisher || 'Oxford', total_units: b.total_units || 8, description: b.description || '' });
+                      }}
+                      className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteBook(b.code)}
+                      className="p-2 text-gray-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setEditingCode(b.code);
-                      setForm({ code: b.code, name: b.name, level: b.level || 'A1', publisher: b.publisher || 'Oxford', total_units: b.total_units || 8, description: b.description || '' });
-                    }}
-                    className="text-purple-600 hover:text-purple-800 p-1"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteBook(b.code)}
-                    className="text-red-500 hover:text-red-700 p-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -1858,30 +1849,30 @@ function LlmSettingsModal({ config, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <Card className="w-full max-w-3xl shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b bg-indigo-50/70 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600 font-bold">
-              <Sparkles className="w-4 h-4" />
+        <CardHeader className="px-6 py-4 border-b border-indigo-100 bg-indigo-50/50 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-700 font-bold border border-indigo-200">
+              <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-gray-900">AI 视觉大模型配置中心</h2>
-              <p className="text-xs text-gray-500">自由切换 OpenAI、智谱 GLM、通义千问、NVIDIA NIM 或自定义接口</p>
+              <h2 className="text-base font-bold text-gray-900">AI 视觉大模型配置中心</h2>
+              <p className="text-xs text-gray-500 font-medium">自由切换 OpenAI、智谱、千问、NVIDIA NIM 或自定义接口</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+          <Button variant="ghost" size="sm" onClick={onClose} className="w-8 h-8 p-0 rounded-full bg-white hover:bg-gray-100">
+            <X className="w-5 h-5 text-gray-500" />
+          </Button>
+        </CardHeader>
 
         {/* Body */}
-        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 flex-1">
+        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-6 flex-1 bg-white">
           {/* 预设平台快速切换 */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-gray-700">1. 选择模型服务商</label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div className="space-y-3">
+            <label className="block text-sm font-bold text-gray-900">1. 选择模型服务商</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {LLM_PRESETS.map(p => {
                 const isSelected = form.provider === p.id;
                 return (
@@ -1889,17 +1880,17 @@ function LlmSettingsModal({ config, onSave, onClose }) {
                     key={p.id}
                     type="button"
                     onClick={() => handleSelectPreset(p)}
-                    className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
+                    className={`p-4 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
                       isSelected
-                        ? 'bg-indigo-50 border-indigo-500 shadow-2xs ring-1 ring-indigo-400/30'
-                        : 'bg-white border-gray-200 hover:border-indigo-200 hover:bg-gray-50/50'
+                        ? 'bg-indigo-50 border-indigo-500 shadow-md ring-2 ring-indigo-500/20 transform scale-[1.02]'
+                        : 'bg-white border-gray-200 hover:border-indigo-300 hover:shadow-sm'
                     }`}
                   >
                     <div>
-                      <div className={`text-xs font-bold ${isSelected ? 'text-indigo-900' : 'text-gray-800'}`}>
+                      <div className={`text-sm font-bold mb-1.5 ${isSelected ? 'text-indigo-900' : 'text-gray-800'}`}>
                         {p.name}
                       </div>
-                      <div className="text-[10px] text-gray-500 mt-1 line-clamp-2">{p.desc}</div>
+                      <div className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{p.desc}</div>
                     </div>
                   </button>
                 );
@@ -1908,9 +1899,10 @@ function LlmSettingsModal({ config, onSave, onClose }) {
           </div>
 
           {/* 详细参数配置 */}
-          <div className="space-y-3.5 p-4 bg-gray-50/80 rounded-xl border">
+          <div className="space-y-4 p-5 bg-gray-50 rounded-xl border border-gray-200 shadow-inner">
+            <label className="block text-sm font-bold text-gray-900 mb-2">2. 配置模型接口参数</label>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">
                 API Base URL (接口地址)
               </label>
               <input
@@ -1918,13 +1910,13 @@ function LlmSettingsModal({ config, onSave, onClose }) {
                 value={form.baseUrl || ''}
                 onChange={e => setForm({ ...form, baseUrl: e.target.value })}
                 placeholder="如 https://integrate.api.nvidia.com/v1"
-                className="w-full px-3 py-2 text-xs border rounded-lg bg-white font-mono"
+                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-shadow"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">
                 Model Name (模型名称)
               </label>
               <input
@@ -1932,66 +1924,59 @@ function LlmSettingsModal({ config, onSave, onClose }) {
                 value={form.model || ''}
                 onChange={e => setForm({ ...form, model: e.target.value })}
                 placeholder="如 google/gemma-3n-e4b-it / glm-4v-flash / gpt-4o-mini"
-                className="w-full px-3 py-2 text-xs border rounded-lg bg-white font-mono"
+                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-shadow"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center justify-between">
-                <span>API Key (密钥)</span>
-                <span className="text-[10px] text-gray-400 font-normal">保存在本地浏览器中，调用时直接传输</span>
+              <label className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-gray-700">API Key (密钥)</span>
+                <Badge variant="secondary" className="text-[10px] bg-gray-200 text-gray-600 border-0">保存在本地浏览器中，调用时直接传输</Badge>
               </label>
               <input
                 type="password"
                 value={form.apiKey || ''}
                 onChange={e => setForm({ ...form, apiKey: e.target.value })}
                 placeholder="粘贴对应的 API Key (如 nvapi-... / sk-...)"
-                className="w-full px-3 py-2 text-xs border rounded-lg bg-white font-mono"
+                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-shadow"
               />
             </div>
           </div>
 
           {/* 连通性测试结果 */}
           {testResult && (
-            <div className={`p-3 rounded-xl text-xs font-mono whitespace-pre-wrap border ${
-              testResult.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+            <div className={`p-4 rounded-xl text-sm font-mono whitespace-pre-wrap border ${
+              testResult.success ? 'bg-success-50 border-success-200 text-success-800' : 'bg-danger-50 border-danger-200 text-danger-800'
             }`}>
               {testResult.msg}
             </div>
           )}
-
-          {/* Footer Buttons */}
-          <div className="flex items-center justify-between pt-2 border-t">
-            <button
-              type="button"
-              onClick={handleTestConnection}
-              disabled={testing || !form.apiKey}
-              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-xl hover:bg-indigo-100 disabled:opacity-50 transition border border-indigo-200"
-            >
-              {testing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-              <span>{testing ? '正在测试连接...' : '🧪 测试连接'}</span>
-            </button>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-xs text-gray-600 hover:text-gray-800"
-              >
-                取消
-              </button>
-              <button
-                type="submit"
-                className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 shadow-sm"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>保存配置并生效</span>
-              </button>
-            </div>
-          </div>
         </form>
-      </div>
+        
+        {/* Footer Buttons */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
+          <Button
+            variant="outline"
+            onClick={handleTestConnection}
+            disabled={testing || !form.apiKey}
+            className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 bg-white"
+          >
+            {testing ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+            {testing ? '正在测试连接...' : '🧪 测试连接'}
+          </Button>
+
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" onClick={onClose}>
+              取消
+            </Button>
+            <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md">
+              <Save className="w-4 h-4 mr-2" />
+              保存配置并生效
+            </Button>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
