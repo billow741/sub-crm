@@ -7,8 +7,7 @@
   <link rel="icon" type="image/webp" href="sunblogo.webp">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="assets/html2canvas.min.js"></script>
   <style>
     :root {
       --sb-blue: #4B9FE0;
@@ -1866,17 +1865,27 @@ function spFormatPatternPills(patternStr) {
   return h;
 }
 
-// Load html2canvas lazily
-var spH2cLoading = false;
+// Load html2canvas with local + multiple CDN fallback
 function spLoadH2c() {
-  if (window.html2canvas || spH2cLoading) return Promise.resolve();
-  spH2cLoading = true;
+  if (typeof window.html2canvas !== 'undefined') return Promise.resolve();
+  var sources = [
+    'assets/html2canvas.min.js',
+    'https://npm.elemecdn.com/html2canvas@1.4.1/dist/html2canvas.min.js',
+    'https://cdn.bootcdn.net/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+    'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
+  ];
   return new Promise(function(resolve) {
-    var s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.2/html2canvas.min.js';
-    s.onload = function() { resolve(); };
-    s.onerror = function() { spH2cLoading = false; resolve(); };
-    document.head.appendChild(s);
+    var idx = 0;
+    function tryNext() {
+      if (typeof window.html2canvas !== 'undefined') { resolve(); return; }
+      if (idx >= sources.length) { resolve(); return; }
+      var s = document.createElement('script');
+      s.src = sources[idx++];
+      s.onload = function() { resolve(); };
+      s.onerror = function() { tryNext(); };
+      document.head.appendChild(s);
+    }
+    tryNext();
   });
 }
 
@@ -2871,38 +2880,40 @@ function spShareCard(btn) {
 
   var isFileProtocol = window.location.protocol === 'file:';
 
-  if (!isFileProtocol && typeof html2canvas !== 'undefined') {
-    html2canvas(posterNode, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      imageTimeout: 4000,
-      backgroundColor: '#FFF9F2',
-      logging: false,
-      ignoreElements: function(el) {
-        return el.classList && (el.classList.contains('tb-thumb-grid') || el.classList.contains('tb-thumb-card') || el.classList.contains('tb-lightbox') || el.classList.contains('sp-toggle-btn') || el.classList.contains('sp-share-btn'));
-      }
-    }).then(function(canvas) {
-      if (posterNode.parentNode) posterNode.parentNode.removeChild(posterNode);
-      try {
-        var imgUrl = canvas.toDataURL('image/png');
-        preview.innerHTML = '<img src="' + imgUrl + '" style="width:100%;height:auto;display:block;border-radius:8px;" alt="海报">';
-        if (downloadBtn) {
-          downloadBtn.href = imgUrl;
-          downloadBtn.style.display = 'inline-block';
+  spLoadH2c().then(function() {
+    if (!isFileProtocol && typeof html2canvas !== 'undefined') {
+      html2canvas(posterNode, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        imageTimeout: 4000,
+        backgroundColor: '#FFF9F2',
+        logging: false,
+        ignoreElements: function(el) {
+          return el.classList && (el.classList.contains('tb-thumb-grid') || el.classList.contains('tb-thumb-card') || el.classList.contains('tb-lightbox') || el.classList.contains('sp-toggle-btn') || el.classList.contains('sp-share-btn'));
         }
-      } catch(err) {
+      }).then(function(canvas) {
+        if (posterNode.parentNode) posterNode.parentNode.removeChild(posterNode);
+        try {
+          var imgUrl = canvas.toDataURL('image/png');
+          preview.innerHTML = '<img src="' + imgUrl + '" style="width:100%;height:auto;display:block;border-radius:8px;" alt="海报">';
+          if (downloadBtn) {
+            downloadBtn.href = imgUrl;
+            downloadBtn.style.display = 'inline-block';
+          }
+        } catch(err) {
+          fallbackDOM(posterNode);
+        }
+      }).catch(function(err) {
+        if (posterNode.parentNode) posterNode.parentNode.removeChild(posterNode);
         fallbackDOM(posterNode);
-      }
-    }).catch(function(err) {
+      });
+    } else {
+      // 无法加载 html2canvas 或受系统策略限制时，优雅展示原生 DOM 海报供手机长按/截屏
       if (posterNode.parentNode) posterNode.parentNode.removeChild(posterNode);
       fallbackDOM(posterNode);
-    });
-  } else {
-    // 本地 file:// 协议直接展示原生 DOM 渲染卡片，避免触发浏览器的 iframe 安全策略
-    if (posterNode.parentNode) posterNode.parentNode.removeChild(posterNode);
-    fallbackDOM(posterNode);
-  }
+    }
+  });
 }
 </script>
 
