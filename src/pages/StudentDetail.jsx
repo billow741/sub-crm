@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Phone, Mail, Calendar, CreditCard, Clock, Plus, Trash2, 
   AlertTriangle, MessageSquare, FileText, Edit, Loader2, User, CheckCircle, 
-  X, Calculator, FileCheck, FileSignature 
+  X, Calculator, FileCheck, FileSignature, BookOpen 
 } from 'lucide-react';
 import { studentOps, packageOps, classOps, paymentOps, hourChangeOps } from '../store';
 import { request } from '../store/api';
@@ -422,44 +422,86 @@ export default function StudentDetail() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <h3 className="font-bold text-gray-900">最近上课</h3>
+            <CardHeader className="flex items-center justify-between pb-3">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-primary-600" />
+                最近上课
+              </h3>
               <Button variant="ghost" size="sm" onClick={() => setShowClassModal(true)}>
                 <Plus className="w-4 h-4 mr-1" /> 添加
               </Button>
             </CardHeader>
-            <div className="p-6">
+            <div className="p-6 pt-0">
               {classes.length > 0 ? (
-                <div className="space-y-4">
-                  {classes.slice(0, 4).map(cls => (
-                    <div key={cls.id} className="flex items-center justify-between border-b border-gray-50 pb-4 last:border-0 last:pb-0">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${cls.status === 'completed' ? 'bg-success-50 text-success-600' : 'bg-gray-100 text-gray-400'}`}>
-                          <Clock className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900 text-sm mb-0.5">{cls.date}</div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">{cls.hours} 节课</span>
-                            <Badge variant={getStatusVariant(cls.status)} className="px-1.5 py-0 text-[10px]">{STATUS_LABELS[cls.status]}</Badge>
+                <div className="divide-y divide-gray-100">
+                  {classes.slice(0, 4).map(cls => {
+                    const hasFeedback = cls.content || cls.homework || cls.fb_teacher_message || cls.fb_homework || cls.fb_vocab || cls.fb_patterns || cls.fb_grammar || cls.fb_pronunciation_errors || cls.fb_grammar_errors;
+                    const isTrialReport = cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id));
+                    const teacher = cls.teacher_name || cls.teacher;
+                    const progressText = cls.fb_lesson_level 
+                      ? `${cls.fb_lesson_level} · Unit ${cls.fb_unit || '-'} L${cls.fb_lesson || '-'}` 
+                      : (cls.subject || cls.course_name || '');
+                    const previewText = cls.fb_teacher_message || cls.content || cls.notes;
+
+                    return (
+                      <div key={cls.id} className="py-3.5 first:pt-2 last:pb-0 flex items-start justify-between gap-3 group">
+                        <div className="flex items-start gap-3.5 min-w-0">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                            isTrialReport ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                            hasFeedback ? 'bg-primary-50 text-primary-600 border border-primary-100' : 
+                            cls.status === 'completed' ? 'bg-success-50 text-success-600 border border-success-100' : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {isTrialReport ? <FileText className="w-5 h-5" /> : hasFeedback ? <MessageSquare className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                              <span className="font-bold text-gray-900 text-sm">{cls.date}</span>
+                              {cls.start_time && <span className="text-xs text-gray-400">{cls.start_time.substring(0, 5)}</span>}
+                              <Badge variant={getStatusVariant(cls.status)} className="px-1.5 py-0 text-[10px]">{STATUS_LABELS[cls.status] || cls.status}</Badge>
+                              {teacher && (
+                                <span className="text-xs text-gray-600 font-medium bg-gray-100/90 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                  <User className="w-3 h-3 text-gray-400" /> {teacher}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {(progressText || previewText) && (
+                              <div className="mt-1 flex flex-col gap-0.5">
+                                {progressText && (
+                                  <span className="text-xs font-semibold text-primary-700 flex items-center gap-1">
+                                    <BookOpen className="w-3.5 h-3.5" /> {progressText}
+                                  </span>
+                                )}
+                                {previewText && (
+                                  <p className="text-xs text-gray-500 line-clamp-1 italic">
+                                    "{previewText}"
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
+
+                        <div className="flex items-center gap-2 shrink-0 self-center">
+                          <span className="text-xs font-bold text-gray-600 bg-gray-50 px-2 py-1 rounded border border-gray-100">{cls.hours} 节</span>
+                          {(hasFeedback || isTrialReport) ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className={`h-7 text-xs px-2.5 shadow-none ${isTrialReport ? 'text-orange-600 border-orange-200 hover:bg-orange-50' : 'text-primary-600 border-primary-200 hover:bg-primary-50'}`}
+                              onClick={() => isTrialReport
+                                ? setShowAssessmentFeedback(assessments.find(a => parseInt(a.class_id) === parseInt(cls.id)))
+                                : setShowFeedbackModal(cls)}
+                            >
+                              {isTrialReport ? '评估报告' : '查看反馈'}
+                            </Button>
+                          ) : (
+                            <span className="text-[11px] text-gray-400 bg-gray-50 px-2 py-1 rounded">未填反馈</span>
+                          )}
+                        </div>
                       </div>
-                      {(cls.content || cls.homework || cls.fb_teacher_message || cls.fb_homework || cls.fb_vocab || cls.fb_patterns || cls.fb_grammar || cls.fb_pronunciation_errors || cls.fb_grammar_errors || (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))) && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
-                            ? setShowAssessmentFeedback(assessments.find(a => parseInt(a.class_id) === parseInt(cls.id)))
-                            : setShowFeedbackModal(cls)}
-                        >
-                          {(cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
-                            ? <FileText className="w-4 h-4 text-primary-600" />
-                            : <MessageSquare className="w-4 h-4 text-primary-600" />}
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-400">
@@ -475,8 +517,14 @@ export default function StudentDetail() {
       {/* 上课记录 */}
       {activeTab === 'classes' && (
         <Card>
-          <CardHeader>
-            <h3 className="font-bold text-gray-900">上课记录</h3>
+          <CardHeader className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-primary-600" />
+                上课记录与教学反馈
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">记录每堂课的消课详情、教学进度、教师反馈与作业布置</p>
+            </div>
             <Button onClick={() => setShowClassModal(true)}>
               <Plus className="w-4 h-4 mr-1.5" /> 记录上课
             </Button>
@@ -485,44 +533,127 @@ export default function StudentDetail() {
             {classes.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-gray-50 border-b border-gray-100 text-gray-500">
+                  <thead className="bg-gray-50/80 border-b border-gray-100 text-gray-500 font-medium">
                     <tr>
-                      <th className="px-6 py-4 font-medium">日期</th>
-                      <th className="px-6 py-4 font-medium">消耗课时</th>
-                      <th className="px-6 py-4 font-medium">状态</th>
-                      <th className="px-6 py-4 font-medium text-center">反馈/报告</th>
-                      <th className="px-6 py-4 font-medium text-right">操作</th>
+                      <th className="px-6 py-4">上课时间</th>
+                      <th className="px-6 py-4">课程 / 进度</th>
+                      <th className="px-6 py-4">授课老师</th>
+                      <th className="px-6 py-4">消耗课时</th>
+                      <th className="px-6 py-4">状态</th>
+                      <th className="px-6 py-4">课堂反馈与评价</th>
+                      <th className="px-6 py-4 text-right">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {classes.map(cls => (
-                      <tr key={cls.id} className="hover:bg-gray-50/50">
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">{cls.date}</div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{cls.hours} 节</td>
-                        <td className="px-6 py-4">
-                          <Badge variant={getStatusVariant(cls.status)}>{STATUS_LABELS[cls.status]}</Badge>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          {(cls.content || cls.homework || cls.fb_teacher_message || cls.fb_homework || cls.fb_vocab || cls.fb_patterns || cls.fb_grammar || cls.fb_pronunciation_errors || cls.fb_grammar_errors || (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))) ? (
+                    {classes.map(cls => {
+                      const hasFeedback = cls.content || cls.homework || cls.fb_teacher_message || cls.fb_homework || cls.fb_vocab || cls.fb_patterns || cls.fb_grammar || cls.fb_pronunciation_errors || cls.fb_grammar_errors;
+                      const isTrialReport = cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id));
+                      const teacher = cls.teacher_name || cls.teacher;
+                      const progressText = cls.fb_lesson_level 
+                        ? `${cls.fb_lesson_level} · Unit ${cls.fb_unit || '-'} L${cls.fb_lesson || '-'}` 
+                        : (cls.subject || cls.course_name || '-');
+                      const feedbackPreview = cls.fb_teacher_message || cls.content || cls.fb_homework || cls.notes;
+
+                      return (
+                        <tr key={cls.id} className="hover:bg-gray-50/70 transition-colors">
+                          {/* 上课时间 */}
+                          <td className="px-6 py-4">
+                            <div className="font-semibold text-gray-900">{cls.date}</div>
+                            {cls.start_time && (
+                              <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {cls.start_time.substring(0, 5)}{cls.end_time ? ` - ${cls.end_time.substring(0, 5)}` : ''}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 课程 / 进度 */}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-1.5 font-medium text-gray-800">
+                              <BookOpen className="w-3.5 h-3.5 text-primary-500 shrink-0" />
+                              <span>{progressText}</span>
+                            </div>
+                            {cls.package_name && (
+                              <div className="text-[11px] text-gray-400 mt-0.5">{cls.package_name}</div>
+                            )}
+                          </td>
+
+                          {/* 授课老师 */}
+                          <td className="px-6 py-4">
+                            {teacher ? (
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-xs">
+                                  {teacher.charAt(0)}
+                                </div>
+                                <span className="font-medium text-gray-700">{teacher}</span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+
+                          {/* 消耗课时 */}
+                          <td className="px-6 py-4 font-semibold text-gray-700">
+                            {cls.hours} 节
+                          </td>
+
+                          {/* 状态 */}
+                          <td className="px-6 py-4">
+                            <Badge variant={getStatusVariant(cls.status)}>{STATUS_LABELS[cls.status] || cls.status}</Badge>
+                          </td>
+
+                          {/* 课堂反馈与评价 */}
+                          <td className="px-6 py-4 whitespace-normal max-w-xs">
+                            {isTrialReport ? (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-7 text-xs px-2.5 border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100 flex items-center gap-1.5"
+                                onClick={() => setShowAssessmentFeedback(assessments.find(a => parseInt(a.class_id) === parseInt(cls.id)))}
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                查看体验课评估报告
+                              </Button>
+                            ) : hasFeedback ? (
+                              <div className="flex items-center gap-3">
+                                {feedbackPreview ? (
+                                  <div className="text-xs text-gray-600 line-clamp-1 max-w-[200px]" title={feedbackPreview}>
+                                    {feedbackPreview}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-emerald-600 font-medium">已录入课堂反馈</span>
+                                )}
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-7 text-xs px-2 shrink-0 border-primary-200 text-primary-700 hover:bg-primary-50"
+                                  onClick={() => setShowFeedbackModal(cls)}
+                                >
+                                  查看反馈
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                {cls.notes ? `备注: ${cls.notes}` : '后台消课 / 暂无反馈'}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* 操作 */}
+                          <td className="px-6 py-4 text-right">
                             <Button 
-                              variant="outline" size="sm" className="h-7 text-xs px-2"
-                              onClick={() => (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
-                                ? setShowAssessmentFeedback(assessments.find(a => parseInt(a.class_id) === parseInt(cls.id)))
-                                : setShowFeedbackModal(cls)}
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleDeleteClass(cls.id)} 
+                              className="text-gray-400 hover:text-danger-600 px-2 hover:bg-danger-50"
+                              title="删除记录"
                             >
-                              {(cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id))) ? '评估报告' : '上课反馈'}
+                              <Trash2 className="w-4 h-4" />
                             </Button>
-                          ) : <span className="text-gray-300">-</span>}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteClass(cls.id)} className="text-gray-400 hover:text-danger-600 px-2">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
