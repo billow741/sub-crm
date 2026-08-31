@@ -132,10 +132,23 @@ export default function Payments() {
     return methodBadgeVariants[method] || 'default';
   };
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedOrg]);
+
   const filteredPayments = payments.filter(p => {
     const studentName = getStudentName(p).toLowerCase();
     return studentName.includes(searchTerm.toLowerCase());
   });
+
+  const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
+  const currentPayments = filteredPayments.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const totalReceived = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const thisMonth = new Date().toISOString().slice(0, 7);
@@ -248,8 +261,8 @@ export default function Payments() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredPayments.length > 0 ? (
-                  filteredPayments.map((payment) => (
+                {currentPayments.length > 0 ? (
+                  currentPayments.map((payment) => (
                     <tr key={payment.id} className="hover:bg-gray-50/70 transition-colors">
                       <td className="px-6 py-4 text-sm whitespace-nowrap">
                         <div className="flex items-center gap-1.5 text-gray-600 font-medium">
@@ -316,6 +329,58 @@ export default function Payments() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white/50 backdrop-blur-sm flex-wrap gap-4">
+            <div className="text-sm font-medium text-gray-500">
+              显示第 {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredPayments.length)} 条记录，共 <span className="text-gray-900 font-bold">{filteredPayments.length}</span> 条
+            </div>
+            <div className="flex gap-1.5 items-center">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                className="shadow-sm"
+              >
+                上一页
+              </Button>
+              <div className="flex items-center gap-1.5 px-2">
+                {[...Array(totalPages)].map((_, i) => {
+                  const page = i + 1;
+                  if (page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-all ${
+                          currentPage === page 
+                            ? 'bg-primary-500 text-white shadow-md' 
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  }
+                  if (page === currentPage - 2 || page === currentPage + 2) {
+                    return <span key={page} className="text-gray-400 font-medium px-1">...</span>;
+                  }
+                  return null;
+                })}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                className="shadow-sm"
+              >
+                下一页
+              </Button>
+            </div>
           </div>
         )}
       </Card>
