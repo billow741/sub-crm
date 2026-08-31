@@ -445,7 +445,7 @@ export default function StudentDetail() {
                           </div>
                         </div>
                       </div>
-                      {(cls.content || cls.homework || (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))) && (
+                      {(cls.content || cls.homework || cls.fb_teacher_message || cls.fb_homework || cls.fb_vocab || cls.fb_patterns || cls.fb_grammar || cls.fb_pronunciation_errors || cls.fb_grammar_errors || (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))) && (
                         <Button 
                           variant="ghost" 
                           size="sm"
@@ -505,7 +505,7 @@ export default function StudentDetail() {
                           <Badge variant={getStatusVariant(cls.status)}>{STATUS_LABELS[cls.status]}</Badge>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          {(cls.content || cls.homework || (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))) ? (
+                          {(cls.content || cls.homework || cls.fb_teacher_message || cls.fb_homework || cls.fb_vocab || cls.fb_patterns || cls.fb_grammar || cls.fb_pronunciation_errors || cls.fb_grammar_errors || (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))) ? (
                             <Button 
                               variant="outline" size="sm" className="h-7 text-xs px-2"
                               onClick={() => (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
