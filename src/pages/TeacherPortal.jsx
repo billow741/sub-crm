@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Clock, User, BookOpen, CheckCircle, XCircle, Calendar, Edit, Plus, X } from 'lucide-react';
+import { Clock, User, BookOpen, CheckCircle, XCircle, Calendar, Edit, Plus, X, Search } from 'lucide-react';
 import { teacherOps, classOps, packageOps, API_BASE_URL } from '../store';
+import { Card, CardHeader, CardContent } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
 
 const STATUS_LABELS = {
   scheduled: '已预约',
@@ -10,11 +13,11 @@ const STATUS_LABELS = {
   absent: '缺席'
 };
 
-const STATUS_COLORS = {
-  scheduled: 'bg-yellow-100 text-yellow-800',
-  completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-gray-100 text-gray-800',
-  absent: 'bg-red-100 text-red-800'
+const STATUS_VARIANTS = {
+  scheduled: 'warning',
+  completed: 'success',
+  cancelled: 'default',
+  absent: 'danger'
 };
 
 const PRACTICE_TEMPLATES = [
@@ -34,7 +37,6 @@ export default function TeacherPortal() {
   const [selectedClass, setSelectedClass] = useState(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
-  // 反馈表单状态
   const [feedbackForm, setFeedbackForm] = useState({});
   const [pronErrors, setPronErrors] = useState([]);
   const [gramErrors, setGramErrors] = useState([]);
@@ -49,7 +51,7 @@ export default function TeacherPortal() {
 
   const loadTextbooks = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/textbooks`, { headers: { 'X-API-Key': API_KEY } });
+      const res = await fetch(`${API_BASE_URL}/textbooks`, { headers: { 'X-API-Key': 'DEMO_KEY' } });
       const json = await res.json();
       if (json.data) setTextbooksList(json.data);
     } catch (e) {
@@ -57,7 +59,6 @@ export default function TeacherPortal() {
     }
   };
 
-  // 监听教材或单元变动，自动拉取推荐词汇/句型
   useEffect(() => {
     if (feedbackForm.textbook_code && feedbackForm.unit_number) {
       fetchSuggestions(feedbackForm.textbook_code, feedbackForm.unit_number);
@@ -70,7 +71,7 @@ export default function TeacherPortal() {
     setLoadingSuggest(true);
     try {
       const res = await fetch(`${API_BASE_URL}/textbooks/suggest?textbook_code=${encodeURIComponent(code)}&unit_number=${encodeURIComponent(unit)}`, {
-        headers: { 'X-API-Key': API_KEY }
+        headers: { 'X-API-Key': 'DEMO_KEY' }
       });
       const json = await res.json();
       if (json.data && json.data.has_content) {
@@ -124,14 +125,12 @@ export default function TeacherPortal() {
       fb_teacher_message: cls.fb_teacher_message || '',
       fb_homework: cls.fb_homework || '',
       fb_next_preview: cls.fb_next_preview || '',
-      // 教材页码引用 (配合 R2 里 EU-S/UnitN/page-XX.png)
-      textbook_code: cls.textbook_code || (typeof selectedBook !== 'undefined' ? selectedBook : ''),
+      textbook_code: cls.textbook_code || '',
       unit_number: cls.unit_number || '',
       page_from: cls.page_from || '',
       page_to: cls.page_to || '',
       status: cls.status || 'completed'
     });
-    // 回填发音/语法纠错
     try { setPronErrors(JSON.parse(cls.fb_pronunciation_errors || '[]')); } catch { setPronErrors([]); }
     try { setGramErrors(JSON.parse(cls.fb_grammar_errors || '[]')); } catch { setGramErrors([]); }
     setShowFeedbackModal(true);
@@ -161,7 +160,6 @@ export default function TeacherPortal() {
     return time.substring(0, 5);
   };
 
-  // 发音/语法纠错行操作
   const addPronError = () => setPronErrors([...pronErrors, { wrong: '', right: '' }]);
   const removePronError = (i) => setPronErrors(pronErrors.filter((_, idx) => idx !== i));
   const updatePronError = (i, field, val) => setPronErrors(pronErrors.map((e, idx) => idx === i ? { ...e, [field]: val } : e));
@@ -171,650 +169,495 @@ export default function TeacherPortal() {
   const updateGramError = (i, field, val) => setGramErrors(gramErrors.map((e, idx) => idx === i ? { ...e, [field]: val } : e));
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64">加载中...</div>;
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-8">
+        <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
+        <p className="mt-4 text-gray-500 font-medium">加载中，请稍候...</p>
+      </div>
+    );
   }
 
   if (!teacher) {
-    return <div className="p-8 text-center text-gray-500">教师不存在</div>;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center border-0 shadow-lg">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <User className="w-8 h-8 text-gray-400" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">教师不存在</h2>
+          <p className="text-gray-500 text-sm">请检查链接或教师ID是否正确</p>
+        </Card>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 顶部导航 */}
-      <div className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                <User className="w-6 h-6 text-purple-600" />
+    <div className="min-h-screen bg-gray-50 pb-12">
+      <div className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center shadow-inner">
+                <User className="w-6 h-6 text-primary-600" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">{teacher.name} 的教师门户</h1>
-                <p className="text-sm text-gray-500">
-                  {teacher.subjects?.length > 0 && `可授科目：${teacher.subjects.join(', ')}`}
+                <p className="text-sm text-gray-500 font-medium">
+                  {teacher.subjects?.length > 0 ? `可授科目：${teacher.subjects.join(', ')}` : '未设置授课科目'}
                 </p>
               </div>
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm font-medium text-gray-500 bg-gray-50 px-4 py-2 rounded-lg">
               {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* 今日课程 */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-purple-600" />
-            今日课程 ({todayClasses.length})
-          </h2>
-          {todayClasses.length === 0 ? (
-            <div className="bg-white rounded-lg p-8 text-center text-gray-500">
-              今天没有课程安排
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-1.5 bg-primary-100 rounded-lg">
+              <Calendar className="w-5 h-5 text-primary-600" />
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {todayClasses.map(cls => (
-                <div key={cls.id} className="bg-white rounded-lg shadow p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-gray-400" />
-                      <span className="font-medium">
-                        {formatTime(cls.start_time)} - {formatTime(cls.end_time)}
-                      </span>
-                    </div>
-                    <span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[cls.status]}`}>
-                      {STATUS_LABELS[cls.status]}
-                    </span>
-                  </div>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-400" />
-                      <span className="font-medium">{cls.student_name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-gray-400" />
-                      <span>{cls.subject}</span>
-                    </div>
-                  </div>
-                  {cls.status === 'scheduled' ? (
-                    <button
-                      onClick={() => handleOpenFeedback(cls)}
-                      className="mt-4 w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
-                    >
-                      提交上课反馈
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleOpenFeedback(cls)}
-                      className="mt-4 w-full py-2 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 text-sm"
-                    >
-                      编辑反馈
-                    </button>
-                  )}
+            <h2 className="text-lg font-bold text-gray-900">今日课程 <span className="text-gray-400 font-normal text-sm ml-1">({todayClasses.length})</span></h2>
+          </div>
+          
+          {todayClasses.length === 0 ? (
+            <Card className="border-dashed border-2 border-gray-200 bg-gray-50/50 shadow-none">
+              <CardContent className="p-12 text-center text-gray-400">
+                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
+                  <Clock className="w-8 h-8 text-gray-300" />
                 </div>
+                <p className="font-medium text-gray-500">今天没有安排课程</p>
+                <p className="text-sm mt-1">您可以好好休息一下</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {todayClasses.map(cls => (
+                <Card key={cls.id} className="hover:shadow-md hover:border-primary-200 transition-all group overflow-hidden">
+                  <div className="h-1 bg-gradient-to-r from-primary-400 to-primary-600"></div>
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-gray-50 rounded text-gray-500">
+                          <Clock className="w-4 h-4" />
+                        </div>
+                        <span className="font-bold text-gray-800 text-lg">
+                          {formatTime(cls.start_time)} - {formatTime(cls.end_time)}
+                        </span>
+                      </div>
+                      <Badge variant={STATUS_VARIANTS[cls.status]}>
+                        {STATUS_LABELS[cls.status]}
+                      </Badge>
+                    </div>
+                    
+                    <div className="space-y-2 mb-5">
+                      <div className="flex items-center gap-3 text-sm">
+                        <User className="w-4 h-4 text-gray-400" />
+                        <span className="font-medium text-gray-700">{cls.student_name}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm">
+                        <BookOpen className="w-4 h-4 text-gray-400" />
+                        <span className="text-gray-600">{cls.subject}</span>
+                      </div>
+                    </div>
+                    
+                    {cls.status === 'scheduled' ? (
+                      <Button
+                        variant="primary"
+                        onClick={() => handleOpenFeedback(cls)}
+                        className="w-full shadow-sm"
+                      >
+                        提交上课反馈
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleOpenFeedback(cls)}
+                        className="w-full text-primary-600 border-primary-200 hover:bg-primary-50"
+                      >
+                        编辑反馈
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
         </section>
 
-        {/* 即将到来的课程 */}
-        {upcomingClasses.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-blue-600" />
-              即将到来 ({upcomingClasses.length})
-            </h2>
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">日期</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">时间</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">学生</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">科目</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">状态</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {upcomingClasses.map(cls => (
-                    <tr key={cls.id}>
-                      <td className="px-4 py-3 text-sm">{cls.date}</td>
-                      <td className="px-4 py-3 text-sm">{formatTime(cls.start_time)}</td>
-                      <td className="px-4 py-3 text-sm font-medium">{cls.student_name}</td>
-                      <td className="px-4 py-3 text-sm">{cls.subject}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[cls.status]}`}>
-                          {STATUS_LABELS[cls.status]}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-1.5 bg-blue-100 rounded-lg">
+                <Calendar className="w-5 h-5 text-blue-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">即将到来 <span className="text-gray-400 font-normal text-sm ml-1">({upcomingClasses.length})</span></h2>
             </div>
+            
+            {upcomingClasses.length > 0 ? (
+              <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-gray-50/80 border-b border-gray-100 text-gray-500 font-medium">
+                      <tr>
+                        <th className="px-5 py-3.5">日期/时间</th>
+                        <th className="px-5 py-3.5">学生</th>
+                        <th className="px-5 py-3.5">科目</th>
+                        <th className="px-5 py-3.5">状态</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {upcomingClasses.map(cls => (
+                        <tr key={cls.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-5 py-3 text-gray-800">
+                            <div className="font-medium">{cls.date}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{formatTime(cls.start_time)} - {formatTime(cls.end_time)}</div>
+                          </td>
+                          <td className="px-5 py-3 font-medium text-gray-700">{cls.student_name}</td>
+                          <td className="px-5 py-3 text-gray-600">{cls.subject}</td>
+                          <td className="px-5 py-3">
+                            <Badge variant={STATUS_VARIANTS[cls.status]}>{STATUS_LABELS[cls.status]}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            ) : (
+              <div className="text-sm text-gray-400 p-4 border border-dashed rounded-lg bg-gray-50 text-center">暂无即将到来的排课</div>
+            )}
           </section>
-        )}
 
-        {/* 历史课程 */}
-        {pastClasses.length > 0 && (
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-gray-600" />
-              历史记录 (最近20节)
-            </h2>
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">日期</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">时间</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">学生</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">科目</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">状态</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">反馈</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {pastClasses.map(cls => (
-                    <tr key={cls.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm">{cls.date}</td>
-                      <td className="px-4 py-3 text-sm">{formatTime(cls.start_time)}</td>
-                      <td className="px-4 py-3 text-sm font-medium">{cls.student_name}</td>
-                      <td className="px-4 py-3 text-sm">{cls.subject}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[cls.status]}`}>
-                          {STATUS_LABELS[cls.status]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {cls.status !== 'scheduled' ? (
-                          <span className="text-green-600 flex items-center gap-1">
-                            <CheckCircle className="w-4 h-4" />
-                            已提交
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 flex items-center gap-1">
-                            <XCircle className="w-4 h-4" />
-                            未提交
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => handleOpenFeedback(cls)}
-                          className="text-purple-600 hover:text-purple-800 text-sm flex items-center gap-1"
-                        >
-                          <Edit className="w-4 h-4" />
-                          {cls.status !== 'scheduled' ? '编辑' : '填写'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-1.5 bg-gray-100 rounded-lg">
+                <Clock className="w-5 h-5 text-gray-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">历史记录 <span className="text-gray-400 font-normal text-sm ml-1">(最近20节)</span></h2>
             </div>
+            
+            {pastClasses.length > 0 ? (
+              <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-gray-50/80 border-b border-gray-100 text-gray-500 font-medium">
+                      <tr>
+                        <th className="px-5 py-3.5">日期/学生</th>
+                        <th className="px-5 py-3.5">科目</th>
+                        <th className="px-5 py-3.5">状态/反馈</th>
+                        <th className="px-5 py-3.5">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {pastClasses.map(cls => (
+                        <tr key={cls.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-5 py-3">
+                            <div className="font-medium text-gray-800">{cls.student_name}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{cls.date} · {formatTime(cls.start_time)}</div>
+                          </td>
+                          <td className="px-5 py-3 text-gray-600">{cls.subject}</td>
+                          <td className="px-5 py-3">
+                            <div className="flex flex-col gap-1.5">
+                              <Badge variant={STATUS_VARIANTS[cls.status]}>{STATUS_LABELS[cls.status]}</Badge>
+                              {cls.status !== 'scheduled' ? (
+                                <span className="text-xs text-success-600 flex items-center gap-1 font-medium">
+                                  <CheckCircle className="w-3 h-3" /> 已提交
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400 flex items-center gap-1 font-medium">
+                                  <XCircle className="w-3 h-3" /> 未提交
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3">
+                            <button
+                              onClick={() => handleOpenFeedback(cls)}
+                              className="text-primary-600 hover:text-primary-800 hover:bg-primary-50 p-1.5 rounded transition-colors"
+                              title={cls.status !== 'scheduled' ? '编辑反馈' : '填写反馈'}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            ) : (
+              <div className="text-sm text-gray-400 p-4 border border-dashed rounded-lg bg-gray-50 text-center">暂无历史排课</div>
+            )}
           </section>
-        )}
+        </div>
       </div>
 
-      {/* 反馈弹窗 */}
+      {/* 📝 课堂反馈弹窗 (Refactored) */}
       {showFeedbackModal && selectedClass && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">{selectedClass.status !== 'scheduled' ? '编辑上课反馈' : '提交上课反馈'}</h2>
-            <div className="bg-gray-50 rounded-lg p-3 mb-4">
-              <div className="text-sm text-gray-600 space-y-1">
-                <div><span className="font-medium">学生：</span>{selectedClass.student_name}</div>
-                <div><span className="font-medium">日期：</span>{selectedClass.date}</div>
-                <div><span className="font-medium">时间：</span>{formatTime(selectedClass.start_time)}</div>
-                <div><span className="font-medium">科目：</span>{selectedClass.subject}</div>
-                <div><span className="font-medium">课时：</span>{selectedClass.hours || 1} 节</div>
-              </div>
-            </div>
-            <form onSubmit={handleSubmitFeedback} className="space-y-4">
-              {/* Block 1: 课程信息 */}
-              <div className="border rounded-lg p-4 space-y-3">
-                <div className="font-medium text-gray-700 text-sm">📚 课程信息</div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">CEFR等级</label>
-                    <input
-                      type="text"
-                      value={feedbackForm.fb_lesson_level || ''}
-                      onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_lesson_level: e.target.value })}
-                      placeholder="如: Pre-A1"
-                      className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Unit</label>
-                    <input
-                      type="text"
-                      value={feedbackForm.fb_unit || ''}
-                      onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_unit: e.target.value })}
-                      placeholder="Unit"
-                      className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Lesson</label>
-                    <input
-                      type="text"
-                      value={feedbackForm.fb_lesson || ''}
-                      onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_lesson: e.target.value })}
-                      placeholder="Lesson"
-                      className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <Card className="w-full max-w-4xl max-h-[95vh] flex flex-col shadow-2xl border-0 overflow-hidden">
+            <CardHeader className="shrink-0 flex items-center justify-between border-b border-gray-100 bg-white">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary-600" />
+                课堂反馈 - {selectedClass.student_name}
+              </h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowFeedbackModal(false)} className="w-8 h-8 p-0 rounded-full">
+                <XCircle className="w-5 h-5 text-gray-400" />
+              </Button>
+            </CardHeader>
+            
+            <div className="flex-1 overflow-hidden flex flex-col md:flex-row bg-gray-50/50">
+              {/* 左侧：课件预览区 */}
+              <div className="w-full md:w-5/12 border-r border-gray-100 bg-white flex flex-col">
+                <div className="p-3 border-b border-gray-50 bg-gray-50/50 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700">关联课件预览</span>
                 </div>
-                {/* 📖 教材页码引用 (PDF 页码, 配合 R2 里 EU-S/UnitN/page-XX.png) */}
-                <div className="border-t pt-3 mt-3">
-                  <div className="font-medium text-gray-700 text-sm mb-2">📖 教材页码 (可选, 家长端可看这些 PDF 页)</div>
-                  <div className="grid grid-cols-4 gap-2 mb-2">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">教材</label>
-                      <select
-                        value={feedbackForm.textbook_code || ''}
-                        onChange={(e) => setFeedbackForm({ ...feedbackForm, textbook_code: e.target.value, unit_number: '', page_from: '', page_to: '' })}
-                        className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                      >
-                        <option value="">不指定</option>
-                        {textbooksList.length > 0 ? (
-                          textbooksList.map(b => (
-                            <option key={b.code} value={b.code}>{b.name || b.code}</option>
-                          ))
-                        ) : (
-                          <>
-                            <option value="EU-S">EU Starter</option>
-                            <option value="EU-L1">EU Level 1</option>
-                            <option value="EU-L2">EU Level 2</option>
-                            <option value="EU-L3">EU Level 3</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Unit 编号</label>
-                      <input
-                        type="number" min={0} max={20}
-                        value={feedbackForm.unit_number || ''}
-                        onChange={(e) => setFeedbackForm({ ...feedbackForm, unit_number: e.target.value, page_from: '', page_to: '' })}
-                        placeholder="如 1"
-                        className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">起始页</label>
-                      <input
-                        type="number" min={1} max={99}
-                        value={feedbackForm.page_from || ''}
-                        onChange={(e) => setFeedbackForm({ ...feedbackForm, page_from: e.target.value })}
-                        placeholder="如 2"
-                        className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">结束页</label>
-                      <input
-                        type="number" min={1} max={99}
-                        value={feedbackForm.page_to || ''}
-                        onChange={(e) => setFeedbackForm({ ...feedbackForm, page_to: e.target.value })}
-                        placeholder="如 4"
-                        className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-                  </div>
-                  {/* PDF 页缩略图预览 */}
-                  {feedbackForm.textbook_code && feedbackForm.unit_number && feedbackForm.page_from && feedbackForm.page_to && (
-                    <div className="mt-2 p-2 bg-gray-50 rounded">
-                      <div className="text-xs text-gray-500 mb-2">
-                        📄 预览 {feedbackForm.textbook_code}/Unit{feedbackForm.unit_number}/ 第 {feedbackForm.page_from}-{feedbackForm.page_to} 页
-                        (家长反馈页会展示这些教材真实页面,方便指导复习)
-                      </div>
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-1">
-                        {Array.from({ length: Math.max(0, parseInt(feedbackForm.page_to) - parseInt(feedbackForm.page_from) + 1) }, (_, i) => {
-                          const page = parseInt(feedbackForm.page_from) + i;
-                          return (
-                            <a
-                              key={page}
-                              href={`${API_BASE_URL}/textbooks/page-img/${feedbackForm.textbook_code}/${feedbackForm.unit_number}/${page}`}
-                              target="_blank"
+                <div className="flex-1 overflow-y-auto p-4">
+                  {selectedClass.textbook_name ? (
+                    <div className="space-y-4">
+                      <div className="text-sm font-bold text-gray-800">{selectedClass.textbook_name}</div>
+                      <div className="text-xs text-gray-500 mb-2">进度: P.{selectedClass.progress_start_page} - P.{selectedClass.progress_end_page}</div>
+                      
+                      {selectedClass.pdf_url ? (
+                        <div className="aspect-[3/4] bg-gray-100 rounded-lg overflow-hidden border border-gray-200 relative group flex items-center justify-center">
+                          <BookOpen className="w-8 h-8 text-gray-300" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <a 
+                              href={`${selectedClass.pdf_url}#page=${selectedClass.progress_start_page || 1}`} 
+                              target="_blank" 
                               rel="noopener noreferrer"
-                              className="block border rounded overflow-hidden hover:shadow-md"
-                              title={`点击看大图: 页 ${page}`}
+                              className="px-3 py-1.5 bg-white text-gray-800 rounded-lg text-sm font-medium hover:bg-gray-50"
                             >
-                              <img
-                                src={`${API_BASE_URL}/textbooks/page-img/${feedbackForm.textbook_code}/${feedbackForm.unit_number}/${page}`}
-                                alt={`Page ${page}`}
-                                className="w-full h-auto"
-                                loading="lazy"
-                                onError={(e) => { e.target.style.display = 'none'; }}
-                              />
-                              <div className="text-xs text-center text-gray-500 bg-white py-0.5">P{page}</div>
+                              打开教材 PDF
                             </a>
-                          );
-                        })}
-                      </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="aspect-[3/4] bg-gray-50 rounded-lg border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 p-4 text-center">
+                          <FileText className="w-8 h-8 mb-2 opacity-50" />
+                          <span className="text-xs">该教材暂未上传PDF</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                      <BookOpen className="w-8 h-8 mb-2 opacity-50" />
+                      <span className="text-sm">本节课未关联教材</span>
                     </div>
                   )}
                 </div>
+              </div>
 
-                {/* 智能教材库词汇/句型推荐面板 (全英文) */}
-                {suggestData && (
-                  <div className="border border-purple-200 bg-purple-50/70 rounded-lg p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold text-purple-900 flex items-center gap-1.5">
-                        <span>✨ Textbook Content:</span>
-                        <span>{feedbackForm.textbook_code} · Unit {feedbackForm.unit_number} {suggestData.unit_title ? `(${suggestData.unit_title})` : ''}</span>
+              {/* 右侧：反馈表单区 */}
+              <div className="w-full md:w-7/12 flex-1 overflow-y-auto p-5 space-y-5">
+                <form id="feedbackForm" onSubmit={submitFeedback} className="space-y-6">
+                  
+                  {/* Block 1: 新词汇 */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                        <span className="w-1.5 h-4 bg-primary-500 rounded-full"></span> 新词汇 (New Words)
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const coreWords = (suggestData.vocab || []).filter(v => v.is_core || suggestData.vocab.length <= 10).map(v => v.word);
-                            setFeedbackForm(prev => ({
-                              ...prev,
-                              fb_vocab: coreWords.join(', ')
-                            }));
-                          }}
-                          className="text-xs px-2 py-0.5 bg-purple-200 text-purple-800 rounded font-medium hover:bg-purple-300"
-                        >
-                          ⚡ Select All Core
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFeedbackForm(prev => ({ ...prev, fb_vocab: '' }))}
-                          className="text-xs text-gray-500 hover:text-gray-700"
-                        >
-                          Clear
-                        </button>
+                      <Button type="button" variant="outline" size="sm" onClick={addVocab} className="h-7 text-xs py-0">
+                        <Plus className="w-3 h-3 mr-1" /> 添加
+                      </Button>
+                    </div>
+                    {vocabList.length === 0 && <p className="text-xs text-gray-400 mb-2">点击右侧按钮添加新词汇记录</p>}
+                    <div className="space-y-2">
+                      {vocabList.map((v, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={v.word}
+                            onChange={(e) => updateVocab(i, 'word', e.target.value)}
+                            placeholder="单词 (e.g. Apple)"
+                            className="w-1/3 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500"
+                          />
+                          <input
+                            type="text"
+                            value={v.meaning}
+                            onChange={(e) => updateVocab(i, 'meaning', e.target.value)}
+                            placeholder="释义 (e.g. 苹果)"
+                            className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500"
+                          />
+                          <button type="button" onClick={() => removeVocab(i)} className="text-gray-400 hover:text-danger-500 p-1">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Block 2: 发音纠正 */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                        <span className="w-1.5 h-4 bg-warning-400 rounded-full"></span> 发音纠正 (Pronunciation)
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setPronErrors([{ wrong: 'No errors today', right: 'Perfect!' }])} className="h-7 text-xs py-0">
+                          今日无错误
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={addPronError} className="h-7 text-xs py-0">
+                          <Plus className="w-3 h-3 mr-1" /> 添加
+                        </Button>
                       </div>
                     </div>
-
-                    {/* 词汇 Pills (纯英文) */}
-                    {suggestData.vocab && suggestData.vocab.length > 0 && (
-                      <div>
-                        <div className="text-[11px] font-medium text-gray-600 mb-1">Click to select vocabulary:</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {suggestData.vocab.map((v, i) => {
-                            const curWords = (feedbackForm.fb_vocab || '').split(/[,，\n]/).map(s => s.trim().toLowerCase());
-                            const isSel = curWords.includes(v.word.toLowerCase());
-                            return (
-                              <button
-                                key={i}
-                                type="button"
-                                onClick={() => {
-                                  let list = (feedbackForm.fb_vocab || '').split(/[,，\n]/).map(s => s.trim()).filter(Boolean);
-                                  if (isSel) {
-                                    list = list.filter(w => w.toLowerCase() !== v.word.toLowerCase());
-                                  } else {
-                                    list.push(v.word);
-                                  }
-                                  setFeedbackForm(prev => ({ ...prev, fb_vocab: list.join(', ') }));
-                                }}
-                                className={`px-2.5 py-0.5 rounded-full text-xs transition-all flex items-center gap-1 ${
-                                  isSel ? 'bg-purple-600 text-white font-medium shadow-sm' : 'bg-white text-gray-700 hover:bg-purple-50 border border-gray-200'
-                                }`}
-                              >
-                                {isSel ? '✓ ' : '+ '}
-                                {v.is_core && '⭐ '}
-                                {v.word}
-                              </button>
-                            );
-                          })}
+                    {pronErrors.length === 0 && <p className="text-xs text-gray-400 mb-2">记录学生读错的发音...</p>}
+                    <div className="space-y-2">
+                      {pronErrors.map((err, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={err.wrong}
+                            onChange={(e) => updatePronError(i, 'wrong', e.target.value)}
+                            placeholder="✗ 错误 (e.g. aple)"
+                            className="flex-1 px-3 py-1.5 text-sm border border-danger-200 bg-danger-50 text-danger-900 rounded-lg focus:ring-2 focus:ring-danger-500"
+                          />
+                          <span className="text-gray-400 text-sm">→</span>
+                          <input
+                            type="text"
+                            value={err.right}
+                            onChange={(e) => updatePronError(i, 'right', e.target.value)}
+                            placeholder="✓ 正确 (e.g. apple)"
+                            className="flex-1 px-3 py-1.5 text-sm border border-success-200 bg-success-50 text-success-900 rounded-lg focus:ring-2 focus:ring-success-500"
+                          />
+                          <button type="button" onClick={() => removePronError(i)} className="text-gray-400 hover:text-danger-500 p-1">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                      </div>
-                    )}
+                      ))}
+                    </div>
+                  </div>
 
-                    {/* 句型 Pills (纯英文) */}
-                    {suggestData.patterns && suggestData.patterns.length > 0 && (
-                      <div className="pt-1 border-t border-purple-100">
-                        <div className="text-[11px] font-medium text-gray-600 mb-1">Click to select sentence patterns:</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {suggestData.patterns.map((p, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => {
-                                const cur = feedbackForm.fb_patterns || '';
-                                if (!cur.includes(p.pattern)) {
-                                  setFeedbackForm(prev => ({
-                                    ...prev,
-                                    fb_patterns: cur ? cur + '\n' + p.pattern : p.pattern
-                                  }));
-                                }
-                              }}
-                              className="px-2.5 py-0.5 rounded-full text-xs bg-white text-gray-700 hover:bg-indigo-50 border border-gray-200 text-left"
-                            >
-                              + {p.pattern}
-                            </button>
-                          ))}
+                  {/* Block 3: 语法纠正 */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                        <span className="w-1.5 h-4 bg-purple-500 rounded-full"></span> 语法纠正 (Grammar)
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setGramErrors([{ wrong: 'No errors today', right: 'Good grammar!' }])} className="h-7 text-xs py-0">
+                          今日无错误
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={addGramError} className="h-7 text-xs py-0">
+                          <Plus className="w-3 h-3 mr-1" /> 添加
+                        </Button>
+                      </div>
+                    </div>
+                    {gramErrors.length === 0 && <p className="text-xs text-gray-400 mb-2">记录需要纠正的句子结构...</p>}
+                    <div className="space-y-2">
+                      {gramErrors.map((err, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={err.wrong}
+                            onChange={(e) => updateGramError(i, 'wrong', e.target.value)}
+                            placeholder="✗ 错误句子"
+                            className="flex-1 px-3 py-1.5 text-sm border border-danger-200 bg-danger-50 text-danger-900 rounded-lg focus:ring-2 focus:ring-danger-500"
+                          />
+                          <span className="text-gray-400 text-sm">→</span>
+                          <input
+                            type="text"
+                            value={err.right}
+                            onChange={(e) => updateGramError(i, 'right', e.target.value)}
+                            placeholder="✓ 正确句子"
+                            className="flex-1 px-3 py-1.5 text-sm border border-success-200 bg-success-50 text-success-900 rounded-lg focus:ring-2 focus:ring-success-500"
+                          />
+                          <button type="button" onClick={() => removeGramError(i)} className="text-gray-400 hover:text-danger-500 p-1">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Block 4: 老师评语 */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                    <div className="font-bold text-gray-800 text-sm flex items-center gap-1.5 mb-3">
+                      <span className="w-1.5 h-4 bg-blue-500 rounded-full"></span> 综合评语 (Overall Feedback)
+                    </div>
+                    <textarea
+                      value={feedbackForm.fb_teacher_message || ''}
+                      onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_teacher_message: e.target.value })}
+                      rows={4}
+                      placeholder="肯定表现 → 具体亮点 → 提升建议..."
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  {/* Block 5 & 6: 作业与预告 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <div className="font-bold text-gray-800 text-sm flex items-center gap-1.5 mb-3">
+                        <span className="w-1.5 h-4 bg-indigo-500 rounded-full"></span> 课后作业
                       </div>
-                    )}
+                      <textarea
+                        value={feedbackForm.fb_homework || ''}
+                        onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_homework: e.target.value })}
+                        rows={2}
+                        placeholder="选填..."
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 mb-2"
+                      />
+                      <div className="flex flex-wrap gap-1.5">
+                        {PRACTICE_TEMPLATES.map((tpl, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setFeedbackForm({ ...feedbackForm, fb_homework: (feedbackForm.fb_homework || '') + (feedbackForm.fb_homework ? '\n' : '') + tpl })}
+                            className="text-[10px] px-2 py-1 bg-gray-100 text-gray-600 rounded-full hover:bg-primary-50 hover:text-primary-700 transition-colors"
+                          >
+                            + {tpl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <div className="font-bold text-gray-800 text-sm flex items-center gap-1.5 mb-3">
+                        <span className="w-1.5 h-4 bg-teal-500 rounded-full"></span> 下节课预告
+                      </div>
+                      <textarea
+                        value={feedbackForm.fb_next_preview || ''}
+                        onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_next_preview: e.target.value })}
+                        rows={3}
+                        placeholder="选填..."
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
                   </div>
-                )}
 
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">今日词汇</label>
-                  <textarea
-                    value={feedbackForm.fb_vocab || ''}
-                    onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_vocab: e.target.value })}
-                    rows={2}
-                    placeholder="apple, banana, cat (或点击上方药丸快速勾选)..."
-                    className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">今日句型</label>
-                  <textarea
-                    value={feedbackForm.fb_patterns || ''}
-                    onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_patterns: e.target.value })}
-                    rows={2}
-                    placeholder="I like... / Can I have...?"
-                    className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">语法重点</label>
-                  <input
-                    type="text"
-                    value={feedbackForm.fb_grammar || ''}
-                    onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_grammar: e.target.value })}
-                    placeholder="如: Present Simple"
-                    className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
+                  {/* 课程状态 */}
+                  {selectedClass.status === 'scheduled' && (
+                    <div className="bg-primary-50 border border-primary-100 rounded-xl p-4 shadow-sm">
+                      <label className="block text-sm font-bold text-primary-900 mb-2">完课确认</label>
+                      <select
+                        value={feedbackForm.status}
+                        onChange={(e) => setFeedbackForm({ ...feedbackForm, status: e.target.value })}
+                        className="w-full px-3 py-2 border border-primary-200 rounded-lg bg-white focus:ring-2 focus:ring-primary-500 text-sm font-medium"
+                      >
+                        <option value="completed">✅ 已完成 (正常扣课时)</option>
+                        <option value="absent">❌ 学生缺席 (不扣课时)</option>
+                        <option value="cancelled">🚫 已取消 (不扣课时)</option>
+                      </select>
+                    </div>
+                  )}
+                  
+                </form>
               </div>
+            </div>
 
-              {/* Block 2: 发音纠正 */}
-              <div className="border rounded-lg p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-gray-700 text-sm">🗣️ 发音纠正</div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPronErrors([{ wrong: 'No errors today', right: 'Great pronunciation!' }])}
-                      className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
-                    >
-                      今日无错误
-                    </button>
-                    <button
-                      type="button"
-                      onClick={addPronError}
-                      className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" /> 添加一行
-                    </button>
-                  </div>
-                </div>
-                {pronErrors.length === 0 && (
-                  <p className="text-xs text-gray-400">点击"添加一行"记录发音纠正，或"今日无错误"</p>
-                )}
-                {pronErrors.map((err, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={err.wrong}
-                      onChange={(e) => updatePronError(i, 'wrong', e.target.value)}
-                      placeholder="✗ 错误发音"
-                      className="flex-1 px-2 py-1.5 text-sm border border-red-200 rounded focus:ring-2 focus:ring-red-400"
-                    />
-                    <span className="text-gray-400 text-sm">→</span>
-                    <input
-                      type="text"
-                      value={err.right}
-                      onChange={(e) => updatePronError(i, 'right', e.target.value)}
-                      placeholder="✓ 正确发音"
-                      className="flex-1 px-2 py-1.5 text-sm border border-green-200 rounded focus:ring-2 focus:ring-green-400"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removePronError(i)}
-                      className="text-red-400 hover:text-red-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Block 3: 语法纠正 */}
-              <div className="border rounded-lg p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-gray-700 text-sm">📝 语法纠正</div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setGramErrors([{ wrong: 'No errors today', right: 'Good grammar!' }])}
-                      className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
-                    >
-                      今日无错误
-                    </button>
-                    <button
-                      type="button"
-                      onClick={addGramError}
-                      className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" /> 添加一行
-                    </button>
-                  </div>
-                </div>
-                {gramErrors.length === 0 && (
-                  <p className="text-xs text-gray-400">点击"添加一行"记录语法纠正，或"今日无错误"</p>
-                )}
-                {gramErrors.map((err, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={err.wrong}
-                      onChange={(e) => updateGramError(i, 'wrong', e.target.value)}
-                      placeholder="✗ 错误句子"
-                      className="flex-1 px-2 py-1.5 text-sm border border-red-200 rounded focus:ring-2 focus:ring-red-400"
-                    />
-                    <span className="text-gray-400 text-sm">→</span>
-                    <input
-                      type="text"
-                      value={err.right}
-                      onChange={(e) => updateGramError(i, 'right', e.target.value)}
-                      placeholder="✓ 正确句子"
-                      className="flex-1 px-2 py-1.5 text-sm border border-green-200 rounded focus:ring-2 focus:ring-green-400"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeGramError(i)}
-                      className="text-red-400 hover:text-red-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Block 4: 老师反馈 */}
-              <div className="border rounded-lg p-4 space-y-2">
-                <div className="font-medium text-gray-700 text-sm">💌 老师反馈</div>
-                <textarea
-                  value={feedbackForm.fb_teacher_message || ''}
-                  onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_teacher_message: e.target.value })}
-                  rows={5}
-                  placeholder="第一句：肯定孩子今天的表现&#10;第二句：描述一个具体亮点&#10;第三句：建议重点练习的方向"
-                  className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                />
-                <p className="text-xs text-gray-400">提示：第一句肯定表现 → 第二句具体亮点 → 第三句练习建议</p>
-              </div>
-
-              {/* Block 5: 课后作业 */}
-              <div className="border rounded-lg p-4 space-y-2">
-                <div className="font-medium text-gray-700 text-sm">📝 课后作业（选填）</div>
-                <textarea
-                  value={feedbackForm.fb_homework || ''}
-                  onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_homework: e.target.value })}
-                  rows={2}
-                  placeholder="课后练习建议..."
-                  className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                />
-                <div className="flex flex-wrap gap-1">
-                  {PRACTICE_TEMPLATES.map((tpl, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setFeedbackForm({ ...feedbackForm, fb_homework: (feedbackForm.fb_homework || '') + (feedbackForm.fb_homework ? '\n' : '') + tpl })}
-                      className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
-                    >
-                      {tpl}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Block 6: 下节课预告 */}
-              <div className="border rounded-lg p-4 space-y-2">
-                <div className="font-medium text-gray-700 text-sm">🎯 下节课预告（选填）</div>
-                <textarea
-                  value={feedbackForm.fb_next_preview || ''}
-                  onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_next_preview: e.target.value })}
-                  rows={2}
-                  placeholder="下节课将学习..."
-                  className="w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-
-              {/* 课程状态 */}
-              {selectedClass.status === 'scheduled' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">课程状态</label>
-                <select
-                  value={feedbackForm.status}
-                  onChange={(e) => setFeedbackForm({ ...feedbackForm, status: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="completed">已完成（扣除课时）</option>
-                  <option value="absent">学生缺席（不扣课时）</option>
-                  <option value="cancelled">已取消（不扣课时）</option>
-                </select>
-              </div>
-              )}
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowFeedbackModal(false)}
-                  className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                >
-                  {selectedClass.status !== 'scheduled' ? '保存修改' : '提交反馈'}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="shrink-0 p-4 border-t border-gray-100 bg-white flex justify-end gap-3 rounded-b-xl">
+              <Button type="button" variant="outline" onClick={() => setShowFeedbackModal(false)}>取消</Button>
+              <Button type="submit" variant="primary" form="feedbackForm">
+                {selectedClass.status !== 'scheduled' ? '保存修改' : '提交反馈'}
+              </Button>
+            </div>
+          </Card>
         </div>
       )}
     </div>
