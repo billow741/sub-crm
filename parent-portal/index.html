@@ -1609,17 +1609,19 @@ function showViewFeedback(idx) {
   var uNum = cls.unit_number || cls.fb_unit;
   var lNum = cls.fb_lesson;
   
-  html += '<div class="modal-feedback__group"><label>📅 课程与教材进度</label><div class="modal-feedback__box">';
+  var progInner = '';
   if (bName || cls.textbook_code) {
-    html += '<div style="margin-bottom:4px;"><span style="color:#4B9FE0;font-weight:700;">📖 所用教材：</span><b>' + esc(bName || cls.textbook_code) + '</b>' + (uNum ? ' · Unit ' + esc(uNum) : '') + (lNum && lNum !== '-' ? ' (Lesson ' + esc(lNum) + ')' : '') + '</div>';
+    progInner += '<div style="margin-bottom:4px;"><span style="color:#4B9FE0;font-weight:700;">📖 所用教材：</span><b>' + esc(bName || cls.textbook_code) + '</b>' + (uNum ? ' · Unit ' + esc(uNum) : '') + (lNum && lNum !== '-' ? ' (Lesson ' + esc(lNum) + ')' : '') + '</div>';
   }
   if (cls.fb_lesson_level) {
-    html += '<div style="color:#64748B;font-size:12px;">课程等级：' + esc(cls.fb_lesson_level) + '</div>';
+    progInner += '<div style="color:#64748B;font-size:12px;">课程等级：' + esc(cls.fb_lesson_level) + '</div>';
   }
   if (!bName && !cls.textbook_code && (cls.fb_unit || cls.fb_lesson)) {
-    html += '<div>教材进度：Unit ' + esc(cls.fb_unit || '-') + ' / Lesson ' + esc(cls.fb_lesson || '-') + '</div>';
+    progInner += '<div>教材进度：Unit ' + esc(cls.fb_unit || '-') + ' / Lesson ' + esc(cls.fb_lesson || '-') + '</div>';
   }
-  html += '</div></div>';
+  if (progInner) {
+    html += '<div class="modal-feedback__group"><label>📅 课程与教材进度</label><div class="modal-feedback__box">' + progInner + '</div></div>';
+  }
 
   // 📖 教材页码 (嵌入 PDF 真实页面图, 方便家长指导复习)
   if (cls.textbook_code && cls.unit_number) {
@@ -1647,8 +1649,14 @@ function showViewFeedback(idx) {
   // 📚 今日学习内容
   if (cls.fb_vocab || cls.fb_patterns || cls.fb_grammar) {
     html += '<div class="modal-feedback__group"><label>📚 今日学习内容</label><div class="modal-feedback__box">';
-    if (cls.fb_vocab) html += '<div style="margin-bottom:8px;"><b>词汇：</b>' + spFormatVocabPills(cls.fb_vocab) + '</div>';
-    if (cls.fb_patterns) html += '<div style="margin-bottom:8px;"><b>句型：</b>' + spFormatPatternPills(cls.fb_patterns) + '</div>';
+    if (cls.fb_vocab) {
+      var vHtml = typeof spFormatVocabPills === 'function' ? spFormatVocabPills(cls.fb_vocab) : esc(cls.fb_vocab);
+      html += '<div style="margin-bottom:8px;"><b>词汇：</b>' + vHtml + '</div>';
+    }
+    if (cls.fb_patterns) {
+      var pHtml = typeof spFormatPatternPills === 'function' ? spFormatPatternPills(cls.fb_patterns) : esc(cls.fb_patterns);
+      html += '<div style="margin-bottom:8px;"><b>句型：</b>' + pHtml + '</div>';
+    }
     if (cls.fb_grammar) html += '<div><b>语法重点：</b><span style="font-weight:600;color:#2563EB;">' + esc(cls.fb_grammar) + '</span></div>';
     html += '</div></div>';
   }
@@ -1660,22 +1668,26 @@ function showViewFeedback(idx) {
   html += errorsHtml(cls.fb_grammar_errors, '语法纠正', '📝');
 
   // 📋 课后总结
-  if (cls.fb_teacher_message || cls.fb_homework || cls.fb_next_preview) {
+  var teacherMsg = cls.fb_teacher_message || cls.feedback;
+  var homework = cls.fb_homework || cls.homework;
+  var preview = cls.fb_next_preview;
+  if (teacherMsg || homework || preview) {
     html += '<div class="modal-feedback__group"><label>📋 课后总结</label><div class="modal-feedback__box">';
-    if (cls.fb_teacher_message) html += '<div style="margin-bottom:8px;padding:8px;background:#eff6ff;border-radius:8px;"><b>💌 老师反馈</b><br>' + esc(cls.fb_teacher_message) + '</div>';
-    if (cls.fb_homework) html += '<div style="margin-bottom:8px;"><b>📝 课后作业</b><br>' + esc(cls.fb_homework) + '</div>';
-    if (cls.fb_next_preview) html += '<div style="margin-bottom:8px;"><b>🎯 下节课预告</b><br>' + esc(cls.fb_next_preview) + '</div>';
+    if (teacherMsg) html += '<div style="margin-bottom:8px;padding:8px;background:#eff6ff;border-radius:8px;"><b>💌 老师反馈</b><br>' + esc(teacherMsg) + '</div>';
+    if (homework) html += '<div style="margin-bottom:8px;"><b>📝 课后作业</b><br>' + esc(homework) + '</div>';
+    if (preview) html += '<div style="margin-bottom:8px;"><b>🎯 下节课预告</b><br>' + esc(preview) + '</div>';
     html += '</div></div>';
   }
 
-  // Keep backward compatibility: if old content/homework exists but no fb_ fields
-  if (!html && (cls.content || cls.homework || cls.notes)) {
-    if (cls.content) html += '<div class="modal-feedback__group"><label>上课内容</label><div class="modal-feedback__box">' + esc(cls.content) + '</div></div>';
-    if (cls.homework) html += '<div class="modal-feedback__group"><label>作业布置</label><div class="modal-feedback__box">' + esc(cls.homework) + '</div></div>';
-    if (cls.notes) html += '<div class="modal-feedback__group"><label>备注</label><div class="modal-feedback__box">' + esc(cls.notes) + '</div></div>';
+  // 兼容旧格式 / 补充内容: content / notes
+  if (cls.content && cls.content !== teacherMsg) {
+    html += '<div class="modal-feedback__group"><label>📖 上课内容</label><div class="modal-feedback__box">' + esc(cls.content) + '</div></div>';
+  }
+  if (cls.notes) {
+    html += '<div class="modal-feedback__group"><label>📌 备注</label><div class="modal-feedback__box">' + esc(cls.notes) + '</div></div>';
   }
 
-  if (!html) html = '<div class="modal-feedback__group"><div class="modal-feedback__box">暂无反馈内容</div></div>';
+  if (!html) html = '<div class="modal-feedback__group"><div class="modal-feedback__box" style="text-align:center;color:#94a3b8;padding:20px;">暂无详细反馈内容</div></div>';
 
   document.getElementById('feedback-modal-body').innerHTML = html;
   document.getElementById('feedback-modal').classList.add('show');

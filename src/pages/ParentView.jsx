@@ -123,13 +123,23 @@ function ParentStudentView() {
   const [previewImg, setPreviewImg] = useState(null);
 
   useEffect(() => {
-    loadData();
-    const s = studentOps.getById(studentId);
-    if (s) {
-      setStudent(s);
-      setPackages(packageOps.getByStudent(studentId));
-      setClasses(classOps.getByStudent(studentId));
+    async function load() {
+      try {
+        const s = await studentOps.getById(studentId);
+        if (s) {
+          setStudent(s);
+          const [pkgs, clsList] = await Promise.all([
+            packageOps.getByStudent(studentId),
+            classOps.getByStudent(studentId)
+          ]);
+          setPackages(Array.isArray(pkgs) ? pkgs : []);
+          setClasses(Array.isArray(clsList) ? clsList : []);
+        }
+      } catch (err) {
+        console.error('Load parent view data error:', err);
+      }
     }
+    load();
   }, [studentId]);
 
   if (!student) {
@@ -309,7 +319,16 @@ function ParentStudentView() {
           <CardContent className="p-6 pt-0">
             {classes.length > 0 ? (
               <div className="relative border-l-2 border-primary-100 ml-3 pl-5 space-y-6 py-2">
-                {classes.slice(0, 10).map((cls, idx) => (
+                {classes.slice(0, 10).map((cls, idx) => {
+                  const teacher = cls.teacher_name || cls.teacher;
+                  const teacherMsg = cls.fb_teacher_message || cls.feedback;
+                  const homework = cls.fb_homework || cls.homework;
+                  let pronErrors = [];
+                  let gramErrors = [];
+                  try { pronErrors = typeof cls.fb_pronunciation_errors === 'string' ? JSON.parse(cls.fb_pronunciation_errors) : (cls.fb_pronunciation_errors || []); } catch {}
+                  try { gramErrors = typeof cls.fb_grammar_errors === 'string' ? JSON.parse(cls.fb_grammar_errors) : (cls.fb_grammar_errors || []); } catch {}
+
+                  return (
                   <div key={cls.id} className="relative">
                     {/* 时间轴节点 */}
                     <div className="absolute -left-[29px] top-1.5 w-4 h-4 rounded-full border-4 border-white bg-primary-400 shadow-sm"></div>
@@ -319,10 +338,15 @@ function ParentStudentView() {
                         <div>
                           <div className="font-bold text-gray-800 flex items-center gap-2">
                             {cls.date}
-                            <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{cls.time}</span>
+                            <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{cls.time || (cls.start_time ? cls.start_time.substring(0, 5) : '')}</span>
                           </div>
                           <div className="text-sm font-medium text-gray-600 mt-1">
-                            {cls.courseName || student.course}
+                            {cls.courseName || cls.subject || student.course || (cls.fb_lesson_level ? `${cls.fb_lesson_level} 课程` : '英语课程')}
+                            {(cls.fb_unit || cls.fb_lesson) && (
+                              <span className="ml-2 text-primary-600 font-semibold text-xs">
+                                Unit {cls.fb_unit || '-'} {cls.fb_lesson ? `L${cls.fb_lesson}` : ''}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <Badge variant="warning" className="shrink-0 bg-warning-50 text-warning-700 border border-warning-200/50">
@@ -331,30 +355,71 @@ function ParentStudentView() {
                       </div>
                       
                       <div className="text-sm space-y-2.5">
-                        {cls.teacher && (
+                        {teacher && (
                           <div className="flex gap-2">
                             <span className="text-gray-400 shrink-0">授课老师:</span>
-                            <span className="text-gray-700 font-medium">{cls.teacher}</span>
+                            <span className="text-gray-700 font-medium">{teacher}</span>
                           </div>
                         )}
-                        {cls.content && (
+
+                        {/* 词汇 / 句型 / 语法 */}
+                        {(cls.fb_vocab || cls.fb_patterns || cls.fb_grammar) && (
+                          <div className="bg-gray-50/80 p-3 rounded-lg border border-gray-100 space-y-1.5 text-xs">
+                            {cls.fb_vocab && <div><b className="text-amber-800">词汇：</b><span className="text-gray-700">{cls.fb_vocab}</span></div>}
+                            {cls.fb_patterns && <div><b className="text-emerald-800">句型：</b><span className="text-gray-700">{cls.fb_patterns}</span></div>}
+                            {cls.fb_grammar && <div><b className="text-indigo-800">语法：</b><span className="text-gray-700">{cls.fb_grammar}</span></div>}
+                          </div>
+                        )}
+
+                        {/* 发音纠正 */}
+                        {Array.isArray(pronErrors) && pronErrors.length > 0 && (
+                          <div className="bg-rose-50/40 p-2.5 rounded-lg border border-rose-100/60 text-xs">
+                            <span className="text-rose-700 font-bold block mb-1">🗣️ 发音纠错：</span>
+                            <div className="space-y-1">
+                              {pronErrors.map((e, idx) => (
+                                <div key={idx}><span className="text-rose-500">✗ {e.wrong}</span> → <span className="text-emerald-600 font-bold">✓ {e.right}</span></div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 语法纠正 */}
+                        {Array.isArray(gramErrors) && gramErrors.length > 0 && (
+                          <div className="bg-rose-50/40 p-2.5 rounded-lg border border-rose-100/60 text-xs">
+                            <span className="text-rose-700 font-bold block mb-1">📝 语法纠错：</span>
+                            <div className="space-y-1">
+                              {gramErrors.map((e, idx) => (
+                                <div key={idx}><span className="text-rose-500">✗ {e.wrong}</span> → <span className="text-emerald-600 font-bold">✓ {e.right}</span></div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 老师寄语 */}
+                        {teacherMsg && (
+                          <div className="mt-2 bg-primary-50/50 border border-primary-100 p-3 rounded-lg">
+                            <span className="text-primary-700 text-xs font-bold block mb-1">💌 老师寄语:</span>
+                            <span className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{teacherMsg}</span>
+                          </div>
+                        )}
+
+                        {/* 作业 */}
+                        {homework && (
+                          <div className="mt-2 bg-blue-50/50 border border-blue-100 p-3 rounded-lg">
+                            <span className="text-blue-700 text-xs font-bold block mb-1">📝 课后作业:</span>
+                            <span className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{homework}</span>
+                          </div>
+                        )}
+
+                        {/* 上课内容 */}
+                        {cls.content && cls.content !== teacherMsg && (
                           <div className="flex gap-2">
                             <span className="text-gray-400 shrink-0">学习内容:</span>
                             <span className="text-gray-700">{cls.content}</span>
                           </div>
                         )}
-                        {cls.feedback && (
-                          <div className="mt-2 bg-primary-50/50 border border-primary-100 p-3 rounded-lg">
-                            <span className="text-primary-700 text-xs font-bold block mb-1">老师寄语:</span>
-                            <span className="text-gray-700 text-sm leading-relaxed">{cls.feedback}</span>
-                          </div>
-                        )}
-                        {cls.fb_homework && (
-                          <div className="mt-2 bg-blue-50/50 border border-blue-100 p-3 rounded-lg">
-                            <span className="text-blue-700 text-xs font-bold block mb-1">课后作业:</span>
-                            <span className="text-gray-700 text-sm leading-relaxed">{cls.fb_homework}</span>
-                          </div>
-                        )}
+
+                        {/* 备注 */}
                         {cls.notes && (
                           <div className="flex gap-2">
                             <span className="text-gray-400 shrink-0">系统备注:</span>
@@ -402,7 +467,8 @@ function ParentStudentView() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {classes.length > 10 && (
                   <div className="relative pt-4 text-center">
                     <div className="absolute -left-[23px] top-6 w-2 h-2 rounded-full bg-gray-300"></div>
