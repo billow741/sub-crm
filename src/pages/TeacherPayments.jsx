@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Calendar, CheckCircle, XCircle, Plus, RefreshCw, Trash2, CreditCard, Edit2, ChevronDown, ChevronUp, Filter, Clock } from 'lucide-react';
+import { DollarSign, Calendar, CheckCircle, XCircle, Plus, RefreshCw, Trash2, CreditCard, Edit2, ChevronDown, ChevronUp, Filter, Clock, User } from 'lucide-react';
 import { teacherOps, teacherPaymentOps } from '../store';
 import { request } from '../store/api';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
