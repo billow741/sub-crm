@@ -37,7 +37,7 @@ export default function Payments() {
   const loadPayments = async () => {
     try {
       setLoading(true);
-      const payParams = {};
+      const payParams = { page_size: 1000 };
       if (selectedOrg) payParams.org_id = selectedOrg;
       const [pays, studs] = await Promise.all([
         paymentOps.getAll(payParams),
