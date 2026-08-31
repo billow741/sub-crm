@@ -1,9 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Calendar, CreditCard, Clock, Plus, Trash2, AlertTriangle, MessageSquare, FileText, Edit, Loader2 } from 'lucide-react';
+import { 
+  ArrowLeft, Phone, Mail, Calendar, CreditCard, Clock, Plus, Trash2, 
+  AlertTriangle, MessageSquare, FileText, Edit, Loader2, User, CheckCircle, 
+  X, Calculator, FileCheck, FileSignature 
+} from 'lucide-react';
 import { studentOps, packageOps, classOps, paymentOps, hourChangeOps } from '../store';
 import { request } from '../store/api';
 import AdjustHoursModal from '../components/AdjustHoursModal';
+import { Card, CardHeader } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
 
 export default function StudentDetail() {
   const { id } = useParams();
@@ -18,16 +25,8 @@ export default function StudentDetail() {
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({
-    name: '',
-    english_name: '',
-    gender: '',
-    phone: '',
-    email: '',
-    age: '',
-    grade: '',
-    parentName: '',
-    notes: '',
-    status: 'active',
+    name: '', english_name: '', gender: '', phone: '', email: '',
+    age: '', grade: '', parentName: '', notes: '', status: 'active',
   });
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -55,20 +54,16 @@ export default function StudentDetail() {
             setClasses(Array.isArray(classesData) ? classesData : []);
             setPayments(Array.isArray(paymentsData) ? paymentsData : []);
             
-            // 加载课时变动记录（来源1: API hour_changes 表）
+            // 加载课时变动记录
             let hcFromApi = [];
             try {
               const hcResult = await hourChangeOps.getByStudent(id);
               hcFromApi = Array.isArray(hcResult) ? hcResult : [];
-            } catch (err) {
-              console.error('Load hour changes error:', err);
-            }
+            } catch (err) { console.error('Load hour changes error:', err); }
 
-            // 补全课时变动（来源2+3: 从 classes 和 payments 动态合成，补齐缺失记录）
-            // 用 related_id + type 做去重键，避免和 API 返回的重复
+            // 补全课时变动
             const seenKeys = new Set(hcFromApi.map(hc => `${hc.type}-${hc.related_id}`));
             const synthesized = [];
-            // 从 classes 合成上课消耗（completed 状态才有课时变动）
             (Array.isArray(classesData) ? classesData : []).forEach(cls => {
               if (cls.status === 'completed' || cls.status === 'absent') {
                 const key = `class-${cls.id}`;
@@ -76,30 +71,20 @@ export default function StudentDetail() {
                   const sign = cls.status === 'absent' ? 0 : -1;
                   const amount = cls.status === 'absent' ? 0 : -(cls.hours || 1);
                   synthesized.push({
-                    id: `cls-${cls.id}`,
-                    type: 'class',
-                    amount,
-                    related_id: cls.id,
-                    description: cls.status === 'absent'
-                      ? `缺席 ${cls.date || ''} ${cls.subject || ''}`
-                      : `上课消耗 ${cls.date || ''} ${cls.subject || ''}`,
+                    id: `cls-${cls.id}`, type: 'class', amount, related_id: cls.id,
+                    description: cls.status === 'absent' ? `缺席 ${cls.date || ''} ${cls.subject || ''}` : `上课消耗 ${cls.date || ''} ${cls.subject || ''}`,
                     detail_text: `${cls.date || ''} ${cls.subject || cls.teacher || ''}`,
                     created_at: cls.created_at || (cls.date ? cls.date + ' 00:00:00' : null),
                   });
                 }
               }
             });
-            // 从 payments 合成购买课时
             (Array.isArray(paymentsData) ? paymentsData : []).forEach(p => {
               const key = `payment-${p.id}`;
               if (!seenKeys.has(key)) {
-                // 金额 / 估单价 = 课时数，或用 hours 字段
                 const hours = p.hours || p.class_count || (p.amount ? Math.round(p.amount / 118) : 0);
                 synthesized.push({
-                  id: `pay-${p.id}`,
-                  type: 'payment',
-                  amount: hours,
-                  related_id: p.id,
+                  id: `pay-${p.id}`, type: 'payment', amount: hours, related_id: p.id,
                   description: `购买课时 ${p.description || ''}`,
                   detail_text: p.description || `付款 ¥${(p.amount || 0).toLocaleString()}`,
                   created_at: p.created_at || (p.date ? p.date + ' 00:00:00' : null),
@@ -108,7 +93,6 @@ export default function StudentDetail() {
             });
 
             const merged = [...hcFromApi, ...synthesized];
-            // 按 created_at 降序
             merged.sort((a, b) => {
               const ta = a.created_at || '';
               const tb = b.created_at || '';
@@ -138,6 +122,16 @@ export default function StudentDetail() {
     loadStudentData();
   }, [id]);
 
+  const loadStudent = async () => {
+    try {
+      const s = await studentOps.getById(id);
+      if (s) setStudent(s);
+      const hcResult = await hourChangeOps.getByStudent(id);
+      // reload hour changes simplified here for adjustment success
+      window.location.reload(); 
+    } catch(e) { }
+  };
+
   const handleAddClass = async (e) => {
     e.preventDefault();
     const hoursToConsume = classForm.hours || 1;
@@ -149,7 +143,6 @@ export default function StudentDetail() {
       return;
     }
     try {
-      // 直接添加课程，不再需要 packageId
       await classOps.add(id, { ...classForm, studentId: id, hours: hoursToConsume });
       setShowClassModal(false);
       setClassForm({ date: '', hours: 1, notes: '' });
@@ -159,6 +152,9 @@ export default function StudentDetail() {
       ]);
       setPackages(Array.isArray(packagesData) ? packagesData : []);
       setClasses(Array.isArray(classesData) ? classesData : []);
+      
+      const s = await studentOps.getById(id);
+      if (s) setStudent(s);
     } catch (err) {
       alert('添加失败：' + err.message);
     }
@@ -174,6 +170,8 @@ export default function StudentDetail() {
         ]);
         setPackages(Array.isArray(packagesData) ? packagesData : []);
         setClasses(Array.isArray(classesData) ? classesData : []);
+        const s = await studentOps.getById(id);
+        if (s) setStudent(s);
       } catch (err) {
         alert('删除失败：' + err.message);
       }
@@ -188,29 +186,21 @@ export default function StudentDetail() {
     ? Math.round(parseFloat(student.remaining_hours) * 100) / 100
     : Math.round(((parseFloat(student.total_hours ?? student.package_summary?.total_hours) || 0) - (parseFloat(student.used_hours ?? student.package_summary?.used_hours) || 0)) * 100) / 100) : 0;
   const totalSpent = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-
-  // 获取第一个活跃的课时包（用于调整）
   const activePackage = packages.find(p => p.remaining > 0) || packages[0];
 
   if (loading) {
     return (
-      <div className="p-8">
-        <div className="text-center py-12">
-          <p className="text-gray-500">加载中...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
       </div>
     );
   }
 
   if (!student) {
     return (
-      <div className="p-8">
-        <div className="text-center py-12">
-          <p className="text-gray-500">学生不存在</p>
-          <Link to="/students" className="text-primary-600 hover:underline mt-2 inline-block">
-            返回学生列表
-          </Link>
-        </div>
+      <div className="p-8 text-center">
+        <p className="text-gray-500 mb-4">学生不存在</p>
+        <Button onClick={() => navigate('/students')} variant="outline">返回学生列表</Button>
       </div>
     );
   }
@@ -220,21 +210,17 @@ export default function StudentDetail() {
     { id: 'classes', label: '上课记录' },
     { id: 'payments', label: '付款记录' },
     { id: 'hour-changes', label: '课时变动' },
-    { id: 'assessments', label: '评估报告' },
+    { id: 'assessments', label: '报告与评估' },
   ];
 
-  const STATUS_LABELS = {
-    completed: '已完成',
-    scheduled: '已排课',
-    cancelled: '已取消',
-    absent: '缺席'
-  };
-
-  const STATUS_COLORS = {
-    completed: 'bg-green-100 text-green-700',
-    scheduled: 'bg-blue-100 text-blue-700',
-    cancelled: 'bg-gray-100 text-gray-700',
-    absent: 'bg-red-100 text-red-700'
+  const STATUS_LABELS = { completed: '已完成', scheduled: '已排课', cancelled: '已取消', absent: '缺席' };
+  const getStatusVariant = (status) => {
+    switch (status) {
+      case 'completed': return 'success';
+      case 'scheduled': return 'primary';
+      case 'absent': return 'danger';
+      default: return 'secondary';
+    }
   };
 
   const handleOpenEdit = () => {
@@ -282,770 +268,724 @@ export default function StudentDetail() {
   };
 
   return (
-    <div className="p-8">
-      <button onClick={() => navigate('/students')} className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6">
-        <ArrowLeft size={20} />
-        返回学生列表
-      </button>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex items-center">
+        <button onClick={() => navigate('/students')} className="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors">
+          <ArrowLeft size={18} />
+          <span>返回学生列表</span>
+        </button>
+      </div>
 
       {/* 学生基本信息 */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
-              <span className="text-2xl text-primary-700 font-bold">
+      <Card className="p-6">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div className="flex items-center gap-5">
+            <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-primary-200 rounded-2xl flex items-center justify-center shadow-inner border border-primary-100">
+              <span className="text-3xl text-primary-700 font-bold">
                 {student.name?.charAt(0) || '学'}
               </span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">{student.name}</h1>
-              {student.english_name && <div className="text-sm text-gray-400 mt-0.5">{student.english_name}</div>}
-              <div className="flex items-center gap-4 mt-2 text-gray-500">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
+                <Badge variant={student.status === 'active' ? 'success' : student.status === 'inactive' ? 'secondary' : 'primary'}>
+                  {student.status === 'active' ? '学习中' : student.status === 'inactive' ? '已暂停' : '已结课'}
+                </Badge>
+              </div>
+              {student.english_name && <div className="text-sm font-medium text-gray-500 mt-1">{student.english_name}</div>}
+              <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-gray-600">
                 {student.phone && (
-                  <span className="flex items-center gap-1">
-                    <Phone size={16} />
-                    {student.phone}
-                  </span>
+                  <span className="flex items-center gap-1.5"><Phone size={14} /> {student.phone}</span>
                 )}
                 {student.email && (
-                  <span className="flex items-center gap-1">
-                    <Mail size={16} />
-                    {student.email}
-                  </span>
+                  <span className="flex items-center gap-1.5"><Mail size={14} /> {student.email}</span>
                 )}
               </div>
-              <div className="flex items-center gap-3 mt-2 flex-wrap text-sm text-gray-500">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                  student.gender === '男' || student.gender === 'male' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' :
-                  student.gender === '女' || student.gender === 'female' ? 'bg-pink-50 text-pink-700 border border-pink-200/60' :
-                  'bg-gray-100 text-gray-500 border border-gray-200'
-                }`}>
-                  性别: {student.gender === 'male' ? '男' : student.gender === 'female' ? '女' : (student.gender || '未设置')}
-                </span>
-                <span>等级: {student.grade || '-'}</span>
-                <span>年龄: {student.age ? `${student.age}岁` : '-'}</span>
-                <span>家长: {student.parent_name || student.parentName || '-'}</span>
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                {student.gender && (
+                  <Badge variant={student.gender === 'male' || student.gender === '男' ? 'primary' : 'danger'} className="bg-opacity-10 border-0">
+                    {student.gender === 'male' ? '男' : student.gender === 'female' ? '女' : student.gender}
+                  </Badge>
+                )}
+                {student.age && <Badge variant="default" className="bg-gray-100 border-0">{student.age}岁</Badge>}
+                {student.grade && <Badge variant="warning" className="bg-warning-50 border-0">等级: {student.grade}</Badge>}
+                {(student.parent_name || student.parentName) && (
+                  <Badge variant="default" className="bg-gray-100 border-0">家长: {student.parent_name || student.parentName}</Badge>
+                )}
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleOpenEdit}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 text-xs font-medium rounded-lg transition-colors"
-            >
-              <Edit size={14} />
-              编辑资料
-            </button>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              student.status === 'active' ? 'bg-green-100 text-green-700' :
-              student.status === 'inactive' ? 'bg-gray-100 text-gray-700' :
-              'bg-blue-100 text-blue-700'
-            }`}>
-              {student.status === 'active' ? '学习中' : student.status === 'inactive' ? '已暂停' : '已结课'}
-            </span>
+          <div className="flex shrink-0">
+            <Button variant="outline" onClick={handleOpenEdit}>
+              <Edit className="w-4 h-4 mr-2" /> 编辑资料
+            </Button>
           </div>
         </div>
 
         {/* 课时不足警告 */}
         {totalRemaining > 0 && totalRemaining < 3 && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
-            <AlertTriangle size={18} />
-            <span className="text-sm font-medium">课时不足！剩余 {totalRemaining} 节，请提醒家长续费</span>
+          <div className="mt-6 p-4 bg-warning-50 border border-warning-200 rounded-xl flex items-center gap-3 text-warning-800">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <span className="font-medium">课时不足！剩余 {totalRemaining} 节，请提醒家长续费</span>
           </div>
         )}
-        {totalRemaining === 0 && (
-          <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded-lg flex items-center gap-2 text-red-800">
-            <AlertTriangle size={18} />
-            <span className="text-sm font-medium">课时已用完，请立即购买新课时</span>
+        {totalRemaining <= 0 && (
+          <div className="mt-6 p-4 bg-danger-50 border border-danger-200 rounded-xl flex items-center gap-3 text-danger-800">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <span className="font-medium">课时已用完，请立即购买新课时</span>
           </div>
         )}
 
         {/* 快速统计 */}
-        <div className="grid grid-cols-5 gap-4 mt-6 pt-6 border-t border-gray-100">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-800">{Math.round((parseFloat(student?.total_hours ?? student?.package_summary?.total_hours) || 0) * 100) / 100}</div>
-            <div className="text-sm text-gray-500">总课时</div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6 pt-6 border-t border-gray-100">
+          <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100">
+            <div className="text-sm text-gray-500 mb-1">总课时</div>
+            <div className="text-2xl font-bold text-gray-900">{Math.round((parseFloat(student?.total_hours ?? student?.package_summary?.total_hours) || 0) * 100) / 100}</div>
           </div>
-          <div className="text-center">
+          <div className="bg-primary-50/50 rounded-xl p-4 border border-primary-100">
+            <div className="text-sm text-primary-600/80 mb-1">剩余课时</div>
             <div className="text-2xl font-bold text-primary-600">{totalRemaining}</div>
-            <div className="text-sm text-gray-500">剩余课时</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-800">{classes.filter(c => c.status === 'completed').length}</div>
-            <div className="text-sm text-gray-500">上课次数</div>
+          <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100">
+            <div className="text-sm text-gray-500 mb-1">上课次数</div>
+            <div className="text-2xl font-bold text-gray-900">{classes.filter(c => c.status === 'completed').length}</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">¥{totalSpent.toLocaleString()}</div>
-            <div className="text-sm text-gray-500">累计消费</div>
+          <div className="bg-success-50/50 rounded-xl p-4 border border-success-100">
+            <div className="text-sm text-success-600/80 mb-1">累计消费</div>
+            <div className="text-2xl font-bold text-success-600">¥{totalSpent.toLocaleString()}</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-800">{payments.length}</div>
-            <div className="text-sm text-gray-500">付款次数</div>
+          <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100">
+            <div className="text-sm text-gray-500 mb-1">付款次数</div>
+            <div className="text-2xl font-bold text-gray-900">{payments.length}</div>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* 标签页 */}
-      <div className="mb-6">
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === tab.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto no-scrollbar">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-5 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              activeTab === tab.id 
+                ? 'border-primary-500 text-primary-600' 
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* 概览 */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 课时余额概览 */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-800">课时余额</h3>
+          <Card>
+            <CardHeader>
+              <h3 className="font-bold text-gray-900">课时余额</h3>
               {student && (
-                <button
-                  onClick={() => setShowAdjustModal(true)}
-                  className="text-sm text-primary-600 hover:text-primary-700"
-                >
+                <Button variant="ghost" size="sm" onClick={() => setShowAdjustModal(true)}>
+                  <Calculator className="w-4 h-4 mr-1" />
                   调整课时
-                </button>
+                </Button>
               )}
-            </div>
-            <div className="text-center py-4">
-              <div className="text-4xl font-bold text-primary-600">{totalRemaining}</div>
-              <div className="text-sm text-gray-500 mt-1">剩余课时</div>
-            </div>
-            {/* 课时包列表 */}
-            {packages.length > 0 && (
-              <div className="mt-4 space-y-2">
-                {packages.map(pkg => (
-                  <div key={pkg.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                    <span className="text-gray-600">{pkg.name || `套餐 #${pkg.id}`}</span>
-                    <span className="font-medium text-primary-600">
-                      {Math.round((parseFloat(pkg.remaining) || 0) * 100) / 100}/{Math.round((parseFloat(pkg.total) || 0) * 100) / 100}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {totalRemaining < 3 && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                课时不足，请提醒家长续费
-              </div>
-            )}
-          </div>
-
-          {/* 最近上课记录 */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-800">最近上课</h3>
-              <button onClick={() => setShowClassModal(true)} className="text-primary-600 hover:text-primary-700 text-sm flex items-center gap-1">
-                <Plus size={16} />
-                添加
-              </button>
-            </div>
-            {classes.length > 0 ? (
-              <div className="space-y-3">
-                {classes.slice(0, 3).map(cls => (
-                  <div key={cls.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <Clock size={16} className="text-gray-400" />
-                      <div>
-                        <div className="font-medium text-gray-800">{cls.date}</div>
-                        <div className="text-sm text-gray-500">
-                          {cls.hours} 节
-                          {cls.status && (
-                            <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${STATUS_COLORS[cls.status]}`}>
-                              {STATUS_LABELS[cls.status]}
-                            </span>
-                          )}
-                        </div>
+            </CardHeader>
+            <div className="p-6">
+              <div className="flex items-center gap-6 mb-6">
+                <div className="w-24 h-24 rounded-full border-[6px] border-primary-100 flex flex-col items-center justify-center shrink-0">
+                  <span className="text-3xl font-bold text-primary-600 leading-none">{totalRemaining}</span>
+                  <span className="text-[10px] text-gray-500 mt-1 font-medium">剩余</span>
+                </div>
+                <div className="flex-1 space-y-3">
+                  {packages.length > 0 ? packages.map(pkg => (
+                    <div key={pkg.id} className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-gray-700">{pkg.name || `套餐 #${pkg.id}`}</span>
+                        <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
+                          {Math.round((parseFloat(pkg.remaining) || 0) * 100) / 100} / {Math.round((parseFloat(pkg.total) || 0) * 100) / 100} 节
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div 
+                          className="bg-primary-500 h-1.5 rounded-full" 
+                          style={{ width: `${Math.min(100, Math.max(0, (pkg.remaining / pkg.total) * 100))}%` }}
+                        ></div>
                       </div>
                     </div>
-                    {(cls.content || cls.homework || (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))) && (
-                      <button onClick={() => (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
-                        ? setShowAssessmentFeedback(assessments.find(a => parseInt(a.class_id) === parseInt(cls.id)))
-                        : setShowFeedbackModal(cls)} className="text-primary-600 hover:text-primary-700" title={cls.is_trial === 1 ? "查看报告" : "查看反馈"}>
-                        {(cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
-                          ? <FileText size={16} />
-                          : <MessageSquare size={16} />}
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  )) : (
+                    <p className="text-sm text-gray-400">暂无活跃课时包</p>
+                  )}
+                </div>
               </div>
-            ) : (
-              <p className="text-gray-400 text-center py-4">暂无上课记录</p>
-            )}
-          </div>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <h3 className="font-bold text-gray-900">最近上课</h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowClassModal(true)}>
+                <Plus className="w-4 h-4 mr-1" /> 添加
+              </Button>
+            </CardHeader>
+            <div className="p-6">
+              {classes.length > 0 ? (
+                <div className="space-y-4">
+                  {classes.slice(0, 4).map(cls => (
+                    <div key={cls.id} className="flex items-center justify-between border-b border-gray-50 pb-4 last:border-0 last:pb-0">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${cls.status === 'completed' ? 'bg-success-50 text-success-600' : 'bg-gray-100 text-gray-400'}`}>
+                          <Clock className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900 text-sm mb-0.5">{cls.date}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">{cls.hours} 节课</span>
+                            <Badge variant={getStatusVariant(cls.status)} className="px-1.5 py-0 text-[10px]">{STATUS_LABELS[cls.status]}</Badge>
+                          </div>
+                        </div>
+                      </div>
+                      {(cls.content || cls.homework || (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))) && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
+                            ? setShowAssessmentFeedback(assessments.find(a => parseInt(a.class_id) === parseInt(cls.id)))
+                            : setShowFeedbackModal(cls)}
+                        >
+                          {(cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
+                            ? <FileText className="w-4 h-4 text-primary-600" />
+                            : <MessageSquare className="w-4 h-4 text-primary-600" />}
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <Clock className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                  <p className="text-sm">暂无上课记录</p>
+                </div>
+              )}
+            </div>
+          </Card>
         </div>
       )}
 
       {/* 上课记录 */}
       {activeTab === 'classes' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-semibold text-gray-800">上课记录</h3>
-            <button onClick={() => setShowClassModal(true)} className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
-              <Plus size={18} />
-              记录上课
-            </button>
+        <Card>
+          <CardHeader>
+            <h3 className="font-bold text-gray-900">上课记录</h3>
+            <Button onClick={() => setShowClassModal(true)}>
+              <Plus className="w-4 h-4 mr-1.5" /> 记录上课
+            </Button>
+          </CardHeader>
+          <div className="p-0">
+            {classes.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-gray-50 border-b border-gray-100 text-gray-500">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">日期</th>
+                      <th className="px-6 py-4 font-medium">消耗课时</th>
+                      <th className="px-6 py-4 font-medium">状态</th>
+                      <th className="px-6 py-4 font-medium text-center">反馈/报告</th>
+                      <th className="px-6 py-4 font-medium text-right">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {classes.map(cls => (
+                      <tr key={cls.id} className="hover:bg-gray-50/50">
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-gray-900">{cls.date}</div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">{cls.hours} 节</td>
+                        <td className="px-6 py-4">
+                          <Badge variant={getStatusVariant(cls.status)}>{STATUS_LABELS[cls.status]}</Badge>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {(cls.content || cls.homework || (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))) ? (
+                            <Button 
+                              variant="outline" size="sm" className="h-7 text-xs px-2"
+                              onClick={() => (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
+                                ? setShowAssessmentFeedback(assessments.find(a => parseInt(a.class_id) === parseInt(cls.id)))
+                                : setShowFeedbackModal(cls)}
+                            >
+                              {(cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id))) ? '评估报告' : '上课反馈'}
+                            </Button>
+                          ) : <span className="text-gray-300">-</span>}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteClass(cls.id)} className="text-gray-400 hover:text-danger-600 px-2">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-16 text-gray-400">
+                <Clock className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                <p>暂无上课记录</p>
+              </div>
+            )}
           </div>
-          {classes.length > 0 ? (
-            <div className="space-y-3">
-              {classes.map(cls => (
-                <div key={cls.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center">
-                      <Clock className="w-5 h-5 text-primary-600" />
-                    </div>
-                    <div>
-                      <div className="font-medium text-gray-800">{cls.date}</div>
-                      <div className="text-sm text-gray-500 flex items-center gap-2">
-                        {cls.hours} 节
-                        {cls.status && (
-                          <span className={`px-1.5 py-0.5 rounded text-xs ${STATUS_COLORS[cls.status]}`}>
-                            {STATUS_LABELS[cls.status]}
-                          </span>
-                        )}
-                        {cls.content && <span className="text-primary-600">· 有反馈</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {(cls.content || cls.homework || (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))) && (
-                      <button onClick={() => (cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
-                        ? setShowAssessmentFeedback(assessments.find(a => parseInt(a.class_id) === parseInt(cls.id)))
-                        : setShowFeedbackModal(cls)} className="p-2 text-primary-600 hover:text-primary-700" title={cls.is_trial === 1 ? "查看报告" : "查看反馈"}>
-                        {(cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id)))
-                          ? <FileText size={18} />
-                          : <MessageSquare size={18} />}
-                      </button>
-                    )}
-                    <button onClick={() => handleDeleteClass(cls.id)} className="p-2 text-gray-400 hover:text-red-600">
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-400">
-              <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>暂无上课记录</p>
-            </div>
-          )}
-        </div>
+        </Card>
       )}
 
       {/* 付款记录 */}
       {activeTab === 'payments' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="font-semibold text-gray-800 mb-6">付款记录</h3>
-          {payments.length > 0 ? (
-            <div className="space-y-3">
-              {payments.map(payment => (
-                <div key={payment.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
-                      <CreditCard className="w-5 h-5 text-green-600" />
-                    </div>
-                    <div>
-                      <div className="font-medium text-gray-800">{payment.date}</div>
-                      <div className="text-sm text-gray-500">
-                        {payment.payment_method || payment.method || '微信支付'}
-                        {payment.description && ` · ${payment.description}`}
-                      </div>
-                    </div>
-                  </div>
-                  <div className={`text-lg font-semibold ${payment.amount > 0 ? 'text-green-600' : 'text-gray-600'}`}>
-                    {payment.amount > 0 ? '+' : ''}¥{payment.amount?.toLocaleString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-400">
-              <CreditCard className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>暂无付款记录</p>
-            </div>
-          )}
-        </div>
+        <Card>
+          <CardHeader>
+            <h3 className="font-bold text-gray-900">付款记录</h3>
+          </CardHeader>
+          <div className="p-0">
+            {payments.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-gray-50 border-b border-gray-100 text-gray-500">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">付款日期</th>
+                      <th className="px-6 py-4 font-medium">支付方式</th>
+                      <th className="px-6 py-4 font-medium">购买课时</th>
+                      <th className="px-6 py-4 font-medium">说明</th>
+                      <th className="px-6 py-4 font-medium text-right">金额</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {payments.map(payment => (
+                      <tr key={payment.id} className="hover:bg-gray-50/50">
+                        <td className="px-6 py-4 font-medium text-gray-900">{payment.date}</td>
+                        <td className="px-6 py-4 text-gray-600">{payment.payment_method || payment.method || '微信支付'}</td>
+                        <td className="px-6 py-4 text-gray-600">{payment.hours || payment.class_count || '-'} 节</td>
+                        <td className="px-6 py-4 text-gray-500">{payment.description || '-'}</td>
+                        <td className="px-6 py-4 text-right font-bold text-success-600">
+                          +{payment.amount?.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-16 text-gray-400">
+                <CreditCard className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                <p>暂无付款记录</p>
+              </div>
+            )}
+          </div>
+        </Card>
       )}
 
+      {/* 课时变动 */}
       {activeTab === 'hour-changes' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="font-semibold text-gray-800 mb-6">课时变动记录</h3>
-          {hourChanges.length > 0 ? (
-            <div className="space-y-3">
-              {hourChanges.map(hc => (
-                <div key={hc.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      hc.type === 'payment' ? 'bg-green-50' :
-                      hc.type === 'class' ? 'bg-red-50' : 'bg-blue-50'
-                    }`}>
-                      {hc.type === 'payment' ? '+' : hc.type === 'class' ? '-' : '~'}
-                    </div>
-                    <div>
-                      <div className="font-medium text-gray-800">
-                        {hc.type === 'payment' && '购买课时'}
-                        {hc.type === 'class' && '上课消耗'}
-                        {hc.type === 'adjust' && '手动调整'}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {hc.description || hc.detail_text || '-'}
-                        {hc.created_at && ` · ${hc.created_at.split(' ')[0]}`}
-                      </div>
-                    </div>
-                  </div>
-                  <div className={`text-lg font-semibold ${
-                    hc.amount > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {hc.amount > 0 ? '+' : ''}{hc.amount} 课时
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-400">
-              <p>暂无课时变动记录</p>
-            </div>
-          )}
-        </div>
+        <Card>
+          <CardHeader>
+            <h3 className="font-bold text-gray-900">课时变动流水</h3>
+          </CardHeader>
+          <div className="p-0">
+            {hourChanges.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-gray-50 border-b border-gray-100 text-gray-500">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">时间</th>
+                      <th className="px-6 py-4 font-medium">类型</th>
+                      <th className="px-6 py-4 font-medium">说明</th>
+                      <th className="px-6 py-4 font-medium text-right">变动额</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {hourChanges.map(hc => (
+                      <tr key={hc.id} className="hover:bg-gray-50/50">
+                        <td className="px-6 py-4 text-gray-500">{hc.created_at || '-'}</td>
+                        <td className="px-6 py-4">
+                          <Badge variant={hc.type === 'payment' ? 'success' : hc.type === 'class' ? 'danger' : 'warning'}>
+                            {hc.type === 'payment' && '购买课时'}
+                            {hc.type === 'class' && '上课消耗'}
+                            {hc.type === 'adjust' && '手动调整'}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-gray-700">{hc.description || hc.detail_text || '-'}</td>
+                        <td className={`px-6 py-4 text-right font-bold ${hc.amount > 0 ? 'text-success-600' : 'text-danger-600'}`}>
+                          {hc.amount > 0 ? '+' : ''}{hc.amount}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-16 text-gray-400">
+                <FileCheck className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                <p>暂无课时变动记录</p>
+              </div>
+            )}
+          </div>
+        </Card>
       )}
 
-      {/* 评估与阶段成长报告 */}
+      {/* 报告与评估 */}
       {activeTab === 'assessments' && (
         <div className="space-y-6">
-          {/* 阶段性里程碑成长报告 */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-semibold text-gray-800 text-lg flex items-center gap-2">
-                  <span>🏆 阶段性成长报告 (Milestone Reports)</span>
-                  <span className="text-xs bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full font-medium">共 {progressReports.length} 份</span>
+          <Card>
+            <CardHeader className="flex-col items-start gap-1 pb-5">
+              <div className="flex items-center justify-between w-full">
+                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                  <FileSignature className="w-5 h-5 text-purple-600" />
+                  阶段性成长报告
                 </h3>
-                <p className="text-xs text-gray-500 mt-1">系统在学生完成第 10、30、60 节课或晋级升阶时自动生成的阶段能力综合评估</p>
+                <Badge variant="primary" className="bg-purple-100 text-purple-700">共 {progressReports.length} 份</Badge>
               </div>
-            </div>
+              <p className="text-xs text-gray-500">系统在学生完成第 10、30、60 节课或晋级升阶时自动生成的阶段能力综合评估</p>
+            </CardHeader>
+            <div className="p-6 pt-0">
+              {progressReports.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {progressReports.map(pr => {
+                    const typeMap = {
+                      milestone_10: { label: '🥉 10课时适应期', color: 'bg-amber-100 text-amber-800' },
+                      milestone_30: { label: '🥈 30课时进阶期', color: 'bg-blue-100 text-blue-800' },
+                      milestone_60: { label: '🥇 60课时大纲总结', color: 'bg-emerald-100 text-emerald-800' },
+                      level_up: { label: '🚀 等级跃迁报告', color: 'bg-purple-100 text-purple-800' }
+                    };
+                    const badge = typeMap[pr.report_type] || { label: pr.report_type || '阶段评估', color: 'bg-gray-100 text-gray-800' };
 
-            {progressReports.length > 0 ? (
-              <div className="space-y-4">
-                {progressReports.map(pr => {
-                  const typeMap = {
-                    milestone_10: { label: '🥉 10课时适应期评估', color: 'bg-amber-50 text-amber-800 border-amber-200' },
-                    milestone_30: { label: '🥈 30课时进阶期评估', color: 'bg-blue-50 text-blue-800 border-blue-200' },
-                    milestone_60: { label: '🥇 60课时大纲总结', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-                    level_up: { label: '🚀 能力等级跃迁报告', color: 'bg-purple-50 text-purple-800 border-purple-200' }
-                  };
-                  const badge = typeMap[pr.report_type] || { label: '📋 ' + (pr.report_type || '阶段评估'), color: 'bg-gray-50 text-gray-800 border-gray-200' };
-
-                  return (
-                    <div key={pr.id} className="border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow bg-white">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className={`text-xs px-2.5 py-1 rounded-md font-semibold border ${badge.color}`}>
+                    return (
+                      <div key={pr.id} className="border border-gray-100 rounded-xl p-5 hover:border-purple-200 hover:shadow-md transition-all bg-white cursor-pointer" onClick={() => setShowProgressReportModal(pr)}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex flex-col gap-2">
+                            <span className={`text-xs px-2.5 py-1 rounded-md font-bold w-fit ${badge.color}`}>
                               {badge.label}
                             </span>
-                            <span className="text-sm text-gray-500">{pr.created_at ? pr.created_at.substring(0,10) : ''}</span>
-                            <span className="text-sm font-medium text-gray-700">执教教师：{pr.teacher_name || '-'}</span>
+                            <span className="text-sm text-gray-500 flex items-center gap-2">
+                              <Calendar className="w-3.5 h-3.5" /> {pr.created_at ? pr.created_at.substring(0,10) : ''}
+                            </span>
                           </div>
-                          {(pr.from_level || pr.to_level) && (
-                            <div className="mt-2 inline-flex items-center gap-1.5 bg-purple-50 text-purple-700 text-xs px-3 py-1 rounded-lg font-medium">
-                              <span>🎓 级别晋升：</span>
-                              <span>{pr.from_level || '入学'}</span>
-                              <span>→</span>
-                              <span className="font-bold text-purple-900">{pr.to_level}</span>
-                            </div>
-                          )}
+                          <Button variant="ghost" size="sm" className="text-purple-600 hover:text-purple-700 bg-purple-50">
+                            查看
+                          </Button>
                         </div>
-                        <button
-                          onClick={() => setShowProgressReportModal(pr)}
-                          className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-sm hover:bg-purple-200 font-medium flex items-center gap-1"
-                        >
-                          <FileText className="w-4 h-4" />
-                          查看详情
-                        </button>
-                      </div>
-
-                      {/* 阶段摘要与评语 */}
-                      {pr.summary && (
-                        <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-700">
-                          <span className="font-semibold text-gray-800">📋 阶段总结：</span>{pr.summary}
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                        {pr.strengths && (
-                          <div className="p-3 bg-green-50 rounded-lg text-xs text-green-900 border border-green-100">
-                            <span className="font-bold text-green-800 block mb-1">💪 亮点优势：</span>
-                            <p className="whitespace-pre-wrap">{pr.strengths}</p>
+                        {(pr.from_level || pr.to_level) && (
+                          <div className="mt-3 inline-flex items-center gap-2 bg-purple-50 text-purple-700 text-xs px-3 py-1.5 rounded-lg font-medium border border-purple-100">
+                            🎓 级别晋升：<span>{pr.from_level || '入学'}</span> <ArrowLeft size={12} className="rotate-180" /> <span className="font-bold text-purple-900">{pr.to_level}</span>
                           </div>
                         )}
-                        {pr.improvements && (
-                          <div className="p-3 bg-orange-50 rounded-lg text-xs text-orange-900 border border-orange-100">
-                            <span className="font-bold text-orange-800 block mb-1">📈 建议提升：</span>
-                            <p className="whitespace-pre-wrap">{pr.improvements}</p>
-                          </div>
+                        {pr.summary && (
+                          <p className="mt-3 text-sm text-gray-600 line-clamp-2">{pr.summary}</p>
                         )}
                       </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  <FileSignature className="w-10 h-10 mx-auto mb-3 opacity-30 text-purple-500" />
+                  <p className="text-sm">暂无阶段性成长报告 (完成对应课时后自动生成)</p>
+                </div>
+              )}
+            </div>
+          </Card>
 
-                      {pr.teacher_message && (
-                        <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-blue-900 border border-blue-100">
-                          <span className="font-bold text-blue-800 block mb-1">💌 教师寄语：</span>
-                          <p className="whitespace-pre-wrap">{pr.teacher_message}</p>
+          <Card>
+            <CardHeader className="flex-col items-start gap-1 pb-5">
+              <div className="flex items-center justify-between w-full">
+                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-orange-500" />
+                  体验课评估报告
+                </h3>
+                <Badge variant="warning" className="bg-orange-100 text-orange-700">共 {assessments.length} 份</Badge>
+              </div>
+            </CardHeader>
+            <div className="p-6 pt-0">
+              {assessments.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {assessments.map(a => (
+                    <div key={a.id} className="border border-gray-100 rounded-xl p-5 hover:border-orange-200 hover:shadow-md transition-all bg-white cursor-pointer" onClick={() => openAssessmentReport(a)}>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex flex-col gap-2">
+                          {a.is_trial === 1 && <span className="text-xs px-2.5 py-1 rounded-md font-bold w-fit bg-orange-100 text-orange-800">🎁 体验课评估</span>}
+                          <span className="text-sm text-gray-500 flex items-center gap-2">
+                            <Calendar className="w-3.5 h-3.5" /> {a.class_date} {(a.start_time||'').substring(0,5)}
+                          </span>
+                        </div>
+                        <Button variant="ghost" size="sm" className="text-orange-600 hover:text-orange-700 bg-orange-50">
+                          查看PDF
+                        </Button>
+                      </div>
+                      <div className="text-sm text-gray-600 mb-2">教师：{a.teacher_name || '-'} · {a.subject || '英语'}</div>
+                      {a.recommended_level && (
+                        <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-md border border-blue-100 font-medium">
+                          🎓 建议级别: {a.recommended_level}
                         </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-40 text-purple-500" />
-                <p className="text-sm">暂无阶段性成长报告（完成 10、30、60 课时或升阶时将自动触发教师生成）</p>
-              </div>
-            )}
-          </div>
-
-          {/* 体验课评估报告 */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h3 className="font-semibold text-gray-800 text-lg mb-4 flex items-center gap-2">
-              <span>📝 体验课入学评估 (Trial Assessment)</span>
-              <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full font-medium">共 {assessments.length} 份</span>
-            </h3>
-            {assessments.length > 0 ? (
-              <div className="space-y-4">
-                {assessments.map(a => (
-                  <div key={a.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          {a.is_trial === 1 && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🎁 体验课</span>}
-                          <span className="text-sm text-gray-500">{a.class_date} {a.start_time?.substring(0,5)} - {a.end_time?.substring(0,5)}</span>
-                          <span className="text-sm font-medium text-gray-700">教师：{a.teacher_name || '-'}</span>
-                        </div>
-                        <div className="text-sm text-gray-500">课程：{a.subject || '英语'}</div>
-                        {a.recommended_level && (
-                          <div className="mt-2 inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-lg">
-                            🎓 建议级别: {a.recommended_level}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => openAssessmentReport(a)}
-                        className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm hover:bg-orange-200 font-medium flex items-center gap-1"
-                      >
-                        <FileText className="w-4 h-4" />
-                        查看 / 导出PDF
-                      </button>
-                    </div>
-                    {a.teacher_message && (
-                      <div className="mt-2 p-3 bg-blue-50 rounded-lg text-sm text-gray-600">
-                        <span className="font-medium">💌 教师寄语：</span>{a.teacher_message}
-                      </div>
-                    )}
-                    <div className="mt-2 text-xs text-gray-400">{a.status === 'published' ? '已发布' : '草稿'}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-40 text-orange-500" />
-                <p className="text-sm">暂无体验课评估报告</p>
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  <FileText className="w-10 h-10 mx-auto mb-3 opacity-30 text-orange-500" />
+                  <p className="text-sm">暂无体验课评估报告</p>
+                </div>
+              )}
+            </div>
+          </Card>
         </div>
       )}
 
-      {/* 添加上课记录弹窗 */}
+      {/* --- Modals --- */}
+      
+      {/* 记录上课 */}
       {showClassModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">记录上课</h2>
-            <form onSubmit={handleAddClass} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">上课日期 *</label>
-                <input
-                  type="date"
-                  required
-                  value={classForm.date}
-                  onChange={(e) => setClassForm({ ...classForm, date: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md shadow-2xl border-0 overflow-hidden">
+            <CardHeader className="flex items-center justify-between border-b border-gray-100 bg-white">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <Plus className="w-5 h-5 text-primary-600" />
+                记录上课
+              </h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowClassModal(false)} className="w-8 h-8 p-0 rounded-full">
+                <X className="w-5 h-5 text-gray-400" />
+              </Button>
+            </CardHeader>
+            <form onSubmit={handleAddClass}>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">上课日期 *</label>
+                  <input
+                    type="date" required value={classForm.date} onChange={(e) => setClassForm({ ...classForm, date: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">消耗课时 *</label>
+                  <input
+                    type="number" required min="0.1" step="0.01" value={classForm.hours} onChange={(e) => setClassForm({ ...classForm, hours: parseFloat(e.target.value) })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                  <input
+                    type="text" value={classForm.notes} onChange={(e) => setClassForm({ ...classForm, notes: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="如：口语课、阅读课"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">消耗课时 *</label>
-                <input
-                  type="number"
-                  required
-                  min="0.1"
-                  step="0.01"
-                  value={classForm.hours}
-                  onChange={(e) => setClassForm({ ...classForm, hours: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
-                <input
-                  type="text"
-                  value={classForm.notes}
-                  onChange={(e) => setClassForm({ ...classForm, notes: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="如：口语课、阅读课"
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => setShowClassModal(false)} className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50">
-                  取消
-                </button>
-                <button type="submit" className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
-                  保存
-                </button>
+              <div className="flex gap-3 p-4 border-t border-gray-100 bg-gray-50 justify-end">
+                <Button variant="outline" type="button" onClick={() => setShowClassModal(false)}>取消</Button>
+                <Button type="submit">保存</Button>
               </div>
             </form>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* 反馈详情弹窗 */}
+      {/* 反馈详情 */}
       {showFeedbackModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">上课反馈详情</h2>
-            <div className="bg-gray-50 rounded-lg p-4 mb-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="text-gray-500">学生：</span>
-                  <span className="font-medium text-gray-800">{student.name}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500">日期：</span>
-                  <span className="font-medium text-gray-800">{showFeedbackModal.date}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500">课时：</span>
-                  <span className="font-medium text-gray-800">{showFeedbackModal.hours} 节</span>
-                </div>
-                <div>
-                  <span className="text-gray-500">状态：</span>
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[showFeedbackModal.status]}`}>
-                    {STATUS_LABELS[showFeedbackModal.status]}
-                  </span>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <CardHeader className="shrink-0 flex items-center justify-between border-b border-gray-100 bg-white">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary-600" />
+                上课反馈详情
+              </h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowFeedbackModal(null)} className="w-8 h-8 p-0 rounded-full">
+                <X className="w-5 h-5 text-gray-400" />
+              </Button>
+            </CardHeader>
+            <div className="p-5 overflow-y-auto space-y-5">
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div><span className="text-gray-500">日期：</span><span className="font-medium text-gray-900">{showFeedbackModal.date}</span></div>
+                  <div><span className="text-gray-500">课时：</span><span className="font-medium text-gray-900">{showFeedbackModal.hours} 节</span></div>
+                  <div className="col-span-2">
+                    <span className="text-gray-500 mr-2">状态：</span>
+                    <Badge variant={getStatusVariant(showFeedbackModal.status)}>{STATUS_LABELS[showFeedbackModal.status]}</Badge>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="space-y-4">
               {showFeedbackModal.content && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-1">上课内容</h3>
-                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600 whitespace-pre-wrap">
+                  <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5"><FileText className="w-4 h-4" /> 上课内容</h3>
+                  <div className="bg-blue-50/50 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed border border-blue-100">
                     {showFeedbackModal.content}
                   </div>
                 </div>
               )}
               {showFeedbackModal.homework && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-1">作业布置</h3>
-                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600 whitespace-pre-wrap">
+                  <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5"><Edit className="w-4 h-4" /> 作业布置</h3>
+                  <div className="bg-orange-50/50 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed border border-orange-100">
                     {showFeedbackModal.homework}
                   </div>
                 </div>
               )}
               {showFeedbackModal.notes && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-1">备注</h3>
-                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600 whitespace-pre-wrap">
+                  <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5">备注</h3>
+                  <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 whitespace-pre-wrap leading-relaxed border border-gray-200">
                     {showFeedbackModal.notes}
                   </div>
                 </div>
               )}
             </div>
-            <div className="flex justify-end mt-6">
-              <button onClick={() => setShowFeedbackModal(null)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-                关闭
-              </button>
+            <div className="flex justify-end p-4 border-t border-gray-100 shrink-0">
+              <Button variant="outline" onClick={() => setShowFeedbackModal(null)}>关闭</Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* 阶段性成长报告详情弹窗 */}
+      {/* 阶段性成长报告详情 */}
       {showProgressReportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-              <div>
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <span>🏆 阶段性成长评估报告</span>
-                </h2>
-                <p className="text-xs text-gray-400 mt-1">报告生成时间：{showProgressReportModal.created_at || '-'}</p>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <CardHeader className="shrink-0 flex items-center justify-between border-b border-gray-100 bg-white p-5">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <FileSignature className="w-6 h-6 text-purple-600" />
+                    阶段性成长评估
+                  </h2>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">报告生成时间：{showProgressReportModal.created_at || '-'}</div>
               </div>
-              <span className="text-xs font-semibold px-3 py-1 bg-purple-50 text-purple-700 rounded-full border border-purple-200">
-                {showProgressReportModal.report_type === 'milestone_10' ? '🥉 10课时适应期' :
-                 showProgressReportModal.report_type === 'milestone_30' ? '🥈 30课时进阶期' :
-                 showProgressReportModal.report_type === 'milestone_60' ? '🥇 60课时大纲总结' :
-                 showProgressReportModal.report_type === 'level_up' ? '🚀 等级跃迁' :
-                 (showProgressReportModal.report_type || '阶段里程碑')}
-              </span>
+              <Button variant="ghost" size="sm" onClick={() => setShowProgressReportModal(null)} className="w-8 h-8 p-0 rounded-full bg-gray-100">
+                <X className="w-5 h-5 text-gray-500" />
+              </Button>
+            </CardHeader>
+            
+            <div className="overflow-y-auto p-5">
+              <div className="bg-purple-50/50 rounded-xl p-4 mb-6 border border-purple-100 grid grid-cols-2 gap-4 text-sm">
+                <div><span className="text-gray-500">学生：</span><span className="font-semibold text-gray-800">{student.name}</span></div>
+                <div><span className="text-gray-500">教师：</span><span className="font-semibold text-gray-800">{showProgressReportModal.teacher_name || '-'}</span></div>
+                {(showProgressReportModal.from_level || showProgressReportModal.to_level) && (
+                  <div className="col-span-2 flex items-center gap-2 font-medium text-purple-700 bg-white p-2.5 rounded-lg border border-purple-100 shadow-sm">
+                    🎓 能力级别跃迁：<span>{showProgressReportModal.from_level || '入学'}</span> <ArrowLeft size={14} className="rotate-180" /> <span className="font-bold text-purple-900">{showProgressReportModal.to_level}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-5 text-sm">
+                {showProgressReportModal.summary && (
+                  <div>
+                    <h4 className="font-bold text-gray-900 mb-2">📋 阶段学习总结</h4>
+                    <div className="p-4 bg-gray-50 rounded-xl text-gray-700 whitespace-pre-wrap leading-relaxed border border-gray-100">
+                      {showProgressReportModal.summary}
+                    </div>
+                  </div>
+                )}
+
+                {showProgressReportModal.strengths && (
+                  <div>
+                    <h4 className="font-bold text-green-700 mb-2">💪 亮点与优势</h4>
+                    <div className="p-4 bg-green-50/50 rounded-xl text-green-900 border border-green-100 whitespace-pre-wrap leading-relaxed">
+                      {showProgressReportModal.strengths}
+                    </div>
+                  </div>
+                )}
+
+                {showProgressReportModal.improvements && (
+                  <div>
+                    <h4 className="font-bold text-orange-700 mb-2">📈 建议重点提升</h4>
+                    <div className="p-4 bg-orange-50/50 rounded-xl text-orange-900 border border-orange-100 whitespace-pre-wrap leading-relaxed">
+                      {showProgressReportModal.improvements}
+                    </div>
+                  </div>
+                )}
+
+                {showProgressReportModal.recommendation && (
+                  <div>
+                    <h4 className="font-bold text-primary-700 mb-2">🎯 后续规划与建议</h4>
+                    <div className="p-4 bg-primary-50/50 rounded-xl text-primary-900 border border-primary-100 whitespace-pre-wrap leading-relaxed">
+                      {showProgressReportModal.recommendation}
+                    </div>
+                  </div>
+                )}
+
+                {showProgressReportModal.teacher_message && (
+                  <div>
+                    <h4 className="font-bold text-purple-700 mb-2">💌 老师寄语</h4>
+                    <div className="p-4 bg-purple-50/50 rounded-xl text-purple-900 border border-purple-100 whitespace-pre-wrap leading-relaxed">
+                      {showProgressReportModal.teacher_message}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-
-            <div className="bg-gray-50 rounded-xl p-4 my-4 grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-gray-500">学生姓名：</span><span className="font-semibold text-gray-800">{student.name} {student.english_name ? `(${student.english_name})` : ''}</span></div>
-              <div><span className="text-gray-500">执教教师：</span><span className="font-semibold text-gray-800">{showProgressReportModal.teacher_name || '-'}</span></div>
-              {(showProgressReportModal.from_level || showProgressReportModal.to_level) && (
-                <div className="col-span-2 flex items-center gap-2 font-medium text-purple-700 bg-purple-50 p-2 rounded-lg">
-                  <span>🎓 能力级别跃迁：</span>
-                  <span>{showProgressReportModal.from_level || '入学'}</span>
-                  <span>→</span>
-                  <span className="font-bold text-purple-900">{showProgressReportModal.to_level}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-4 text-sm">
-              {showProgressReportModal.summary && (
-                <div>
-                  <h4 className="font-bold text-gray-800 mb-1 flex items-center gap-1.5">
-                    <span>📋 阶段学习总结 (Summary)</span>
-                  </h4>
-                  <div className="p-3 bg-gray-50 rounded-xl text-gray-700 whitespace-pre-wrap leading-relaxed">
-                    {showProgressReportModal.summary}
-                  </div>
-                </div>
-              )}
-
-              {showProgressReportModal.strengths && (
-                <div>
-                  <h4 className="font-bold text-green-800 mb-1 flex items-center gap-1.5">
-                    <span>💪 亮点与优势 (Strengths)</span>
-                  </h4>
-                  <div className="p-3 bg-green-50 rounded-xl text-green-900 border border-green-100 whitespace-pre-wrap leading-relaxed">
-                    {showProgressReportModal.strengths}
-                  </div>
-                </div>
-              )}
-
-              {showProgressReportModal.improvements && (
-                <div>
-                  <h4 className="font-bold text-orange-800 mb-1 flex items-center gap-1.5">
-                    <span>📈 建议重点提升 (Areas to Improve)</span>
-                  </h4>
-                  <div className="p-3 bg-orange-50 rounded-xl text-orange-900 border border-orange-100 whitespace-pre-wrap leading-relaxed">
-                    {showProgressReportModal.improvements}
-                  </div>
-                </div>
-              )}
-
-              {showProgressReportModal.recommendation && (
-                <div>
-                  <h4 className="font-bold text-indigo-800 mb-1 flex items-center gap-1.5">
-                    <span>🎯 后续规划与建议教材 (Recommendations)</span>
-                  </h4>
-                  <div className="p-3 bg-indigo-50 rounded-xl text-indigo-900 border border-indigo-100 whitespace-pre-wrap leading-relaxed">
-                    {showProgressReportModal.recommendation}
-                  </div>
-                </div>
-              )}
-
-              {showProgressReportModal.teacher_message && (
-                <div>
-                  <h4 className="font-bold text-blue-800 mb-1 flex items-center gap-1.5">
-                    <span>💌 老师寄语 (Teacher's Message)</span>
-                  </h4>
-                  <div className="p-3 bg-blue-50 rounded-xl text-blue-900 border border-blue-100 whitespace-pre-wrap leading-relaxed">
-                    {showProgressReportModal.teacher_message}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end mt-6 pt-4 border-t border-gray-100">
-              <button
-                onClick={() => setShowProgressReportModal(null)}
-                className="px-5 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-medium"
-              >
-                关闭
-              </button>
-            </div>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* 评估报告弹窗（上课记录中体验课查看） */}
+      {/* 体验课报告弹窗 */}
       {showAssessmentFeedback && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">📝 体验课评估报告</h2>
-              <span className="text-sm text-orange-600 font-medium">🎁 体验课</span>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-4 mb-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-500">学生：</span><span className="font-medium text-gray-800">{showAssessmentFeedback.student_name || student.name}{showAssessmentFeedback.student_english_name ? ` (${showAssessmentFeedback.student_english_name})` : ''}</span></div>
-                <div><span className="text-gray-500">教师：</span><span className="font-medium text-gray-800">{showAssessmentFeedback.teacher_name || '-'}</span></div>
-                <div><span className="text-gray-500">日期：</span><span className="font-medium text-gray-800">{showAssessmentFeedback.class_date} {(showAssessmentFeedback.start_time||'').substring(0,5)}-{(showAssessmentFeedback.end_time||'').substring(0,5)}</span></div>
-                <div><span className="text-gray-500">科目：</span><span className="font-medium text-gray-800">{showAssessmentFeedback.subject || '英语'}</span></div>
-              </div>
-            </div>
-            {(() => {
-              const a = showAssessmentFeedback;
-              const StarRow = ({ score }) => (
-                <span className="text-lg tracking-tight">
-                  {[1,2,3,4,5].map(i => <span key={i} className={i <= (a[score]||0) ? 'text-orange-400' : 'text-gray-300'}>★</span>)}
-                </span>
-              );
-              const dims = [
-                {title:'🎧 听力评估',items:[['listening_conversation','日常对话理解'],['listening_key_info','关键信息抓取']],comment:'listening_comments'},
-                {title:'🗣️ 口语评估',items:[['speaking_pronunciation','发音与流利度'],['speaking_communication','表达能力']],comment:'speaking_comments'},
-                {title:'📖 阅读评估',items:[['reading_vocabulary','词汇量'],['reading_comprehension','阅读理解']],comment:'reading_comments'},
-                {title:'✍️ 写作评估',items:[['writing_spelling','基础拼写'],['writing_sentences','简单句构建']],comment:'writing_comments'},
-                {title:'🌟 课堂表现',items:[['classroom_participation','参与度'],['classroom_focus','专注力'],['classroom_interaction','互动意愿']],comment:'classroom_comments'},
-              ];
-              return (
-                <div className="space-y-3">
-                  {dims.map(dim => (
-                    <div key={dim.title} className="border border-gray-200 rounded-lg p-3">
-                      <div className="font-medium text-gray-700 text-sm mb-2">{dim.title}</div>
-                      {dim.items.map(item => (
-                        <div key={item[0]} className="flex items-center justify-between py-1">
-                          <span className="text-sm text-gray-600">{item[1]}</span>
-                          <StarRow score={item[0]} />
-                        </div>
-                      ))}
-                      {a[dim.comment] && (
-                        <div className="mt-2 p-2 bg-orange-50 border-l-2 border-orange-300 rounded text-sm text-gray-600 whitespace-pre-wrap">{a[dim.comment]}</div>
-                      )}
-                    </div>
-                  ))}
-                  <div className="border border-gray-200 rounded-lg p-3 bg-orange-50">
-                    <div className="font-medium text-gray-700 text-sm mb-2">📋 综合评估</div>
-                    {a.strengths && <div className="mb-2"><span className="text-sm font-medium text-gray-700">💪 强项</span><div className="text-sm text-gray-600 whitespace-pre-wrap mt-1">{a.strengths}</div></div>}
-                    {a.improvements && <div className="mb-2"><span className="text-sm font-medium text-gray-700">📈 待提升</span><div className="text-sm text-gray-600 whitespace-pre-wrap mt-1">{a.improvements}</div></div>}
-                    {a.recommended_level && <div className="mb-2"><span className="text-sm font-medium text-gray-700">🎓 建议级别</span><span className="ml-2 text-sm bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{a.recommended_level}</span></div>}
-                    {a.teacher_message && <div className="mt-3 p-3 bg-blue-50 rounded-lg"><span className="text-sm font-medium text-gray-700">💌 教师寄语</span><div className="text-sm text-gray-600 whitespace-pre-wrap mt-1">{a.teacher_message}</div></div>}
-                  </div>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <CardHeader className="shrink-0 flex items-center justify-between border-b border-gray-100 bg-white">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-orange-600" />
+                体验课评估报告
+              </h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowAssessmentFeedback(null)} className="w-8 h-8 p-0 rounded-full">
+                <X className="w-5 h-5 text-gray-400" />
+              </Button>
+            </CardHeader>
+            <div className="overflow-y-auto p-5 space-y-5">
+              <div className="bg-orange-50/50 rounded-xl p-4 border border-orange-100">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-gray-500">学生：</span><span className="font-medium text-gray-900">{showAssessmentFeedback.student_name || student.name}</span></div>
+                  <div><span className="text-gray-500">教师：</span><span className="font-medium text-gray-900">{showAssessmentFeedback.teacher_name || '-'}</span></div>
+                  <div><span className="text-gray-500">日期：</span><span className="font-medium text-gray-900">{showAssessmentFeedback.class_date}</span></div>
+                  <div><span className="text-gray-500">建议级别：</span><span className="font-bold text-blue-600">{showAssessmentFeedback.recommended_level || '-'}</span></div>
                 </div>
-              );
-            })()}
-            <div className="flex justify-between mt-6">
-              <button onClick={() => openAssessmentReport(showAssessmentFeedback)} className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 text-sm flex items-center gap-1">
-                <FileText size={16} /> 导出 PDF
-              </button>
-              <button onClick={() => setShowAssessmentFeedback(null)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">关闭</button>
+              </div>
+
+              {(() => {
+                const a = showAssessmentFeedback;
+                const StarRow = ({ score }) => (
+                  <span className="text-lg tracking-tighter">
+                    {[1,2,3,4,5].map(i => <span key={i} className={i <= (a[score]||0) ? 'text-orange-500' : 'text-gray-200'}>★</span>)}
+                  </span>
+                );
+                const dims = [
+                  {title:'🎧 听力评估',items:[['listening_conversation','日常对话理解'],['listening_key_info','关键信息抓取']],comment:'listening_comments'},
+                  {title:'🗣️ 口语评估',items:[['speaking_pronunciation','发音与流利度'],['speaking_communication','表达能力']],comment:'speaking_comments'},
+                  {title:'🌟 课堂表现',items:[['classroom_participation','参与度'],['classroom_focus','专注力'],['classroom_interaction','互动意愿']],comment:'classroom_comments'},
+                ];
+                return (
+                  <div className="space-y-4">
+                    {dims.map(dim => (
+                      <div key={dim.title} className="border border-gray-100 rounded-xl p-4 shadow-sm">
+                        <div className="font-bold text-gray-800 text-sm mb-3">{dim.title}</div>
+                        <div className="space-y-2">
+                          {dim.items.map(item => (
+                            <div key={item[0]} className="flex items-center justify-between">
+                              <span className="text-sm text-gray-600">{item[1]}</span>
+                              <StarRow score={item[0]} />
+                            </div>
+                          ))}
+                        </div>
+                        {a[dim.comment] && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">{a[dim.comment]}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
-          </div>
+            <div className="flex justify-between p-4 border-t border-gray-100 bg-gray-50 shrink-0">
+              <Button onClick={() => openAssessmentReport(showAssessmentFeedback)} className="bg-orange-500 hover:bg-orange-600 border-0">
+                <FileText className="w-4 h-4 mr-2" /> 导出打印 PDF
+              </Button>
+              <Button variant="outline" onClick={() => setShowAssessmentFeedback(null)}>关闭</Button>
+            </div>
+          </Card>
         </div>
       )}
 
@@ -1058,150 +998,81 @@ export default function StudentDetail() {
         />
       )}
 
-      {/* 编辑学生资料弹窗 */}
+      {/* 编辑学生资料 */}
       {showEditModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">编辑学生资料</h2>
-            <form onSubmit={handleSaveStudent} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">姓名 *</label>
-                <input
-                  type="text"
-                  required
-                  value={editForm.name}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">英文名 *</label>
-                <input
-                  type="text"
-                  required
-                  value={editForm.english_name}
-                  onChange={(e) => setEditForm({ ...editForm, english_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="如：Alice"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">性别</label>
-                  <select
-                    value={editForm.gender}
-                    onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="">请选择性别</option>
-                    <option value="男">男</option>
-                    <option value="女">女</option>
-                    <option value="保密">保密</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">年龄</label>
-                  <input
-                    type="number"
-                    value={editForm.age}
-                    onChange={(e) => setEditForm({ ...editForm, age: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="如：7"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">等级</label>
-                  <select
-                    value={editForm.grade}
-                    onChange={(e) => setEditForm({ ...editForm, grade: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="">请选择等级</option>
-                    <option value="Pre-A1">Pre-A1</option>
-                    <option value="A1">A1</option>
-                    <option value="A2">A2</option>
-                    <option value="B1">B1</option>
-                    <option value="B2">B2</option>
-                    <option value="C1">C1</option>
-                    <option value="C2">C2</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">学习状态</label>
-                  <select
-                    value={editForm.status}
-                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="active">学习中</option>
-                    <option value="inactive">已暂停</option>
-                    <option value="graduated">已结课</option>
-                  </select>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <CardHeader className="shrink-0 flex items-center justify-between border-b border-gray-100 bg-white">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <Edit className="w-5 h-5 text-primary-600" />
+                编辑学员资料
+              </h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowEditModal(false)} className="w-8 h-8 p-0 rounded-full">
+                <X className="w-5 h-5 text-gray-400" />
+              </Button>
+            </CardHeader>
+            <form onSubmit={handleSaveStudent} className="flex flex-col overflow-hidden">
+              <div className="p-5 overflow-y-auto space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">姓名 *</label>
+                    <input type="text" required value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">英文名</label>
+                    <input type="text" value={editForm.english_name} onChange={(e) => setEditForm({ ...editForm, english_name: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">性别</label>
+                    <select value={editForm.gender} onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                      <option value="">未知</option>
+                      <option value="male">男</option>
+                      <option value="female">女</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">年龄</label>
+                    <input type="number" value={editForm.age} onChange={(e) => setEditForm({ ...editForm, age: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">等级</label>
+                    <select value={editForm.grade} onChange={(e) => setEditForm({ ...editForm, grade: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                      <option value="">未定</option>
+                      <option value="Pre-A1">Pre-A1</option><option value="A1">A1</option><option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option><option value="C1">C1</option><option value="C2">C2</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">状态</label>
+                    <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                      <option value="active">学习中</option><option value="inactive">已暂停</option><option value="graduated">已结课</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">家长姓名</label>
+                    <input type="text" value={editForm.parentName} onChange={(e) => setEditForm({ ...editForm, parentName: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">联系电话</label>
+                    <input type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">电子邮箱</label>
+                    <input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">备注说明</label>
+                    <textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={3} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">电话</label>
-                  <input
-                    type="tel"
-                    value={editForm.phone}
-                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
-                  <input
-                    type="email"
-                    value={editForm.email}
-                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">家长姓名</label>
-                <input
-                  type="text"
-                  value={editForm.parentName}
-                  onChange={(e) => setEditForm({ ...editForm, parentName: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
-                <textarea
-                  value={editForm.notes}
-                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
-                  disabled={submittingEdit}
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingEdit}
-                  className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50"
-                >
-                  {submittingEdit ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" /> 保存中...
-                    </span>
-                  ) : '保存修改'}
-                </button>
+              <div className="flex gap-3 p-4 border-t border-gray-100 bg-gray-50 justify-end shrink-0">
+                <Button variant="outline" type="button" onClick={() => setShowEditModal(false)} disabled={submittingEdit}>取消</Button>
+                <Button type="submit" disabled={submittingEdit}>
+                  {submittingEdit ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> 保存中...</> : '保存修改'}
+                </Button>
               </div>
             </form>
-          </div>
+          </Card>
         </div>
       )}
     </div>
@@ -1216,7 +1087,6 @@ export default function StudentDetail() {
     reportWindow.document.write('</body></html>');
     reportWindow.document.close();
 
-    // Fetch full data
     request(`/assessments/${assessment.id}`).then(data => {
       const a = data.data || data;
       reportWindow.document.body.innerHTML = buildReportHTML(a);
@@ -1234,7 +1104,6 @@ export default function StudentDetail() {
     const esc = (s) => { if (!s) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&','<':'<','>':'>','"':'"',"'":'&#39;'}[c])); };
 
     let html = '<div class="report-page">';
-    // Header with logo + gradient
     html += '<div class="report-header">';
     html += '<div class="header-top">';
     html += '<div class="brand"><img src="/sunblogo.webp" class="brand-logo" alt="SunnyBridge"></div>';
@@ -1244,7 +1113,6 @@ export default function StudentDetail() {
     html += '<div class="subtitle">Trial Class Assessment Report</div></div>';
     html += '</div>';
 
-    // Student Info
     html += '<div class="info-section">';
     html += `<div class="info-item"><div class="info-label">学生姓名 / Student Name</div><div class="info-value">${esc(a.student_name||'')}${a.student_english_name?' ('+esc(a.student_english_name)+')':''}</div></div>`;
     html += `<div class="info-item"><div class="info-label">授课教师 / Teacher</div><div class="info-value">${esc(a.teacher_name||'-')}</div></div>`;
@@ -1252,7 +1120,6 @@ export default function StudentDetail() {
     html += `<div class="info-item"><div class="info-label">课程科目 / Subject</div><div class="info-value">${esc(a.subject||'英语')}</div></div>`;
     html += '</div>';
 
-    // Dimensions (精简后: 3个维度, 各2项)
     const dims = [
       { icon: '🗣️', title: '口语表现 Speaking Performance', items: [['speaking_pronunciation','发音清晰度'],['speaking_communication','开口意愿']], comments: a.speaking_comments },
       { icon: '🎧', title: '理解能力 Comprehension', items: [['listening_conversation','指令理解'],['listening_key_info','反应速度']], comments: a.listening_comments },
@@ -1272,7 +1139,6 @@ export default function StudentDetail() {
     });
     html += '</div>';
 
-    // Overall
     html += '<div class="overall-section">';
     html += '<div class="overall-title">📋 综合评估 Overall Assessment</div>';
     if (a.recommended_level) html += `<div class="overall-item"><span class="overall-label">🎓 建议级别 Recommended Level</span><div class="overall-text">${esc(a.recommended_level)}</div></div>`;
@@ -1280,7 +1146,6 @@ export default function StudentDetail() {
     if (a.improvements) html += `<div class="overall-item"><span class="overall-label">📈 待提升 Areas to Improve</span><div class="overall-text">${esc(a.improvements)}</div></div>`;
     html += '</div>';
 
-    // Teacher Message
     if (a.teacher_message) {
       html += '<div class="message-section">';
       html += '<div class="message-header">💌 教师寄语 Teacher\'s Message</div>';
@@ -1288,7 +1153,6 @@ export default function StudentDetail() {
       html += '</div>';
     }
 
-    // Footer
     html += '<div class="report-footer">';
     html += '<div class="footer-brand">SunnyBridge 少儿英语</div>';
     html += '<div class="footer-slogan">Bridging Smiles, Building Futures</div>';
@@ -1296,9 +1160,7 @@ export default function StudentDetail() {
     html += '<div class="footer-date">' + new Date().toLocaleDateString('zh-CN') + '</div>';
     html += '</div>';
 
-    // Print button
     html += '<div class="print-btn-area"><button class="print-btn" onclick="window.print()">🖨️ 导出 / 打印 PDF</button></div>';
-
     html += '</div>';
     return html;
   }
