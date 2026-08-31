@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, Edit, Trash2, Loader2 } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Loader2, User } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { studentOps } from '../store';
 import OrgFilter from '../components/OrgFilter';
 import { setSelectedOrg, organizationOps, getSelectedOrg, getUserRole } from '../store/api';
+import { Card, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 
 export default function Students() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -117,7 +120,7 @@ export default function Students() {
   };
 
   const handleDelete = async (id) => {
-    const pwd = window.prompt('【高危操作】删除学生将导致所有关联记录消失！\\n请输入授权密码 "DELETE" 确认删除：');
+    const pwd = window.prompt('【高危操作】删除学生将导致所有关联记录消失！\n请输入授权密码 "DELETE" 确认删除：');
     if (pwd !== 'DELETE') {
       if (pwd !== null) alert('密码错误，取消删除。');
       return;
@@ -145,330 +148,354 @@ export default function Students() {
     return Math.round(((parseFloat(student.total_hours) || 0) - (parseFloat(student.used_hours) || 0)) * 100) / 100;
   };
 
+  const getGenderBadge = (gender) => {
+    if (gender === '男' || gender === 'male') return <Badge variant="primary">男</Badge>;
+    if (gender === '女' || gender === 'female') return <Badge variant="danger" className="bg-pink-50 text-pink-700">女</Badge>;
+    if (gender) return <Badge variant="default">{gender}</Badge>;
+    return null;
+  };
+
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">学生管理</h1>
           <p className="text-gray-500 mt-1">共 {students.length} 名学生</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
-        >
-          <Plus size={20} /> 添加学生
-        </button>
+        <Button onClick={() => setShowModal(true)} className="w-full sm:w-auto">
+          <Plus size={20} className="mr-2" aria-hidden="true" /> 
+          添加学生
+        </Button>
       </div>
+
       {/* 搜索筛选 */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+      <div className="flex flex-col md:flex-row gap-3 mb-6">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} aria-hidden="true" />
           <input
             type="text"
             placeholder="搜索学生姓名或电话..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-shadow"
           />
         </div>
-        <OrgFilter selectedOrg={selectedOrg} onChange={(orgId) => { setSelectedOrgState(orgId); setSelectedOrg(orgId); }} />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-        >
-          <option value="all">全部状态</option>
-          <option value="active">学习中</option>
-          <option value="inactive">已暂停</option>
-          <option value="graduated">已结课</option>
-        </select>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <OrgFilter 
+            selectedOrg={selectedOrg} 
+            onChange={(orgId) => { setSelectedOrgState(orgId); setSelectedOrg(orgId); }} 
+            className="w-full sm:w-auto focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:outline-none"
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full sm:w-auto px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-shadow bg-white"
+          >
+            <option value="all">全部状态</option>
+            <option value="active">学习中</option>
+            <option value="inactive">已暂停</option>
+            <option value="graduated">已结课</option>
+          </select>
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <Card className="overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+          <div className="p-8 space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="animate-pulse flex items-center space-x-4">
+                <div className="rounded-full bg-gray-200 h-10 w-10"></div>
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-6 py-4 font-medium text-gray-500">学生信息</th>
-                <th className="text-left px-6 py-4 font-medium text-gray-500">所属机构</th>
-                <th className="text-left px-6 py-4 font-medium text-gray-500">联系方式</th>
-                <th className="text-left px-6 py-4 font-medium text-gray-500">剩余课时</th>
-                <th className="text-left px-6 py-4 font-medium text-gray-500">状态</th>
-                <th className="text-left px-6 py-4 font-medium text-gray-500">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredStudents.length > 0 ? (
-                filteredStudents.map((student) => {
-                  const remaining = getStudentRemaining(student);
-                  return (
-                    <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <Link to={`/students/${student.id}`} className="flex items-center gap-3 hover:text-primary-600">
-                          <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                            <span className="text-primary-700 font-medium">
-                              {student.name?.charAt(0) || '学'}
-                            </span>
-                          </div>
-                          <div>
-                            <div className="font-medium text-gray-800 flex items-center gap-1.5">
-                              <span>{student.name}</span>
-                              {student.gender && (
-                                <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[11px] font-medium ${
-                                  student.gender === '男' || student.gender === 'male' ? 'bg-blue-50 text-blue-600 border border-blue-200/60' :
-                                  student.gender === '女' || student.gender === 'female' ? 'bg-pink-50 text-pink-600 border border-pink-200/60' :
-                                  'bg-gray-100 text-gray-600'
-                                }`}>
-                                  {student.gender === 'male' ? '男' : student.gender === 'female' ? '女' : student.gender}
-                                </span>
-                              )}
-                            </div>
-                            {student.english_name && <div className="text-sm text-gray-400">{student.english_name}</div>}
-                            <div className="text-sm text-gray-500">
-                              {student.grade && `等级: ${student.grade}`}
-                              {student.age && ` | 年龄: ${student.age}岁`}
-                            </div>
-                          </div>
-                        </Link>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                          {getOrgName(student.organization_id)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-600">{student.phone}</div>
-                        {student.email && <div className="text-sm text-gray-400">{student.email}</div>}
-                        {(student.parent_name || student.parentName) && (
-                          <div className="text-sm text-gray-400">家长: {student.parent_name || student.parentName}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`font-semibold ${
-                          remaining < 3 ? 'text-red-500' : remaining < 10 ? 'text-orange-500' : 'text-green-500'
-                        }`}>
-                          {remaining} 节
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          student.status === 'active' ? 'bg-green-100 text-green-700' :
-                          student.status === 'inactive' ? 'bg-gray-100 text-gray-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
-                          {student.status === 'active' ? '学习中' : student.status === 'inactive' ? '已暂停' : '已结课'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEdit(student)}
-                            className="p-2 text-gray-400 hover:text-primary-600 transition-colors"
-                          >
-                            <Edit size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(student.id)}
-                            className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm sm:text-base whitespace-nowrap">
+              <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
-                    {searchTerm ? '未找到匹配的学生' : '暂无学生数据'}
-                  </td>
+                  <th className="text-left px-4 md:px-6 py-4 font-medium text-gray-500">学生信息</th>
+                  <th className="text-left px-4 md:px-6 py-4 font-medium text-gray-500 hidden md:table-cell">所属机构</th>
+                  <th className="text-left px-4 md:px-6 py-4 font-medium text-gray-500">联系方式</th>
+                  <th className="text-left px-4 md:px-6 py-4 font-medium text-gray-500">剩余课时</th>
+                  <th className="text-left px-4 md:px-6 py-4 font-medium text-gray-500">状态</th>
+                  <th className="text-right px-4 md:px-6 py-4 font-medium text-gray-500">操作</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredStudents.length > 0 ? (
+                  filteredStudents.map((student) => {
+                    const remaining = getStudentRemaining(student);
+                    return (
+                      <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 md:px-6 py-4">
+                          <Link 
+                            to={`/students/${student.id}`} 
+                            className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded-lg p-1 -ml-1"
+                          >
+                            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center shrink-0 border border-primary-200/50 group-hover:bg-primary-200 transition-colors">
+                              <span className="text-primary-700 font-medium">
+                                {student.name?.charAt(0) || '学'}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-medium text-gray-800 flex items-center gap-2 group-hover:text-primary-600 transition-colors">
+                                <span className="truncate">{student.name}</span>
+                                {getGenderBadge(student.gender)}
+                              </div>
+                              {student.english_name && <div className="text-sm text-gray-400 truncate">{student.english_name}</div>}
+                              <div className="text-xs md:text-sm text-gray-500 flex gap-2">
+                                {student.grade && <span>等级: {student.grade}</span>}
+                                {student.age && <span>年龄: {student.age}岁</span>}
+                              </div>
+                            </div>
+                          </Link>
+                        </td>
+                        <td className="px-4 md:px-6 py-4 hidden md:table-cell">
+                          <Badge variant="primary" className="bg-indigo-50 text-indigo-700">
+                            {getOrgName(student.organization_id)}
+                          </Badge>
+                        </td>
+                        <td className="px-4 md:px-6 py-4">
+                          <div className="text-gray-600">{student.phone}</div>
+                          {student.email && <div className="text-xs text-gray-400 truncate max-w-[150px]" title={student.email}>{student.email}</div>}
+                          {(student.parent_name || student.parentName) && (
+                            <div className="text-xs text-gray-500 mt-0.5">家长: {student.parent_name || student.parentName}</div>
+                          )}
+                        </td>
+                        <td className="px-4 md:px-6 py-4">
+                          <span className={`font-semibold ${
+                            remaining < 3 ? 'text-danger-500' : remaining < 10 ? 'text-warning-500' : 'text-success-600'
+                          }`}>
+                            {remaining} 节
+                          </span>
+                        </td>
+                        <td className="px-4 md:px-6 py-4">
+                          <Badge variant={
+                            student.status === 'active' ? 'success' :
+                            student.status === 'inactive' ? 'default' :
+                            'primary'
+                          }>
+                            {student.status === 'active' ? '学习中' : student.status === 'inactive' ? '已暂停' : '已结课'}
+                          </Badge>
+                        </td>
+                        <td className="px-4 md:px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleEdit(student)}
+                              className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                              aria-label="编辑学生"
+                            >
+                              <Edit size={18} aria-hidden="true" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(student.id)}
+                              className="p-2 text-gray-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-500"
+                              aria-label="删除学生"
+                            >
+                              <Trash2 size={18} aria-hidden="true" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
+                      <div className="flex flex-col items-center justify-center">
+                        <User size={48} className="mb-4 text-gray-300" aria-hidden="true" />
+                        <p>{searchTerm ? '未找到匹配的学生' : '暂无学生数据'}</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </Card>
 
+      {/* 弹窗部分可稍后进一步封装 Modal 组件，此处先优化基础样式 */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">
-              {editingStudent ? '编辑学生' : '添加学生'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">姓名 *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">英文名 *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.english_name}
-                  onChange={(e) => setFormData({ ...formData, english_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="如：Alice"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">性别</label>
-                  <select
-                    value={formData.gender}
-                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="">请选择性别</option>
-                    <option value="男">男</option>
-                    <option value="女">女</option>
-                    <option value="保密">保密</option>
-                  </select>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <h2 className="text-xl font-semibold text-gray-800">
+                {editingStudent ? '编辑学生' : '添加学生'}
+              </h2>
+              <button 
+                onClick={() => setShowModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
+              >
+                关闭
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              <form id="student-form" onSubmit={handleSubmit} className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">姓名 *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-shadow"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">英文名 *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.english_name}
+                      onChange={(e) => setFormData({ ...formData, english_name: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-shadow"
+                      placeholder="如：Alice"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">性别</label>
+                    <select
+                      value={formData.gender}
+                      onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                    >
+                      <option value="">请选择性别</option>
+                      <option value="男">男</option>
+                      <option value="女">女</option>
+                      <option value="保密">保密</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">年龄</label>
+                    <input
+                      type="number"
+                      value={formData.age}
+                      onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="如：7"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">电话</label>
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">等级</label>
+                    <select
+                      value={formData.grade}
+                      onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                    >
+                      <option value="">请选择等级</option>
+                      <option value="Pre-A1">Pre-A1</option>
+                      <option value="A1">A1</option>
+                      <option value="A2">A2</option>
+                      <option value="B1">B1</option>
+                      <option value="B2">B2</option>
+                      <option value="C1">C1</option>
+                      <option value="C2">C2</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">状态</label>
+                    <select
+                      value={formData.status || 'active'}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                    >
+                      <option value="active">学习中</option>
+                      <option value="inactive">已暂停</option>
+                      <option value="graduated">已结课</option>
+                    </select>
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">年龄</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">家长姓名</label>
                   <input
-                    type="number"
-                    value={formData.age}
-                    onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="如：7"
+                    type="text"
+                    value={formData.parentName}
+                    onChange={(e) => setFormData({ ...formData, parentName: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">电话</label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    rows={3}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">等级</label>
-                  <select
-                    value={formData.grade}
-                    onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="">请选择等级</option>
-                    <option value="Pre-A1">Pre-A1</option>
-                    <option value="A1">A1</option>
-                    <option value="A2">A2</option>
-                    <option value="B1">B1</option>
-                    <option value="B2">B2</option>
-                    <option value="C1">C1</option>
-                    <option value="C2">C2</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">状态</label>
-                  <select
-                    value={formData.status || 'active'}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="active">学习中</option>
-                    <option value="inactive">已暂停</option>
-                    <option value="graduated">已结课</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">家长姓名</label>
-                <input
-                  type="text"
-                  value={formData.parentName}
-                  onChange={(e) => setFormData({ ...formData, parentName: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              {/* 所属机构选择 - super_admin 可选，普通用户自动锁定 */}
-              {orgs.length > 1 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">所属机构</label>
-                  <select
-                    value={formData.organization_id}
-                    onChange={(e) => setFormData({ ...formData, organization_id: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="">请选择机构</option>
-                    {orgs.map(org => (
-                      <option key={org.id} value={org.id}>{org.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false);
-                    setEditingStudent(null);
-                    setFormData({ name: '', english_name: '', phone: '', email: '', age: '', grade: '', parentName: '', notes: '', status: 'active', organization_id: '' });
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
-                  disabled={submitting}
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50"
-                >
-                  {submitting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" /> 保存中...
-                    </span>
-                  ) : (
-                    editingStudent ? '保存' : '添加'
-                  )}
-                </button>
-              </div>
-            </form>
+                
+                {orgs.length > 1 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">所属机构</label>
+                    <select
+                      value={formData.organization_id}
+                      onChange={(e) => setFormData({ ...formData, organization_id: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                    >
+                      <option value="">请选择机构</option>
+                      {orgs.map(org => (
+                        <option key={org.id} value={org.id}>{org.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </form>
+            </div>
+            
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-3 shrink-0">
+              <Button 
+                variant="outline"
+                className="flex-1 bg-white"
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingStudent(null);
+                  setFormData({ name: '', english_name: '', phone: '', email: '', age: '', grade: '', parentName: '', notes: '', status: 'active', organization_id: '' });
+                }}
+                disabled={submitting}
+              >
+                取消
+              </Button>
+              <Button
+                type="submit"
+                form="student-form"
+                className="flex-1"
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> 保存中...
+                  </span>
+                ) : (
+                  editingStudent ? '保存' : '添加'
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       )}

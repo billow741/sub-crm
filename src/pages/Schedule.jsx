@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Trash2, CheckCircle, Clock, XCircle, Building2, Copy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, CheckCircle, Clock, XCircle, Building2, Copy, Plus, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import { teacherOps, studentOps, classOps } from '../store';
 import OrgFilter from '../components/OrgFilter';
 import TeacherFilter from '../components/TeacherFilter';
 import CopyWeekModal from '../components/CopyWeekModal';
 import { setSelectedOrg, organizationOps } from '../store/api';
+import { Card, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 
 // 时长(分钟) → 后端根据系数自动计算课时，前端只传 duration
 // 此函数仅用于前端显示和课时充足检查的预估
@@ -27,13 +30,33 @@ const TIME_SLOTS = [
 const getStatusStyle = (status) => {
   switch (status) {
     case 'completed':
-      return { bg: 'bg-green-100', text: 'text-green-800', icon: <CheckCircle className="w-3 h-3 text-green-600" /> };
+      return { 
+        bg: 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100/80', 
+        text: 'text-emerald-800', 
+        subtext: 'text-emerald-600',
+        icon: <CheckCircle className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> 
+      };
     case 'scheduled':
-      return { bg: 'bg-purple-100', text: 'text-purple-800', icon: <Clock className="w-3 h-3 text-purple-600" /> };
+      return { 
+        bg: 'bg-primary-50 border-primary-200 hover:bg-primary-100/80', 
+        text: 'text-primary-900', 
+        subtext: 'text-primary-600',
+        icon: <Clock className="w-3.5 h-3.5 text-primary-600 flex-shrink-0" /> 
+      };
     case 'cancelled':
-      return { bg: 'bg-red-100', text: 'text-red-800', icon: <XCircle className="w-3 h-3 text-red-600" /> };
+      return { 
+        bg: 'bg-rose-50 border-rose-200 hover:bg-rose-100/80', 
+        text: 'text-rose-800', 
+        subtext: 'text-rose-600',
+        icon: <XCircle className="w-3.5 h-3.5 text-rose-500 flex-shrink-0" /> 
+      };
     default:
-      return { bg: 'bg-purple-100', text: 'text-purple-800', icon: <Clock className="w-3 h-3 text-purple-600" /> };
+      return { 
+        bg: 'bg-gray-50 border-gray-200 hover:bg-gray-100', 
+        text: 'text-gray-800', 
+        subtext: 'text-gray-500',
+        icon: <Clock className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" /> 
+      };
   }
 };
 
@@ -463,156 +486,212 @@ export default function Schedule() {
   const weeks = getTwoWeeks();
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64">加载中...</div>;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="sticky top-0 z-30 bg-gray-50 pb-3 -mx-4 px-4 pt-1">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-gray-900">排课管理</h1>
-            <OrgFilter selectedOrg={selectedOrg} onChange={(orgId) => { setSelectedOrgState(orgId); setSelectedOrg(orgId); }} />
-            <TeacherFilter
-              teachers={teachers}
-              selectedIds={selectedTeacherIds}
-              onChange={setSelectedTeacherIds}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleToday}
-              className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
-            >
-              今天
-            </button>
-            <button
-              onClick={handleOpenCopyModal}
-              className="px-3 py-1.5 text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg flex items-center gap-1"
-              title="复制上周排课到本周"
-            >
-              <Copy className="w-4 h-4" />
-              复制上周
-            </button>
-            <button
-              onClick={handlePrevWeek}
-              className="p-2 hover:bg-gray-100 rounded-lg"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleNextWeek}
-              className="p-2 hover:bg-gray-100 rounded-lg"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-            <span className="text-gray-600 font-medium">
-              {weeks[0][0].toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} -
-              {weeks[1][6].toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
-            </span>
+    return (
+      <div className="space-y-6 animate-pulse p-4 md:p-6 max-w-full mx-auto">
+        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div className="h-8 w-48 bg-gray-200 rounded-lg"></div>
+          <div className="h-8 w-64 bg-gray-200 rounded-lg"></div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 h-[600px] p-4 flex flex-col gap-4">
+          <div className="h-10 bg-gray-100 rounded-lg"></div>
+          <div className="flex-1 grid grid-cols-8 gap-2">
+            {[...Array(24)].map((_, i) => (
+              <div key={i} className="bg-gray-50 rounded-lg border border-gray-100"></div>
+            ))}
           </div>
         </div>
       </div>
+    );
+  }
 
-      <div className="bg-white rounded-lg shadow overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+  return (
+    <div className="space-y-4 max-w-full">
+      {/* 顶部控制栏 */}
+      <div className="sticky top-0 z-30 bg-gray-50/90 backdrop-blur-md pb-2 pt-1">
+        <Card className="p-3.5 shadow-sm border-gray-200/80">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight">排课管理</h1>
+              <OrgFilter selectedOrg={selectedOrg} onChange={(orgId) => { setSelectedOrgState(orgId); setSelectedOrg(orgId); }} />
+              <TeacherFilter
+                teachers={teachers}
+                selectedIds={selectedTeacherIds}
+                onChange={setSelectedTeacherIds}
+              />
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200/60">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleToday}
+                  className="text-xs h-7 px-2.5 hover:bg-white rounded"
+                >
+                  今天
+                </Button>
+                <button
+                  onClick={handlePrevWeek}
+                  className="p-1 hover:bg-white text-gray-600 rounded transition-colors"
+                  title="上一周"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleNextWeek}
+                  className="p-1 hover:bg-white text-gray-600 rounded transition-colors"
+                  title="下一周"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700">
+                <CalendarIcon className="w-3.5 h-3.5 text-primary-500" />
+                <span>
+                  {weeks[0][0].toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })} ~ {weeks[1][6].toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
+                </span>
+              </div>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleOpenCopyModal}
+                className="h-8 gap-1.5 text-primary-700 bg-primary-50/50 border-primary-200 hover:bg-primary-100 text-xs"
+                title="复制上周排课到本周"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                复制上周
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* 日历主网格 */}
+      <Card className="overflow-hidden border-gray-200 shadow-sm flex flex-col" style={{ maxHeight: 'calc(100vh - 170px)' }}>
         <div className="overflow-auto flex-1">
           <div className="min-w-[1400px]">
             {/* 表头 — sticky 在日历顶部 */}
-            <div className="grid grid-cols-[80px_repeat(14,minmax(90px,1fr))] border-b sticky top-0 z-20 bg-white shadow-sm">
-              <div className="p-3 text-center text-gray-500 font-medium border-r bg-gray-50 sticky left-0 z-10">时间</div>
-              {weeks.map((week, weekIdx) => (
-                week.map((date, dayIdx) => (
-                  <div
-                    key={`${weekIdx}-${dayIdx}`}
-                    className={`p-3 text-center border-r last:border-r-0 ${isToday(date) ? 'bg-blue-50' : ''}`}
-                  >
-                    <div className="text-xs text-gray-500">{DAYS[date.getDay()]}</div>
-                    <div className={`font-semibold text-lg ${isToday(date) ? 'text-blue-600' : 'text-gray-700'}`}>
-                      {date.getDate()}
-                    </div>
-                  </div>
-                ))
-              ))}
-            </div>
-
-          {/* 时间行 */}
-          {TIME_SLOTS.map(time => (
-            <div key={time} className="grid grid-cols-[80px_repeat(14,minmax(90px,1fr))] border-b hover:bg-gray-50">
-              <div className="p-3 text-center text-sm text-gray-600 font-medium border-r bg-gray-50 sticky left-0 z-10">
-                {time}
+            <div className="grid grid-cols-[70px_repeat(14,minmax(90px,1fr))] border-b border-gray-200 sticky top-0 z-20 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+              <div className="p-3 text-center text-xs font-semibold text-gray-500 border-r border-gray-200 bg-gray-50 sticky left-0 z-10 flex items-center justify-center">
+                时间
               </div>
               {weeks.map((week, weekIdx) => (
                 week.map((date, dayIdx) => {
-                  const dateKey = formatDateKey(date);
-                  const slotSchedules = getSchedulesForSlot(dateKey, time);
+                  const today = isToday(date);
                   return (
                     <div
-                      key={`${weekIdx}-${dayIdx}-${time}`}
-                      onClick={() => handleSlotClick(date, time)}
-                      className={`min-h-[70px] p-1.5 border-r last:border-r-0 cursor-pointer relative flex flex-col gap-1 ${
-                        isToday(date) ? 'bg-blue-50/30' : ''
+                      key={`${weekIdx}-${dayIdx}`}
+                      className={`p-2.5 text-center border-r border-gray-100 last:border-r-0 transition-colors ${
+                        today ? 'bg-primary-50/70' : weekIdx === 1 && dayIdx === 0 ? 'bg-gray-50/50' : 'bg-white'
                       }`}
                     >
-                      {slotSchedules.map(schedule => {
-                        const statusStyle = getStatusStyle(schedule.status);
-                        return (
-                        <div
-                          key={schedule.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditSchedule(schedule);
-                          }}
-                          className={`${statusStyle.bg} ${statusStyle.text} text-xs p-1 rounded mb-1 hover:opacity-80 group relative ${schedule.is_trial ? 'ring-2 ring-orange-400' : ''}`}
-                        >
-                          {schedule.is_trial === 1 && <span className="absolute -top-1 -right-1 text-[9px] bg-orange-500 text-white rounded-full px-1 leading-tight">🎁</span>}
-                          <div className="flex items-center gap-1">
-                            {statusStyle.icon}
-                            <div className="font-medium truncate">
-                              {getStudentName(schedule.student_id)}
-                            </div>
-                          </div>
-                          <div className={`truncate ml-4 ${statusStyle.text.replace('800', '600')}`}>
-                            {schedule.teacher_name || getTeacherName(schedule.teacher_id)}
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteSchedule(schedule.id);
-                            }}
-                            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-0.5 bg-red-500 text-white rounded"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                        );
-                      })}
+                      <div className={`text-[11px] font-medium ${today ? 'text-primary-600 font-bold' : 'text-gray-400'}`}>
+                        {DAYS[date.getDay()]}
+                      </div>
+                      <div className={`font-bold text-base mt-0.5 ${today ? 'text-primary-700' : 'text-gray-800'}`}>
+                        {date.getDate()}
+                      </div>
                     </div>
                   );
                 })
               ))}
             </div>
-          ))}
-          </div>
+
+            {/* 时间行 */}
+            {TIME_SLOTS.map(time => (
+              <div key={time} className="grid grid-cols-[70px_repeat(14,minmax(90px,1fr))] border-b border-gray-100 hover:bg-gray-50/40 transition-colors">
+                <div className="p-2 text-center text-xs text-gray-500 font-medium border-r border-gray-200 bg-gray-50 sticky left-0 z-10 flex items-center justify-center">
+                  {time}
+                </div>
+                {weeks.map((week, weekIdx) => (
+                  week.map((date, dayIdx) => {
+                    const dateKey = formatDateKey(date);
+                    const slotSchedules = getSchedulesForSlot(dateKey, time);
+                    const today = isToday(date);
+                    return (
+                      <div
+                        key={`${weekIdx}-${dayIdx}-${time}`}
+                        onClick={() => handleSlotClick(date, time)}
+                        className={`min-h-[72px] p-1.5 border-r border-gray-100 last:border-r-0 cursor-pointer relative flex flex-col gap-1 transition-colors ${
+                          today ? 'bg-primary-50/15 hover:bg-primary-50/30' : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        {slotSchedules.map(schedule => {
+                          const statusStyle = getStatusStyle(schedule.status);
+                          return (
+                            <div
+                              key={schedule.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditSchedule(schedule);
+                              }}
+                              className={`${statusStyle.bg} border text-xs p-1.5 rounded-lg mb-0.5 shadow-xs hover:shadow-sm transition-all group relative ${
+                                schedule.is_trial ? 'ring-1.5 ring-amber-400' : ''
+                              }`}
+                            >
+                              {schedule.is_trial === 1 && (
+                                <span className="absolute -top-1.5 -right-1 text-[9px] bg-amber-500 text-white font-bold rounded-full px-1 shadow-xs leading-tight">
+                                  试听
+                                </span>
+                              )}
+                              <div className="flex items-center gap-1">
+                                {statusStyle.icon}
+                                <div className={`font-semibold truncate ${statusStyle.text}`}>
+                                  {getStudentName(schedule.student_id)}
+                                </div>
+                              </div>
+                              <div className={`truncate ml-4.5 text-[11px] font-medium ${statusStyle.subtext}`}>
+                                {schedule.teacher_name || getTeacherName(schedule.teacher_id)}
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSchedule(schedule.id);
+                                }}
+                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-1 bg-rose-500 text-white rounded hover:bg-rose-600 transition-opacity shadow-xs"
+                                title="删除此排课"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })
+                ))}
+              </div>
+            ))}
           </div>
         </div>
+      </Card>
 
-        {/* 添加/编辑排课弹窗 */}
+      {/* 添加/编辑排课弹窗 */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] flex flex-col">
-            <div className="p-6 pb-2 shrink-0">
-              <h2 className="text-xl font-bold">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <h2 className="text-xl font-bold text-gray-800">
                 {editingSchedule ? '编辑排课' : '添加排课'}
               </h2>
+              <button 
+                onClick={() => setShowModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                关闭
+              </button>
             </div>
-            <form id="schedule-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
+
+            <form id="schedule-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
               {/* 所属机构 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">所属机构 *</label>
                 <select
                   value={formData.organization_id}
                   onChange={(e) => setFormData({ ...formData, organization_id: e.target.value, student_id: '', teacher_id: '' })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                   required
                 >
                   <option value="">选择机构</option>
@@ -627,7 +706,7 @@ export default function Schedule() {
                 <select
                   value={formData.student_id}
                   onChange={(e) => setFormData({ ...formData, student_id: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                   required
                   disabled={!formData.organization_id}
                 >
@@ -646,7 +725,7 @@ export default function Schedule() {
                 <select
                   value={formData.teacher_id}
                   onChange={(e) => setFormData({ ...formData, teacher_id: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                   required
                   disabled={!formData.organization_id}
                 >
@@ -667,29 +746,30 @@ export default function Schedule() {
                   <p className="text-xs text-gray-400 mt-1">请先选择所属机构</p>
                 )}
                 {formData.date && formData.time && getFilteredTeachers().length > 0 && getAvailableTeachers().length === 0 && (
-                  <p className="text-xs text-orange-500 mt-1">⚠️ 该时间段所有教师都有冲突</p>
+                  <p className="text-xs text-rose-500 mt-1 font-medium">⚠️ 该时间段所有教师都有冲突</p>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">日期</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">日期 *</label>
                   <input
                     type="date"
                     value={formData.date}
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">时间</label>
-              <input
-                type="time"
-                value={formData.time}
-                onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
-              />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">时间 *</label>
+                  <input
+                    type="time"
+                    value={formData.time}
+                    onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    required
+                  />
                 </div>
               </div>
 
@@ -699,7 +779,7 @@ export default function Schedule() {
                   <select
                     value={formData.duration}
                     onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value), is_trial: parseInt(e.target.value) === 25 ? formData.is_trial : false })}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                   >
                     <option value={25}>25分钟 (0.66课时)</option>
                     <option value={50}>50分钟 (1课时)</option>
@@ -712,22 +792,22 @@ export default function Schedule() {
                     type="text"
                     value={formData.subject}
                     onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="英语"
                   />
                 </div>
               </div>
 
               {formData.duration === 25 && (
-                <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2 bg-amber-50/80 border border-amber-200 rounded-lg px-3 py-2.5">
                   <input
                     type="checkbox"
                     checked={formData.is_trial}
                     onChange={(e) => setFormData({ ...formData, is_trial: e.target.checked })}
-                    className="w-4 h-4 text-orange-600 rounded"
+                    className="w-4 h-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
                     id="is-trial"
                   />
-                  <label htmlFor="is-trial" className="text-sm text-orange-700 font-medium cursor-pointer">
+                  <label htmlFor="is-trial" className="text-sm text-amber-800 font-medium cursor-pointer">
                     🎁 体验课（25分钟免费试听）
                   </label>
                 </div>
@@ -739,26 +819,27 @@ export default function Schedule() {
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={2}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                  placeholder="添加排课备注信息..."
                 />
               </div>
-
             </form>
-            <div className="flex gap-3 p-6 pt-2 shrink-0 border-t border-gray-100">
-              <button
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-3 shrink-0">
+              <Button
+                variant="outline"
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                className="flex-1 bg-white"
               >
                 取消
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 form="schedule-form"
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                className="flex-1"
               >
                 保存
-              </button>
+              </Button>
             </div>
           </div>
         </div>
