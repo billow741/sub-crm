@@ -933,7 +933,7 @@ export default function StudentDetail() {
       {/* 反馈详情 */}
       {showFeedbackModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-lg shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <Card className="w-full max-w-xl shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
             <CardHeader className="shrink-0 flex items-center justify-between border-b border-gray-100 bg-white">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-primary-600" />
@@ -943,43 +943,174 @@ export default function StudentDetail() {
                 <X className="w-5 h-5 text-gray-400" />
               </Button>
             </CardHeader>
-            <div className="p-5 overflow-y-auto space-y-5">
+
+            <div className="p-6 overflow-y-auto space-y-4">
+              {/* 基本信息条 */}
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><span className="text-gray-500">日期：</span><span className="font-medium text-gray-900">{showFeedbackModal.date}</span></div>
-                  <div><span className="text-gray-500">课时：</span><span className="font-medium text-gray-900">{showFeedbackModal.hours} 节</span></div>
-                  <div className="col-span-2">
-                    <span className="text-gray-500 mr-2">状态：</span>
-                    <Badge variant={getStatusVariant(showFeedbackModal.status)}>{STATUS_LABELS[showFeedbackModal.status]}</Badge>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-gray-500">学生：</span><span className="font-semibold text-gray-800">{student.name}</span></div>
+                  <div><span className="text-gray-500">老师：</span><span className="font-semibold text-gray-800">{showFeedbackModal.teacher_name || showFeedbackModal.teacher || '-'}</span></div>
+                  <div><span className="text-gray-500">日期：</span><span className="font-medium text-gray-800">{showFeedbackModal.date} {showFeedbackModal.start_time ? showFeedbackModal.start_time.substring(0, 5) : ''}</span></div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500">课时：</span>
+                    <span className="font-semibold text-gray-800">{showFeedbackModal.hours} 节</span>
+                    <Badge variant={getStatusVariant(showFeedbackModal.status)} className="ml-1">{STATUS_LABELS[showFeedbackModal.status] || showFeedbackModal.status}</Badge>
                   </div>
                 </div>
               </div>
-              {showFeedbackModal.content && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5"><FileText className="w-4 h-4" /> 上课内容</h3>
-                  <div className="bg-blue-50/50 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed border border-blue-100">
-                    {showFeedbackModal.content}
+
+              {/* 📅 教材与单元进度 */}
+              {(showFeedbackModal.fb_lesson_level || showFeedbackModal.fb_unit || showFeedbackModal.fb_lesson || showFeedbackModal.subject) && (
+                <div className="border border-blue-100 rounded-xl p-4 bg-blue-50/40">
+                  <div className="font-bold text-blue-900 text-sm mb-1.5 flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-blue-600" />
+                    课程与教材进度
+                  </div>
+                  <div className="text-sm text-blue-800 font-medium">
+                    {showFeedbackModal.fb_lesson_level && <span>课程级别：{showFeedbackModal.fb_lesson_level} · </span>}
+                    {(showFeedbackModal.fb_unit || showFeedbackModal.fb_lesson) ? (
+                      <span>Unit {showFeedbackModal.fb_unit || '-'} / Lesson {showFeedbackModal.fb_lesson || '-'}</span>
+                    ) : (
+                      <span>{showFeedbackModal.subject || '英语课程'}</span>
+                    )}
                   </div>
                 </div>
               )}
-              {showFeedbackModal.homework && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5"><Edit className="w-4 h-4" /> 作业布置</h3>
-                  <div className="bg-orange-50/50 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed border border-orange-100">
-                    {showFeedbackModal.homework}
+
+              {/* 📚 今日学习重点 */}
+              {(showFeedbackModal.fb_vocab || showFeedbackModal.fb_patterns || showFeedbackModal.fb_grammar) && (
+                <div className="border border-gray-100 rounded-xl p-4 bg-white shadow-xs space-y-2.5">
+                  <div className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                    <span>📚 今日学习重点</span>
                   </div>
+                  {showFeedbackModal.fb_vocab && (
+                    <div className="text-sm text-gray-700 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/60">
+                      <b className="text-amber-800">核心词汇：</b>{showFeedbackModal.fb_vocab}
+                    </div>
+                  )}
+                  {showFeedbackModal.fb_patterns && (
+                    <div className="text-sm text-gray-700 bg-emerald-50/50 p-2.5 rounded-lg border border-emerald-100/60">
+                      <b className="text-emerald-800">重点句型：</b>{showFeedbackModal.fb_patterns}
+                    </div>
+                  )}
+                  {showFeedbackModal.fb_grammar && (
+                    <div className="text-sm text-gray-700 bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-100/60">
+                      <b className="text-indigo-800">语法要点：</b>{showFeedbackModal.fb_grammar}
+                    </div>
+                  )}
                 </div>
               )}
-              {showFeedbackModal.notes && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5">备注</h3>
-                  <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 whitespace-pre-wrap leading-relaxed border border-gray-200">
-                    {showFeedbackModal.notes}
+
+              {/* 🗣️ 发音纠正 */}
+              {(() => {
+                let errors = [];
+                try { errors = typeof showFeedbackModal.fb_pronunciation_errors === 'string' ? JSON.parse(showFeedbackModal.fb_pronunciation_errors) : (showFeedbackModal.fb_pronunciation_errors || []); } catch {}
+                if (!Array.isArray(errors) || !errors.length) return null;
+                return (
+                  <div className="border border-gray-100 rounded-xl p-4 bg-white shadow-xs">
+                    <div className="font-bold text-gray-800 text-sm mb-2 flex items-center gap-1.5">
+                      <span>🗣️ 发音纠正</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {errors.map((e, i) => (
+                        <div key={i} className="flex items-center gap-2 py-1 px-2.5 bg-rose-50/50 rounded-lg text-sm border border-rose-100/50">
+                          <span className="text-rose-600 font-medium">✗ {e.wrong}</span>
+                          <span className="text-gray-400">→</span>
+                          <span className="text-emerald-600 font-bold">✓ {e.right}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                );
+              })()}
+
+              {/* 📝 语法纠正 */}
+              {(() => {
+                let errors = [];
+                try { errors = typeof showFeedbackModal.fb_grammar_errors === 'string' ? JSON.parse(showFeedbackModal.fb_grammar_errors) : (showFeedbackModal.fb_grammar_errors || []); } catch {}
+                if (!Array.isArray(errors) || !errors.length) return null;
+                return (
+                  <div className="border border-gray-100 rounded-xl p-4 bg-white shadow-xs">
+                    <div className="font-bold text-gray-800 text-sm mb-2 flex items-center gap-1.5">
+                      <span>📝 语法纠正</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {errors.map((e, i) => (
+                        <div key={i} className="py-1.5 px-2.5 bg-rose-50/50 rounded-lg text-sm border border-rose-100/50">
+                          <div className="text-rose-600">✗ {e.wrong}</div>
+                          <div className="text-emerald-600 font-bold mt-0.5">✓ {e.right}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 📋 课后总结 / 老师评语 */}
+              {(showFeedbackModal.fb_teacher_message || showFeedbackModal.feedback || showFeedbackModal.fb_homework || showFeedbackModal.fb_next_preview) && (
+                <div className="border border-purple-100 rounded-xl p-4 bg-purple-50/50 space-y-3">
+                  <div className="font-bold text-purple-900 text-sm flex items-center gap-1.5">
+                    <span>📋 课后总结与评价</span>
+                  </div>
+                  {(showFeedbackModal.fb_teacher_message || showFeedbackModal.feedback) && (
+                    <div>
+                      <span className="text-xs font-semibold text-purple-800">💌 老师反馈寄语：</span>
+                      <div className="text-sm text-gray-800 whitespace-pre-wrap mt-1 bg-white p-3 rounded-lg border border-purple-100/70 leading-relaxed shadow-2xs">
+                        {showFeedbackModal.fb_teacher_message || showFeedbackModal.feedback}
+                      </div>
+                    </div>
+                  )}
+                  {showFeedbackModal.fb_homework && (
+                    <div>
+                      <span className="text-xs font-semibold text-purple-800">📝 课后作业布置：</span>
+                      <div className="text-sm text-gray-800 whitespace-pre-wrap mt-1 bg-white p-3 rounded-lg border border-purple-100/70 leading-relaxed shadow-2xs">
+                        {showFeedbackModal.fb_homework}
+                      </div>
+                    </div>
+                  )}
+                  {showFeedbackModal.fb_next_preview && (
+                    <div>
+                      <span className="text-xs font-semibold text-purple-800">🎯 下节课预告：</span>
+                      <div className="text-sm text-gray-800 whitespace-pre-wrap mt-1 bg-white p-3 rounded-lg border border-purple-100/70 leading-relaxed shadow-2xs">
+                        {showFeedbackModal.fb_next_preview}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 旧格式兼容：content/homework/notes */}
+              {(showFeedbackModal.content || showFeedbackModal.homework || showFeedbackModal.notes) && !showFeedbackModal.fb_teacher_message && !showFeedbackModal.fb_vocab && (
+                <div className="space-y-3">
+                  {showFeedbackModal.content && (
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5"><FileText className="w-4 h-4" /> 上课内容</h3>
+                      <div className="bg-blue-50/50 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed border border-blue-100">
+                        {showFeedbackModal.content}
+                      </div>
+                    </div>
+                  )}
+                  {showFeedbackModal.homework && (
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5"><Edit className="w-4 h-4" /> 作业布置</h3>
+                      <div className="bg-orange-50/50 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed border border-orange-100">
+                        {showFeedbackModal.homework}
+                      </div>
+                    </div>
+                  )}
+                  {showFeedbackModal.notes && (
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-700 mb-1.5">系统备注</h3>
+                      <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 whitespace-pre-wrap leading-relaxed border border-gray-200">
+                        {showFeedbackModal.notes}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-            <div className="flex justify-end p-4 border-t border-gray-100 shrink-0">
+
+            <div className="flex justify-end p-4 border-t border-gray-100 bg-gray-50 shrink-0">
               <Button variant="outline" onClick={() => setShowFeedbackModal(null)}>关闭</Button>
             </div>
           </Card>
