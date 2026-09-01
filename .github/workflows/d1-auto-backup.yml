@@ -1,6 +1,11 @@
 name: Cloudflare D1 每日双账号自动备份
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/d1-auto-backup.yml'
   schedule:
     # 每天北京时间凌晨 03:00 (UTC 19:00) 自动定时运行
     - cron: '0 19 * * *'
@@ -34,6 +39,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN_MAIN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID_MAIN || '50bcb6bbd4e10f2f1bea0adac4d3c617' }}
         run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "⚠️ 尚未在 GitHub Secrets 中配置 CF_API_TOKEN_MAIN 密钥，无法连接 Cloudflare。"
+            echo "请前往 GitHub 仓库 -> Settings -> Secrets and variables -> Actions 添加 CF_API_TOKEN_MAIN。"
+            exit 1
+          fi
           mkdir -p backups
           echo "正在导出主账号 D1 数据库..."
           npx wrangler d1 export sunnybridge-crm --remote --output="backups/d1_main_${{ env.DATE }}.sql"
