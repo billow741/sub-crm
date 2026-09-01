@@ -1343,10 +1343,13 @@ function encodeStudentToken(studentId) {
 
 function getStudentId() {
   var params = new URLSearchParams(window.location.search);
-  var token = params.get('token');
+  var token = params.get('token') || localStorage.getItem('sb_student_token');
   if (token) {
     var decodedId = decodeStudentToken(token);
-    if (decodedId) return decodedId;
+    if (decodedId) {
+      localStorage.setItem('sb_student_token', token);
+      return decodedId;
+    }
   }
   return null;
 }
