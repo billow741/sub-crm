@@ -1,0 +1,61 @@
+name: Cloudflare D1 每日双账号自动备份
+
+on:
+  schedule:
+    # 每天北京时间凌晨 03:00 (UTC 19:00) 自动定时运行
+    - cron: '0 19 * * *'
+  workflow_dispatch: # 支持在 GitHub 网页上一键手动随时备份
+
+jobs:
+  backup-and-sync:
+    name: 自动备份与异地镜像
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 安装 Wrangler
+        run: npm install -g wrangler
+
+      - name: 获取备份时间戳
+        id: date
+        run: echo "DATE=$(date +'%Y-%m-%d_%H%M%S')" >> $GITHUB_ENV
+
+      # ========================================================
+      # 1. 备份主账号 (生产库)
+      # ========================================================
+      - name: 导出主账号 D1 数据库
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN_MAIN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID_MAIN || '50bcb6bbd4e10f2f1bea0adac4d3c617' }}
+        run: |
+          mkdir -p backups
+          echo "正在导出主账号 D1 数据库..."
+          npx wrangler d1 export sunnybridge-crm --remote --output="backups/d1_main_${{ env.DATE }}.sql"
+
+      # ========================================================
+      # 2. 自动同步镜像到副账号 (实现异地灾备 / 双账号同步)
+      # ========================================================
+      - name: 自动同步恢复到副账号 (灾备库)
+        if: "${{ secrets.CF_API_TOKEN_BACKUP != '' && secrets.CF_ACCOUNT_ID_BACKUP != '' }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN_BACKUP }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID_BACKUP }}
+        run: |
+          echo "正在将主库数据自动同步至副账号灾备库..."
+          npx wrangler d1 execute sunnybridge-crm --remote --file="backups/d1_main_${{ env.DATE }}.sql" || echo "副账号同步跳过"
+
+      # ========================================================
+      # 3. 备份文件安全打包存储 (保留 30 天，支持随时下载)
+      # ========================================================
+      - name: 上传备份至 GitHub 安全存储
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup-${{ env.DATE }}
+          path: backups/*.sql
+          retention-days: 30
