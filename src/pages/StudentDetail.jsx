@@ -13,15 +13,14 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 
 const SALT_KEY_PAIRS = [
-  { salt: 'SunnyBridge2024', key: 'sb2024!@#' },
-  { salt: 'SB_Edu_2025', key: 'sb_edu_25$%' }
+  { salt: 'sunnybridge2024', key: 'sb_parent_key_v1' },
+  { salt: 'sunnybridge', key: 'SBridgeParent2024!@' }
 ];
 
 function xorEncode(str, key) {
   let result = '';
-  const encoded = btoa(encodeURIComponent(str));
-  for (let i = 0; i < encoded.length; i++) {
-    result += String.fromCharCode(encoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+  for (let i = 0; i < str.length; i++) {
+    result += String.fromCharCode(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
   }
   return btoa(result);
 }
@@ -289,7 +288,7 @@ export default function StudentDetail() {
   const handleCopyParentLink = () => {
     if (!student) return;
     const token = encodeStudentToken(student.id);
-    const url = `https://parent.sunnybridge.qzz.io/index.html?token=${token}`;
+    const url = `https://parent.sunnybridge.qzz.io/?token=${token}`;
     
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(url)
@@ -303,7 +302,7 @@ export default function StudentDetail() {
   const handleOpenParentPortal = () => {
     if (!student) return;
     const token = encodeStudentToken(student.id);
-    const url = `https://parent.sunnybridge.qzz.io/index.html?token=${token}`;
+    const url = `https://parent.sunnybridge.qzz.io/?token=${token}`;
     window.open(url, '_blank');
   };
 
