@@ -1074,9 +1074,83 @@
         from { opacity: 0; transform: scale(0.97); }
         to { opacity: 1; transform: scale(1); }
       }
+      /* PWA Banner */
+      .pwa-banner {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 40px);
+        max-width: 400px;
+        background: linear-gradient(135deg, var(--sb-blue), var(--sb-blue-dark));
+        color: white;
+        border-radius: 16px;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 10px 30px rgba(75, 159, 224, 0.4);
+        z-index: 9999;
+        animation: pwaSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+      .pwa-banner__info {
+        display: flex;
+        flex-direction: column;
+      }
+      .pwa-banner__title {
+        font-weight: 700;
+        font-size: 15px;
+      }
+      .pwa-banner__desc {
+        font-size: 12px;
+        opacity: 0.9;
+        margin-top: 4px;
+      }
+      .pwa-banner__actions {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .pwa-banner__btn {
+        background: white;
+        color: var(--sb-blue-dark);
+        border: none;
+        border-radius: 20px;
+        padding: 6px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+      .pwa-banner__close {
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 24px;
+        line-height: 1;
+        cursor: pointer;
+        opacity: 0.7;
+        padding: 0;
+      }
+      @keyframes pwaSlideUp {
+        from { transform: translate(-50%, 100%); opacity: 0; }
+        to { transform: translate(-50%, 0); opacity: 1; }
+      }
       </style>
 </head>
 <body>
+<!-- PWA Install Banner -->
+<div id="pwa-banner" class="pwa-banner" style="display: none;">
+  <div class="pwa-banner__info">
+    <div class="pwa-banner__title">放到桌面，体验更佳</div>
+    <div class="pwa-banner__desc">像原生 App 一样快捷使用</div>
+  </div>
+  <div class="pwa-banner__actions">
+    <button id="pwa-install-btn" class="pwa-banner__btn">立即安装</button>
+    <button id="pwa-close-btn" class="pwa-banner__close">&times;</button>
+  </div>
+</div>
+
 
 <!-- ===== Floating Header ===== -->
 <header class="sb-header">
@@ -2929,6 +3003,52 @@ function spShareCard(btn) {
     }
   });
 }
+// ===== PWA Install Logic =====
+(function initPWA() {
+  var deferredPrompt;
+  var banner = document.getElementById('pwa-banner');
+  var installBtn = document.getElementById('pwa-install-btn');
+  var closeBtn = document.getElementById('pwa-close-btn');
+
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (localStorage.getItem('hide_pwa_banner') !== 'true') {
+      banner.style.display = 'flex';
+    }
+  });
+
+  closeBtn.addEventListener('click', function() {
+    banner.style.display = 'none';
+    localStorage.setItem('hide_pwa_banner', 'true');
+  });
+
+  installBtn.addEventListener('click', function() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function(choiceResult) {
+        if (choiceResult.outcome === 'accepted') {
+          banner.style.display = 'none';
+        }
+        deferredPrompt = null;
+      });
+    } else {
+      alert('请点击浏览器底部的【分享】或【菜单】按钮，然后选择【添加到主屏幕 / 安装应用】。');
+    }
+  });
+
+  // iOS Safari detection
+  var isIos = function() {
+    var userAgent = window.navigator.userAgent.toLowerCase();
+    return /iphone|ipad|ipod/.test(userAgent);
+  };
+  var isInStandaloneMode = function() { return ('standalone' in window.navigator) && (window.navigator.standalone); };
+  
+  if (isIos() && !isInStandaloneMode() && localStorage.getItem('hide_pwa_banner') !== 'true') {
+    banner.style.display = 'flex';
+    installBtn.textContent = '查看教程';
+  }
+})();
 </script>
 
 </body>
