@@ -42,11 +42,14 @@ jobs:
       # 2. 自动同步镜像到副账号 (实现异地灾备 / 双账号同步)
       # ========================================================
       - name: 自动同步恢复到副账号 (灾备库)
-        if: "${{ secrets.CF_API_TOKEN_BACKUP != '' && secrets.CF_ACCOUNT_ID_BACKUP != '' }}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN_BACKUP }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID_BACKUP }}
         run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "未配置副账号密钥 (CF_API_TOKEN_BACKUP / CF_ACCOUNT_ID_BACKUP)，已安全跳过副账号镜像同步。"
+            exit 0
+          fi
           echo "正在将主库数据自动同步至副账号灾备库..."
           npx wrangler d1 execute sunnybridge-crm --remote --file="backups/d1_main_${{ env.DATE }}.sql" || echo "副账号同步跳过"
 
