@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Phone, Mail, Calendar, CreditCard, Clock, Plus, Trash2, 
   AlertTriangle, MessageSquare, FileText, Edit, Loader2, User, CheckCircle, 
-  X, Calculator, FileCheck, FileSignature, BookOpen 
+  X, Calculator, FileCheck, FileSignature, BookOpen, Copy, ExternalLink
 } from 'lucide-react';
 import { studentOps, packageOps, classOps, paymentOps, hourChangeOps } from '../store';
 import { request } from '../store/api';
@@ -11,6 +11,25 @@ import AdjustHoursModal from '../components/AdjustHoursModal';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+
+const SALT_KEY_PAIRS = [
+  { salt: 'SunnyBridge2024', key: 'sb2024!@#' },
+  { salt: 'SB_Edu_2025', key: 'sb_edu_25$%' }
+];
+
+function xorEncode(str, key) {
+  let result = '';
+  const encoded = btoa(encodeURIComponent(str));
+  for (let i = 0; i < encoded.length; i++) {
+    result += String.fromCharCode(encoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+  }
+  return btoa(result);
+}
+
+function encodeStudentToken(studentId) {
+  const data = SALT_KEY_PAIRS[0].salt + ':' + studentId;
+  return xorEncode(data, SALT_KEY_PAIRS[0].key);
+}
 
 export default function StudentDetail() {
   const { id } = useParams();
@@ -267,6 +286,27 @@ export default function StudentDetail() {
     }
   };
 
+  const handleCopyParentLink = () => {
+    if (!student) return;
+    const token = encodeStudentToken(student.id);
+    const url = `${window.location.origin}/parent-portal/index.html?token=${token}`;
+    
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(url)
+        .then(() => alert('✅ 家长端专属链接已复制！可直接发送给家长。'))
+        .catch(() => prompt('请手动复制以下链接：', url));
+    } else {
+      prompt('请手动复制以下链接：', url);
+    }
+  };
+
+  const handleOpenParentPortal = () => {
+    if (!student) return;
+    const token = encodeStudentToken(student.id);
+    const url = `${window.location.origin}/parent-portal/index.html?token=${token}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center">
@@ -315,10 +355,18 @@ export default function StudentDetail() {
               </div>
             </div>
           </div>
-          <div className="flex shrink-0">
-            <Button variant="outline" onClick={handleOpenEdit}>
+          <div className="flex flex-col gap-2 shrink-0 items-end">
+            <Button variant="outline" onClick={handleOpenEdit} className="w-full justify-start">
               <Edit className="w-4 h-4 mr-2" /> 编辑资料
             </Button>
+            <div className="flex gap-2 w-full">
+              <Button variant="outline" className="flex-1 border-primary-200 text-primary-700 bg-primary-50 hover:bg-primary-100" onClick={handleOpenParentPortal}>
+                <ExternalLink className="w-4 h-4 mr-1.5" /> 访问家长端
+              </Button>
+              <Button variant="outline" className="px-2.5 border-primary-200 text-primary-700 bg-primary-50 hover:bg-primary-100" onClick={handleCopyParentLink} title="复制专属链接">
+                <Copy className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
