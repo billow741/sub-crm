@@ -127,7 +127,8 @@ export default function Schedule() {
     for (let w = 0; w < 2; w++) {
       const week = [];
       const startOfWeek = new Date(currentDate);
-      startOfWeek.setDate(currentDate.getDate() - currentDate.getDay() + (w * 7));
+      const dayOfWeek = currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1;
+      startOfWeek.setDate(currentDate.getDate() - dayOfWeek + (w * 7));
       for (let d = 0; d < 7; d++) {
         const date = new Date(startOfWeek);
         date.setDate(startOfWeek.getDate() + d);
@@ -274,11 +275,12 @@ export default function Schedule() {
   };
 
   // 打开复制 modal:计算源周(上周)和目标周(本周),拉取两边的课
-  // 周定义:周日到周六(本周末是周六,下个新一周从周日开始)
-  // 例:今天 8-24(周一),本周 = 8-23(周日) ~ 8-29(周六),上周 = 8-16 ~ 8-22
+  // 周定义:周一到周日(符合中国习惯)
+  // 例:今天 8-25(周二),本周 = 8-24(周一) ~ 8-30(周日),上周 = 8-17 ~ 8-23
   const handleOpenCopyModal = async () => {
     const currentWeekStart = new Date(currentDate);
-    currentWeekStart.setDate(currentDate.getDate() - currentDate.getDay()); // 本周日
+    const dayOfWeek = currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1;
+    currentWeekStart.setDate(currentDate.getDate() - dayOfWeek); // 本周一
 
     const sourceWeekStart = new Date(currentWeekStart);
     sourceWeekStart.setDate(sourceWeekStart.getDate() - 7);
