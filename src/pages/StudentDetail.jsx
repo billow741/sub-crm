@@ -289,7 +289,7 @@ export default function StudentDetail() {
   const handleCopyParentLink = () => {
     if (!student) return;
     const token = encodeStudentToken(student.id);
-    const url = `${window.location.origin}/parent-portal/index.html?token=${token}`;
+    const url = `https://parent.sunnybridge.qzz.io/index.html?token=${token}`;
     
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(url)
@@ -303,7 +303,7 @@ export default function StudentDetail() {
   const handleOpenParentPortal = () => {
     if (!student) return;
     const token = encodeStudentToken(student.id);
-    const url = `${window.location.origin}/parent-portal/index.html?token=${token}`;
+    const url = `https://parent.sunnybridge.qzz.io/index.html?token=${token}`;
     window.open(url, '_blank');
   };
 
