@@ -38,6 +38,21 @@ export default function Textbooks() {
   const [showLlmSettingsModal, setShowLlmSettingsModal] = useState(false);
   const [previewImageModal, setPreviewImageModal] = useState(null);
 
+  // 系列目录状态
+  const [selectedSeries, setSelectedSeries] = useState('ALL');
+  const [collapsedSeries, setCollapsedSeries] = useState({});
+
+  // 提取所有教材系列 (Series)
+  const seriesList = Array.from(new Set(books.map(b => b.series || '未分类系列'))).filter(Boolean);
+
+  // 按照系列分组
+  const groupedBooks = books.reduce((acc, b) => {
+    const s = b.series || '未分类系列';
+    if (!acc[s]) acc[s] = [];
+    acc[s].push(b);
+    return acc;
+  }, {});
+
   // AI 视觉模型设置 (支持 localStorage 持久化)
   const [llmConfig, setLlmConfig] = useState(() => {
     try {
@@ -467,43 +482,104 @@ export default function Textbooks() {
       {/* 三栏工作区主体 */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* ================= 第一栏：教材目录列表 (260px) ================= */}
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0 z-0">
-          <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">教材系列 ({books.length})</span>
+        {/* ================= 第一栏：教材系列与目录列表 (280px) ================= */}
+        <div className="w-72 bg-white border-r border-gray-200 flex flex-col shrink-0 z-0">
+          <div className="p-3.5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Layers className="w-4 h-4 text-primary-600 shrink-0" />
+              <span className="text-xs font-bold text-gray-800 uppercase tracking-wider truncate">教材系列 ({seriesList.length})</span>
+            </div>
             <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setShowBooksManage(true)}>
-              <Plus className="w-3.5 h-3.5 mr-1" /> 添加
+              <Plus className="w-3.5 h-3.5 mr-1" /> 管理系列
             </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {books.map(b => {
-              const isSelected = b.code === selectedBookCode;
-              return (
-                <div
-                  key={b.code}
-                  onClick={() => selectBook(b.code)}
-                  className={`p-3 rounded-xl cursor-pointer transition-all border text-left ${
-                    isSelected
-                      ? 'bg-primary-50/80 border-primary-300 shadow-sm ring-1 ring-primary-500/20'
-                      : 'bg-white border-gray-200 hover:border-primary-300 hover:bg-gray-50 hover:shadow-sm'
+          {/* 系列筛选胶囊 */}
+          {seriesList.length > 1 && (
+            <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-slate-50/60 shrink-0">
+              <button
+                onClick={() => setSelectedSeries('ALL')}
+                className={`px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 transition-all ${
+                  selectedSeries === 'ALL'
+                    ? 'bg-primary-600 text-white shadow-2xs'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                全部 ({books.length})
+              </button>
+              {seriesList.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSelectedSeries(s)}
+                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 transition-all ${
+                    selectedSeries === s
+                      ? 'bg-primary-600 text-white shadow-2xs'
+                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
                   }`}
                 >
-                  <div className="flex items-start justify-between mb-1">
-                    <span className="font-bold text-sm text-gray-900 leading-tight">{b.name}</span>
-                    <Badge variant="secondary" className="text-[10px] bg-gray-100 uppercase py-0.5">{b.level || 'A1'}</Badge>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-2 flex items-center justify-between">
-                    <span className="font-medium text-gray-400">{b.code}</span>
-                    <span className="font-bold text-primary-600">{b.unit_count || 0} / {b.total_units} 单元</span>
-                  </div>
-                  {/* 进度条 */}
-                  <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2.5 overflow-hidden">
+                  {s} ({groupedBooks[s]?.length || 0})
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            {(selectedSeries === 'ALL' ? Object.entries(groupedBooks) : [[selectedSeries, groupedBooks[selectedSeries] || []]]).map(([sName, sBooks]) => {
+              const isCollapsed = collapsedSeries[sName];
+              return (
+                <div key={sName} className="space-y-1.5">
+                  {/* 系列级 Header */}
+                  {selectedSeries === 'ALL' && (
                     <div
-                      className="bg-primary-500 h-full rounded-full transition-all duration-500 ease-out"
-                      style={{ width: `${Math.min(100, Math.round(((b.unit_count || 0) / (b.total_units || 1)) * 100))}%` }}
-                    />
-                  </div>
+                      onClick={() => setCollapsedSeries(prev => ({ ...prev, [sName]: !prev[sName] }))}
+                      className="flex items-center justify-between px-2.5 py-1.5 bg-gradient-to-r from-slate-100/90 to-gray-100/60 hover:from-slate-200/90 hover:to-gray-200/60 rounded-lg cursor-pointer transition-colors select-none border border-gray-200/60"
+                    >
+                      <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5 truncate">
+                        <BookOpen className="w-3.5 h-3.5 text-primary-600 shrink-0" />
+                        <span className="truncate">{sName}</span>
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] text-gray-500 font-bold bg-white px-1.5 py-0.5 rounded shadow-2xs">{sBooks.length} 册</span>
+                        <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 该系列下的教材册别 */}
+                  {(!isCollapsed || selectedSeries !== 'ALL') && (
+                    <div className="space-y-1.5 pl-0.5">
+                      {sBooks.map(b => {
+                        const isSelected = b.code === selectedBookCode;
+                        return (
+                          <div
+                            key={b.code}
+                            onClick={() => selectBook(b.code)}
+                            className={`p-3 rounded-xl cursor-pointer transition-all border text-left ${
+                              isSelected
+                                ? 'bg-primary-50/80 border-primary-300 shadow-sm ring-1 ring-primary-500/20'
+                                : 'bg-white border-gray-200 hover:border-primary-300 hover:bg-gray-50 hover:shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between mb-1">
+                              <span className="font-bold text-sm text-gray-900 leading-tight">{b.name}</span>
+                              <Badge variant="secondary" className="text-[10px] bg-gray-100 uppercase py-0.5">{b.level || 'A1'}</Badge>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-2 flex items-center justify-between">
+                              <span className="font-medium text-gray-400">{b.code}</span>
+                              <span className="font-bold text-primary-600">{b.unit_count || 0} / {b.total_units} 单元</span>
+                            </div>
+                            {/* 进度条 */}
+                            <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2.5 overflow-hidden">
+                              <div
+                                className="bg-primary-500 h-full rounded-full transition-all duration-500 ease-out"
+                                style={{ width: `${Math.min(100, Math.round(((b.unit_count || 0) / (b.total_units || 1)) * 100))}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1576,7 +1652,10 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
 function BooksManageModal({ books, onClose }) {
   const [list, setList] = useState(books || []);
   const [editingCode, setEditingCode] = useState(null);
-  const [form, setForm] = useState({ code: '', name: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+  const [form, setForm] = useState({ code: '', name: '', series: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+
+  // 提取现有系列列表
+  const existingSeries = Array.from(new Set(list.map(b => b.series).filter(Boolean)));
 
   const handleSaveBook = async (e) => {
     e.preventDefault();
@@ -1591,7 +1670,7 @@ function BooksManageModal({ books, onClose }) {
       const resp = await request('/textbooks');
       setList(resp.data || []);
       setEditingCode(null);
-      setForm({ code: '', name: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+      setForm({ code: '', name: '', series: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
     } catch (err) {
       alert('保存失败: ' + err.message);
     }
@@ -1614,7 +1693,7 @@ function BooksManageModal({ books, onClose }) {
         <CardHeader className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             <Layers className="w-5 h-5 text-primary-600" />
-            教材目录管理
+            教材系列与目录管理
           </h2>
           <Button variant="ghost" size="sm" onClick={onClose} className="w-8 h-8 p-0 rounded-full">
             <X className="w-5 h-5 text-gray-400" />
@@ -1624,9 +1703,30 @@ function BooksManageModal({ books, onClose }) {
         <div className="p-6 overflow-y-auto space-y-6 bg-gray-50/50">
           <form onSubmit={handleSaveBook} className="p-5 bg-white border border-gray-200 rounded-xl space-y-4 shadow-sm">
             <div className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
-              {editingCode ? `编辑教材: ${editingCode}` : '➕ 新增教材'}
+              {editingCode ? `编辑教材: ${editingCode}` : '➕ 新增教材 / 系列'}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">所属教材系列 (Series - 一级分类)</label>
+                <input
+                  type="text"
+                  list="series-options"
+                  value={form.series}
+                  onChange={e => setForm({ ...form, series: e.target.value })}
+                  placeholder="如 Everybody Up / Oxford Phonics..."
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                />
+                <datalist id="series-options">
+                  {existingSeries.map(s => <option key={s} value={s} />)}
+                  <option value="Everybody Up" />
+                  <option value="Oxford Phonics World" />
+                  <option value="Wonders" />
+                  <option value="Reach Higher" />
+                  <option value="剑桥少儿英语" />
+                </datalist>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">教材代码 (Code)</label>
                 <input
@@ -1634,10 +1734,13 @@ function BooksManageModal({ books, onClose }) {
                   disabled={!!editingCode}
                   value={form.code}
                   onChange={e => setForm({ ...form, code: e.target.value })}
-                  placeholder="如 EU-L4"
+                  placeholder="如 EU-L4 / OPW-1"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-bold text-gray-900 disabled:opacity-60"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">教材全称</label>
                 <input
@@ -1662,6 +1765,15 @@ function BooksManageModal({ books, onClose }) {
                   <option value="B1">B1</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">总单元数</label>
+                <input
+                  type="number"
+                  value={form.total_units}
+                  onChange={e => setForm({ ...form, total_units: parseInt(e.target.value) || 8 })}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -1670,7 +1782,7 @@ function BooksManageModal({ books, onClose }) {
                   variant="outline" size="sm"
                   onClick={() => {
                     setEditingCode(null);
-                    setForm({ code: '', name: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+                    setForm({ code: '', name: '', series: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
                   }}
                 >
                   取消
@@ -1695,15 +1807,16 @@ function BooksManageModal({ books, onClose }) {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-bold text-gray-900 text-sm">{b.name}</span>
                         <Badge variant="secondary" className="px-1.5 py-0 text-[10px] bg-gray-100 uppercase">{b.level}</Badge>
+                        {b.series && <Badge variant="outline" className="px-1.5 py-0 text-[10px] border-primary-200 text-primary-700 bg-primary-50/50">{b.series}</Badge>}
                       </div>
-                      <div className="text-xs text-gray-500 font-mono">{b.code}</div>
+                      <div className="text-xs text-gray-500 font-mono">{b.code} · 共 {b.total_units || 8} 单元</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => {
                         setEditingCode(b.code);
-                        setForm({ code: b.code, name: b.name, level: b.level || 'A1', publisher: b.publisher || 'Oxford', total_units: b.total_units || 8, description: b.description || '' });
+                        setForm({ code: b.code, name: b.name, series: b.series || '', level: b.level || 'A1', publisher: b.publisher || 'Oxford', total_units: b.total_units || 8, description: b.description || '' });
                       }}
                       className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                     >

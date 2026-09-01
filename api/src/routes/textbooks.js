@@ -1047,7 +1047,7 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
 // ---- 教材库管理 (的管理 textbooks 列表) ----
 
 // POST /books-manage — 新增教材
-// Body: { code, name, level, publisher, total_units, description }
+// Body: { code, name, series, level, publisher, total_units, description }
 textbooks.post('/books-manage', async (c) => {
   const DB = c.env.DB;
   let body;
@@ -1058,14 +1058,14 @@ textbooks.post('/books-manage', async (c) => {
   if (existing) return c.json({ error: { code: 'CONFLICT', message: `code ${body.code} 已存在` } }, 409);
 
   const r = await DB.prepare(
-    `INSERT INTO textbooks (code, name, level, publisher, total_units, description, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, 1)`
-  ).bind(body.code, body.name, body.level || null, body.publisher || null, body.total_units || 8, body.description || null).run();
+    `INSERT INTO textbooks (code, name, series, level, publisher, total_units, description, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+  ).bind(body.code, body.name, body.series || '未分类系列', body.level || null, body.publisher || null, body.total_units || 8, body.description || null).run();
   return c.json({ data: { action: 'inserted', code: body.code, id: r.meta?.last_row_id } });
 });
 
 // PATCH /books-manage/:code — 改教材元数据
-// Body: { name?, level?, publisher?, total_units?, description?, is_active? }
+// Body: { name?, series?, level?, publisher?, total_units?, description?, is_active? }
 textbooks.patch('/books-manage/:code', async (c) => {
   const DB = c.env.DB;
   const code = c.req.param('code');
@@ -1078,13 +1078,14 @@ textbooks.patch('/books-manage/:code', async (c) => {
   await DB.prepare(
     `UPDATE textbooks SET
        name = COALESCE(?, name),
+       series = COALESCE(?, series),
        level = COALESCE(?, level),
        publisher = COALESCE(?, publisher),
        total_units = COALESCE(?, total_units),
        description = COALESCE(?, description),
        is_active = COALESCE(?, is_active)
      WHERE id = ?`
-  ).bind(body.name ?? null, body.level ?? null, body.publisher ?? null,
+  ).bind(body.name ?? null, body.series ?? null, body.level ?? null, body.publisher ?? null,
         body.total_units ?? null, body.description ?? null,
         body.is_active ?? null, book.id).run();
 
