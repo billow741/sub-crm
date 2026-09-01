@@ -3024,6 +3024,14 @@ function spShareCard(btn) {
   });
 
   installBtn.addEventListener('click', function() {
+    var userAgent = window.navigator.userAgent.toLowerCase();
+    var isWeChat = /micromessenger/.test(userAgent);
+    
+    if (isWeChat) {
+      alert('【微信内无法安装】\n\n请点击右上角【...】，选择【在浏览器打开】。然后在浏览器中点击底部或右上角菜单的【添加到主屏幕】。');
+      return;
+    }
+
     if (deferredPrompt) {
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then(function(choiceResult) {
@@ -3033,7 +3041,7 @@ function spShareCard(btn) {
         deferredPrompt = null;
       });
     } else {
-      alert('请点击浏览器底部的【分享】或【菜单】按钮，然后选择【添加到主屏幕 / 安装应用】。');
+      alert('请点击浏览器底部的【分享】或右上角【菜单】按钮，然后选择【添加到主屏幕 / 安装应用】。');
     }
   });
 
