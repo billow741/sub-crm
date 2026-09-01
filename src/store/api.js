@@ -482,6 +482,39 @@ export const organizationOps = {
 };
 
 // ============================================
+// 教材与学习进度操作
+// ============================================
+export const textbookOps = {
+  getAll: async () => {
+    const result = await request('/textbooks');
+    return result.data || [];
+  },
+  getByCode: async (code) => {
+    const result = await request(`/textbooks/${code}`);
+    return result.data;
+  },
+  getProgress: async (studentId) => {
+    const result = await request(`/textbooks/progress/${studentId}`);
+    return result.data || [];
+  },
+  updateProgress: async (data) => {
+    const result = await request('/textbooks/progress', {
+      method: 'POST',
+      body: data,
+    });
+    return result.data;
+  },
+  getPreviewNudge: async (studentId) => {
+    const result = await request(`/textbooks/preview-nudge/${studentId}`);
+    return result.data || { preview: null, review: null };
+  },
+  getSuggest: async (textbookCode, unitNumber) => {
+    const result = await request(`/textbooks/suggest?textbook_code=${encodeURIComponent(textbookCode)}&unit_number=${unitNumber}`);
+    return result.data;
+  },
+};
+
+// ============================================
 // 管理操作
 // ============================================
 export const adminOps = {

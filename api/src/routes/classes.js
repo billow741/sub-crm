@@ -56,6 +56,41 @@ async function resolveClassHours(DB, data, orgId) {
   return data.hours ? parseFloat(data.hours) : 1;
 }
 
+// ── 自动维护学生教材学习进度 ──
+async function syncStudentTextbookProgress(DB, studentId, textbookCode, unitNum, lessonNum) {
+  if (!studentId || !textbookCode) return;
+  try {
+    const code = String(textbookCode).trim();
+    const unit = parseInt(unitNum, 10) || 1;
+    const lesson = parseInt(lessonNum, 10) || 1;
+
+    const tb = await DB.prepare('SELECT id FROM textbooks WHERE code = ? LIMIT 1').bind(code).first();
+    const tbId = tb ? tb.id : null;
+
+    const existing = await DB.prepare(
+      'SELECT id, current_unit, current_lesson, total_classes_done FROM student_textbook_progress WHERE student_id = ? AND textbook_code = ?'
+    ).bind(studentId, code).first();
+
+    if (existing) {
+      const nextUnit = Math.max(existing.current_unit || 1, unit);
+      const nextLesson = Math.max(existing.current_lesson || 1, lesson);
+      const totalDone = (existing.total_classes_done || 0) + 1;
+      await DB.prepare(
+        `UPDATE student_textbook_progress
+         SET textbook_id = COALESCE(?, textbook_id), current_unit = ?, current_lesson = ?, total_classes_done = ?, updated_at = datetime('now')
+         WHERE id = ?`
+      ).bind(tbId, nextUnit, nextLesson, totalDone, existing.id).run();
+    } else {
+      await DB.prepare(
+        `INSERT INTO student_textbook_progress (student_id, textbook_id, textbook_code, current_unit, current_lesson, total_classes_done, status, started_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, 'in_progress', datetime('now'), datetime('now'))`
+      ).bind(studentId, tbId, code, unit, lesson).run();
+    }
+  } catch (err) {
+    console.warn('同步学生教材进度异常:', err.message);
+  }
+}
+
 // ── 老师时间冲突检查 ──
 // 同一老师、同一日期、时间区间重叠（排除 cancelled 状态）
 // 返回冲突记录数组（空=无冲突）
@@ -371,6 +406,14 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
     }
   }
 
+  // ── 同步教材学习进度 ──
+  const targetCode = data.textbook_code || data.fb_lesson_level;
+  const targetUnit = data.unit_number || data.fb_unit;
+  const targetLesson = data.fb_lesson;
+  if (classStatus === 'completed' && targetCode) {
+    await syncStudentTextbookProgress(DB, studentId, targetCode, targetUnit, targetLesson);
+  }
+
   return c.json(success({
     id: newClass.id,
     student_id: newClass.student_id,
@@ -607,6 +650,18 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
       }
     } catch (e) {
       console.warn('里程碑检测跳过:', e.message);
+    }
+
+    // ── 同步教材学习进度 ──
+    try {
+      const targetCode = data.textbook_code || existing.textbook_code || data.fb_lesson_level || existing.fb_lesson_level;
+      const targetUnit = data.unit_number || existing.unit_number || data.fb_unit || existing.fb_unit;
+      const targetLesson = data.fb_lesson || existing.fb_lesson;
+      if (newStatus === 'completed' && targetCode) {
+        await syncStudentTextbookProgress(DB, existing.student_id, targetCode, targetUnit, targetLesson);
+      }
+    } catch (e) {
+      console.warn('同步教材学习进度跳过:', e.message);
     }
 
     // 重新查询更新后的记录

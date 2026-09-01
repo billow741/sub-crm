@@ -1456,4 +1456,238 @@ textbooks.post('/commit-units/:code', async (c) => {
   return c.json({ data: { textbook_code: code, units_received: units.length, units_written: written.length, units_skipped: skipped, written } });
 });
 
+// ============================================================
+// 📊 GET /progress/:studentId — 获取学生教材学习进度
+// ============================================================
+textbooks.get('/progress/:studentId', async (c) => {
+  const DB = c.env.DB;
+  const studentId = parseInt(c.req.param('studentId'), 10);
+  if (!studentId) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '需要有效的 studentId' } }, 400);
+  }
+
+  let progressList = [];
+  try {
+    const rows = await DB.prepare(`
+      SELECT stp.*, t.name as textbook_name, t.series, t.level, t.total_units
+      FROM student_textbook_progress stp
+      LEFT JOIN textbooks t ON (t.code = stp.textbook_code OR t.id = stp.textbook_id)
+      WHERE stp.student_id = ?
+      ORDER BY stp.updated_at DESC
+    `).bind(studentId).all();
+    progressList = rows.results || [];
+  } catch (err) {
+    console.warn('读取 student_textbook_progress 失败:', err.message);
+  }
+
+  // 智能兜底：从 classes 历史数据动态汇总已学教材与单元
+  if (progressList.length === 0) {
+    try {
+      const classRows = await DB.prepare(`
+        SELECT
+          COALESCE(NULLIF(textbook_code, ''), NULLIF(fb_lesson_level, '')) as tb_code,
+          MAX(COALESCE(unit_number, fb_unit, 1)) as max_unit,
+          MAX(COALESCE(fb_lesson, 1)) as max_lesson,
+          COUNT(*) as done_count,
+          MIN(date) as first_date,
+          MAX(date) as last_date
+        FROM classes
+        WHERE student_id = ? AND status = 'completed' AND (textbook_code IS NOT NULL OR fb_lesson_level IS NOT NULL)
+        GROUP BY tb_code
+      `).bind(studentId).all();
+
+      for (const cr of (classRows.results || [])) {
+        if (!cr.tb_code) continue;
+        const tb = await DB.prepare('SELECT id, name, series, level, total_units FROM textbooks WHERE code = ? LIMIT 1').bind(cr.tb_code).first();
+        progressList.push({
+          id: null,
+          student_id: studentId,
+          textbook_id: tb ? tb.id : null,
+          textbook_code: cr.tb_code,
+          textbook_name: tb ? tb.name : cr.tb_code,
+          series: tb ? tb.series : null,
+          level: tb ? tb.level : null,
+          total_units: tb ? (tb.total_units || 8) : 8,
+          current_unit: cr.max_unit || 1,
+          current_lesson: cr.max_lesson || 1,
+          total_classes_done: cr.done_count || 0,
+          status: 'in_progress',
+          started_at: cr.first_date,
+          updated_at: cr.last_date
+        });
+      }
+    } catch (e) {
+      console.warn('从 classes 聚合进度失败:', e.message);
+    }
+  }
+
+  return c.json({ data: progressList });
+});
+
+// ============================================================
+// 📊 POST /progress — 手动设置/调整学生教材进度
+// ============================================================
+textbooks.post('/progress', async (c) => {
+  const DB = c.env.DB;
+  const body = await c.req.json();
+  const studentId = parseInt(body.student_id, 10);
+  const textbookCode = String(body.textbook_code || '').trim();
+  const currentUnit = parseInt(body.current_unit, 10) || 1;
+  const currentLesson = parseInt(body.current_lesson, 10) || 1;
+  const status = body.status || 'in_progress';
+  const notes = body.notes || '';
+
+  if (!studentId || !textbookCode) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '缺少 student_id 或 textbook_code' } }, 400);
+  }
+
+  const tb = await DB.prepare('SELECT id FROM textbooks WHERE code = ? LIMIT 1').bind(textbookCode).first();
+  const tbId = tb ? tb.id : null;
+
+  const existing = await DB.prepare(
+    'SELECT id FROM student_textbook_progress WHERE student_id = ? AND textbook_code = ?'
+  ).bind(studentId, textbookCode).first();
+
+  if (existing) {
+    await DB.prepare(`
+      UPDATE student_textbook_progress
+      SET textbook_id = ?, current_unit = ?, current_lesson = ?, status = ?, notes = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(tbId, currentUnit, currentLesson, status, notes, existing.id).run();
+  } else {
+    await DB.prepare(`
+      INSERT INTO student_textbook_progress (student_id, textbook_id, textbook_code, current_unit, current_lesson, total_classes_done, status, notes, started_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 0, ?, ?, datetime('now'), datetime('now'))
+    `).bind(studentId, tbId, textbookCode, currentUnit, currentLesson, status, notes).run();
+  }
+
+  return c.json({ data: { success: true } });
+});
+
+// ============================================================
+// 📋 & 🧠 GET /preview-nudge/:studentId — 课前预习清单 & 课后微复习
+// ============================================================
+textbooks.get('/preview-nudge/:studentId', async (c) => {
+  const DB = c.env.DB;
+  const studentId = parseInt(c.req.param('studentId'), 10);
+  if (!studentId) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '需要有效的 studentId' } }, 400);
+  }
+
+  // 1. 最新一节已完成的课程
+  const lastCompletedClass = await DB.prepare(`
+    SELECT id, date, start_time, teacher, textbook_code, unit_number,
+           fb_unit, fb_lesson, fb_lesson_level, fb_vocab, fb_patterns, fb_grammar,
+           fb_teacher_message, fb_homework, fb_next_preview
+    FROM classes
+    WHERE student_id = ? AND status = 'completed'
+    ORDER BY date DESC, start_time DESC
+    LIMIT 1
+  `).bind(studentId).first();
+
+  // 2. 下一节待上课程
+  const nextScheduledClass = await DB.prepare(`
+    SELECT id, date, start_time, end_time, teacher, textbook_code, unit_number, class_link
+    FROM classes
+    WHERE student_id = ? AND status = 'scheduled' AND date >= date('now', '-1 day')
+    ORDER BY date ASC, start_time ASC
+    LIMIT 1
+  `).bind(studentId).first();
+
+  // ── A. 课前预习清单 ──
+  let preview = null;
+  let targetCode = null;
+  let targetUnit = null;
+
+  if (nextScheduledClass && nextScheduledClass.textbook_code && nextScheduledClass.unit_number) {
+    targetCode = nextScheduledClass.textbook_code;
+    targetUnit = nextScheduledClass.unit_number;
+  } else if (lastCompletedClass) {
+    targetCode = lastCompletedClass.textbook_code || lastCompletedClass.fb_lesson_level;
+    targetUnit = lastCompletedClass.unit_number || lastCompletedClass.fb_unit || 1;
+  }
+
+  if (targetCode && targetUnit) {
+    const uc = await DB.prepare(`
+      SELECT uc.vocab, uc.patterns, uc.grammar, tu.unit_title, t.name as textbook_name
+      FROM unit_content uc
+      LEFT JOIN textbook_units tu ON uc.unit_id = tu.id
+      LEFT JOIN textbooks t ON tu.textbook_id = t.id
+      WHERE (uc.textbook_code = ? OR t.code = ?) AND uc.unit_number = ?
+      LIMIT 1
+    `).bind(targetCode, targetCode, targetUnit).first();
+
+    let vocabList = [];
+    let patternsList = [];
+    if (uc) {
+      try { vocabList = JSON.parse(uc.vocab || '[]'); } catch (_) {}
+      try { patternsList = JSON.parse(uc.patterns || '[]'); } catch (_) {}
+    }
+
+    preview = {
+      has_preview: true,
+      textbook_code: targetCode,
+      textbook_name: uc ? uc.textbook_name : targetCode,
+      unit_number: targetUnit,
+      unit_title: uc ? uc.unit_title : `Unit ${targetUnit}`,
+      next_class_date: nextScheduledClass ? nextScheduledClass.date : null,
+      next_class_time: nextScheduledClass ? `${nextScheduledClass.start_time} - ${nextScheduledClass.end_time}` : null,
+      teacher_preview_note: lastCompletedClass ? lastCompletedClass.fb_next_preview : null,
+      vocab_preview: vocabList.slice(0, 5),
+      patterns_preview: patternsList.slice(0, 2),
+      tip: '不需要提前背诵，和宝贝一起混个脸熟，上课更有自信哦 😊'
+    };
+  }
+
+  // ── B. 课后 2 分钟亲子微复习 ──
+  let review = null;
+  if (lastCompletedClass) {
+    let reviewWords = [];
+    let reviewPatterns = [];
+
+    if (lastCompletedClass.fb_vocab) {
+      reviewWords = lastCompletedClass.fb_vocab.split(/[\n,，、]+/).map(w => w.trim()).filter(Boolean);
+    }
+    if (lastCompletedClass.fb_patterns) {
+      reviewPatterns = lastCompletedClass.fb_patterns.split(/[\n;；]+/).map(p => p.trim()).filter(Boolean);
+    }
+
+    if (reviewWords.length === 0 && (lastCompletedClass.textbook_code || lastCompletedClass.fb_lesson_level)) {
+      const code = lastCompletedClass.textbook_code || lastCompletedClass.fb_lesson_level;
+      const unit = lastCompletedClass.unit_number || lastCompletedClass.fb_unit || 1;
+      const uc = await DB.prepare(`
+        SELECT vocab, patterns FROM unit_content WHERE textbook_code = ? AND unit_number = ? LIMIT 1
+      `).bind(code, unit).first();
+      if (uc) {
+        try {
+          const v = JSON.parse(uc.vocab || '[]');
+          reviewWords = v.slice(0, 4).map(item => item.word + (item.translation ? ` (${item.translation})` : ''));
+        } catch (_) {}
+      }
+    }
+
+    if (reviewWords.length > 0 || (lastCompletedClass.fb_teacher_message && lastCompletedClass.fb_teacher_message.length > 0)) {
+      review = {
+        has_review: true,
+        last_class_date: lastCompletedClass.date,
+        textbook_code: lastCompletedClass.textbook_code || lastCompletedClass.fb_lesson_level,
+        unit_number: lastCompletedClass.unit_number || lastCompletedClass.fb_unit,
+        nudge_title: '🚗 课后 2 分钟亲子互动',
+        nudge_prompt: '下班接宝贝的路上，或者今晚睡前，试着玩个快问快答吧：',
+        words: reviewWords.slice(0, 4),
+        patterns: reviewPatterns.slice(0, 2),
+        homework: lastCompletedClass.fb_homework || null
+      };
+    }
+  }
+
+  return c.json({
+    data: {
+      preview,
+      review
+    }
+  });
+});
+
 export default textbooks;
+

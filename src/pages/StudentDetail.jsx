@@ -6,7 +6,7 @@ import {
   X, Calculator, FileCheck, FileSignature, BookOpen, Copy, ExternalLink
 } from 'lucide-react';
 import { studentOps, packageOps, classOps, paymentOps, hourChangeOps } from '../store';
-import { request } from '../store/api';
+import { request, textbookOps } from '../store/api';
 import AdjustHoursModal from '../components/AdjustHoursModal';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -51,6 +51,7 @@ export default function StudentDetail() {
   const [hourChanges, setHourChanges] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [progressReports, setProgressReports] = useState([]);
+  const [textbookProgress, setTextbookProgress] = useState([]);
   const [showAssessmentFeedback, setShowAssessmentFeedback] = useState(null);
   const [showProgressReportModal, setShowProgressReportModal] = useState(null);
   const [classForm, setClassForm] = useState({ date: '', hours: 1, notes: '' });
@@ -129,6 +130,12 @@ export default function StudentDetail() {
               setAssessments(Array.isArray(aData) ? aData : []);
               setProgressReports(Array.isArray(prData) ? prData : []);
             } catch(e) { console.error('Load reports error:', e); }
+
+            // 加载教材学习进度
+            try {
+              const tbProg = await textbookOps.getProgress(id);
+              setTextbookProgress(Array.isArray(tbProg) ? tbProg : []);
+            } catch(e) { console.error('Load textbook progress error:', e); }
           }
         } catch (err) {
           console.error('Load student error:', err);
@@ -554,6 +561,72 @@ export default function StudentDetail() {
                 <div className="text-center py-8 text-gray-400">
                   <Clock className="w-10 h-10 mx-auto mb-2 opacity-20" />
                   <p className="text-sm">暂无上课记录</p>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* 教材学习进度卡片 */}
+          <Card className="lg:col-span-2">
+            <CardHeader className="flex items-center justify-between pb-3">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-primary-600" />
+                教材学习进度
+              </h3>
+              <span className="text-xs text-gray-500">
+                {textbookProgress.length > 0 ? `共在读 ${textbookProgress.length} 本教材` : '自动汇总上课进度'}
+              </span>
+            </CardHeader>
+            <div className="p-6 pt-2">
+              {textbookProgress.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {textbookProgress.map((tp, idx) => {
+                    const totalUnits = tp.total_units || 8;
+                    const currentUnit = tp.current_unit || 1;
+                    const percent = Math.min(100, Math.round((currentUnit / totalUnits) * 100));
+                    return (
+                      <div key={idx} className="bg-gradient-to-br from-blue-50/50 to-indigo-50/30 border border-blue-100/80 rounded-xl p-4 shadow-2xs">
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-gray-900 text-base">{tp.textbook_name || tp.textbook_code}</span>
+                              <Badge variant="primary" className="text-[10px] px-1.5 py-0">{tp.level || tp.textbook_code}</Badge>
+                            </div>
+                            {tp.series && <p className="text-xs text-gray-500 mt-0.5">{tp.series}</p>}
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs font-bold text-primary-700 bg-white/90 border border-blue-200/60 px-2.5 py-0.5 rounded-full shadow-2xs">
+                              Unit {currentUnit} / {totalUnits}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 进度条 */}
+                        <div className="space-y-1.5 mb-3">
+                          <div className="flex justify-between text-xs text-gray-500 font-medium">
+                            <span>学习进度</span>
+                            <span className="font-bold text-primary-600">{percent}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200/80 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className="bg-gradient-to-r from-primary-500 to-indigo-500 h-2 rounded-full transition-all duration-500" 
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-blue-100/50">
+                          <span>累计完成课时：<strong className="text-gray-800">{tp.total_classes_done || 0} 节</strong></span>
+                          {tp.updated_at && <span className="text-[11px] text-gray-400">更新: {tp.updated_at.substring(0, 10)}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-gray-400 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                  <BookOpen className="w-8 h-8 mx-auto mb-1.5 opacity-20" />
+                  <p className="text-xs">暂无教材学习记录（上课反馈中填写教材代号后将自动同步）</p>
                 </div>
               )}
             </div>

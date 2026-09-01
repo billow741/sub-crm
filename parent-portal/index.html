@@ -1201,6 +1201,44 @@
     </div>
   </section>
 
+  <!-- ===== 📋 课前预习清单 (Next Lesson Preview) ===== -->
+  <section id="preview-section" class="section" style="display: none;">
+    <div class="section__header">
+      <span class="section__label" style="background:linear-gradient(135deg, #4B9FE0, #2563EB);color:#fff;">👀 课前预习清单</span>
+      <span class="section__count" id="preview-unit-tag" style="background:#EFF6FF;color:#2563EB;font-weight:700;">Unit 1</span>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:18px;border:1px solid rgba(75,159,224,0.2);box-shadow:0 4px 20px rgba(75,159,224,0.06);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+        <div>
+          <div style="font-weight:700;font-size:15px;color:#1E293B;" id="preview-title">下节课内容预告</div>
+          <div style="font-size:12px;color:#64748B;margin-top:2px;" id="preview-sub">提前熟悉重点，课堂开口更自信！</div>
+        </div>
+        <div style="font-size:11px;background:#F0FDF4;color:#16A34A;padding:4px 8px;border-radius:6px;font-weight:600;" id="preview-time-tag">即将开课</div>
+      </div>
+      
+      <!-- 核心词汇胶囊 -->
+      <div id="preview-vocab-wrap" style="margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">🔤 重点预习词汇：</div>
+        <div id="preview-vocab-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+
+      <!-- 核心句型 -->
+      <div id="preview-patterns-wrap" style="margin-bottom:12px;display:none;">
+        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:4px;">💬 重点句型预览：</div>
+        <div id="preview-patterns-list" style="font-size:13px;color:#1E293B;background:#F8FAFC;padding:8px 12px;border-radius:8px;border-left:3px solid #4B9FE0;"></div>
+      </div>
+
+      <!-- 老师预告备注 -->
+      <div id="preview-teacher-note-wrap" style="margin-bottom:10px;display:none;background:#FEF9C3;padding:8px 12px;border-radius:8px;font-size:12px;color:#854D0E;">
+        <b>👩‍🏫 老师预告：</b><span id="preview-teacher-note"></span>
+      </div>
+
+      <div style="font-size:11px;color:#94A3B8;text-align:right;">
+        💡 不需要提前背诵，和宝贝一起混个脸熟就好 😊
+      </div>
+    </div>
+  </section>
+
   <!-- ===== Study Profile Section ===== -->
   <section id="sp-section" class="sp-section">
     <!-- Info Card -->
@@ -1235,6 +1273,24 @@
         <div class="sp-info-item"><div class="sp-info-item__label">课时余额</div><div class="sp-info-item__value" id="sp-balance">-</div></div>
         <div class="sp-info-item"><div class="sp-info-item__label">已完课程</div><div class="sp-info-item__value" id="sp-total-lessons">-</div></div>
       </div>
+
+      <!-- 📖 教材学习进度条 (Textbook Progress Banner) -->
+      <div id="sp-textbook-progress-banner" style="display:none;margin-top:14px;padding:12px 14px;background:linear-gradient(135deg, rgba(75,159,224,0.08), rgba(99,102,241,0.06));border-radius:12px;border:1px solid rgba(75,159,224,0.2);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;font-weight:700;">
+          <span style="color:var(--sb-dark);display:flex;align-items:center;gap:6px;">
+            <span style="font-size:14px;">📖</span> <span id="sp-tb-name">教材学习进度</span>
+          </span>
+          <span style="color:var(--sb-blue);background:#fff;padding:2px 8px;border-radius:100px;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,0.05);" id="sp-tb-unit-badge">Unit 0 / 0</span>
+        </div>
+        <div style="height:6px;background:rgba(28,36,75,0.08);border-radius:3px;overflow:hidden;">
+          <div id="sp-tb-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg, #4B9FE0, #6366F1);border-radius:3px;transition:width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
+        </div>
+        <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--sb-muted);">
+          <span id="sp-tb-desc">已学完 0 个单元</span>
+          <span id="sp-tb-pct" style="font-weight:700;color:var(--sb-blue);">0%</span>
+        </div>
+      </div>
+
       <!-- Milestone Progress Banner -->
       <div id="sp-milestone-banner" style="margin-top:14px;padding:12px 14px;background:rgba(75,159,224,0.06);border-radius:12px;border:1px solid rgba(75,159,224,0.12);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;font-weight:600;">
@@ -1257,6 +1313,23 @@
 
     <!-- Tab: 上课记录 -->
     <div class="sp-tab-content active" id="sp-tab-history">
+      <!-- 🚗 课后微复习卡片 (Review Nudge Card) -->
+      <div id="review-nudge-card" style="display:none;margin-bottom:16px;background:linear-gradient(135deg, #FFFBEB, #FEF3C7);border-radius:16px;padding:16px;border:1px solid #FDE68A;box-shadow:0 4px 15px rgba(245,158,11,0.06);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-weight:700;font-size:14px;color:#92400E;display:flex;align-items:center;gap:6px;">
+            <span>🚗</span> 课后 2 分钟亲子小互动
+          </span>
+          <span style="font-size:11px;color:#B45309;background:#FEF3C7;border:1px solid #FCD34D;padding:2px 8px;border-radius:100px;" id="review-date-tag">上次课程</span>
+        </div>
+        <div style="font-size:12px;color:#78350F;margin-bottom:10px;" id="review-prompt">
+          接宝贝的路上或今晚睡前，试着玩个快问快答：
+        </div>
+        <div id="review-words-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+        <div id="review-homework-wrap" style="display:none;font-size:12px;color:#92400E;background:rgba(255,255,255,0.7);padding:8px 10px;border-radius:8px;">
+          <b>📝 课后作业：</b><span id="review-homework-text"></span>
+        </div>
+      </div>
+
       <div id="sp-vocab-banner" style="text-align:center;padding:10px 16px;background:linear-gradient(135deg,rgba(75,159,224,0.06),rgba(245,166,35,0.06));border-radius:12px;margin-bottom:12px;font-size:14px;color:var(--sb-dark);">📚 累计学习词汇 <b id="sp-vocab-count" style="font-size:20px;color:var(--sb-orange);">0</b> 个</div>
       <div id="sp-history-list"></div>
     </div>
@@ -1531,6 +1604,18 @@ async function loadStudentData() {
     // 异步加载教材库与单元翻译字典
     preloadTextbookTranslations(classesData);
 
+    // 异步加载教材学习进度
+    apiGet('/textbooks/progress/' + studentId).then(function(res) {
+      var pList = (res && res.data) ? res.data : (Array.isArray(res) ? res : []);
+      renderTextbookProgress(pList);
+    }).catch(function(err) { console.warn('加载教材进度异常:', err); });
+
+    // 异步加载课前预习与课后微复习
+    apiGet('/textbooks/preview-nudge/' + studentId).then(function(res) {
+      var pData = (res && res.data) ? res.data : res;
+      renderPreviewAndNudge(pData);
+    }).catch(function(err) { console.warn('加载预习与复习异常:', err); });
+
     // 加载评估报告数据（供成长报告Tab和学习轨迹Tab使用）
     loadAssessments(studentId).then(function() {
       renderStudyProfile(student, classesData);
@@ -1547,6 +1632,142 @@ async function loadStudentData() {
         '<button type="button" onclick="loadStudentData()" style="padding:8px 20px;background:#4B9FE0;color:#fff;border:none;border-radius:100px;font-size:13px;font-weight:600;cursor:pointer;">🔄 重新加载</button>' +
         '</div>';
     }
+  }
+}
+
+// ===== 渲染教材学习进度条 =====
+function renderTextbookProgress(progressList) {
+  var banner = document.getElementById('sp-textbook-progress-banner');
+  if (!banner) return;
+  if (!Array.isArray(progressList) || progressList.length === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+  var tp = progressList[0];
+  var totalUnits = tp.total_units || 8;
+  var currentUnit = tp.current_unit || 1;
+  var pct = Math.min(100, Math.round((currentUnit / totalUnits) * 100));
+
+  var nameEl = document.getElementById('sp-tb-name');
+  if (nameEl) nameEl.textContent = (tp.textbook_name || tp.textbook_code) + ' 学习进度';
+  
+  var badgeEl = document.getElementById('sp-tb-unit-badge');
+  if (badgeEl) badgeEl.textContent = 'Unit ' + currentUnit + ' / ' + totalUnits;
+
+  var barEl = document.getElementById('sp-tb-progress-bar');
+  if (barEl) barEl.style.width = pct + '%';
+
+  var descEl = document.getElementById('sp-tb-desc');
+  if (descEl) descEl.textContent = '已学至 Unit ' + currentUnit + ' (累计 ' + (tp.total_classes_done || 0) + ' 节课)';
+
+  var pctEl = document.getElementById('sp-tb-pct');
+  if (pctEl) pctEl.textContent = pct + '%';
+
+  banner.style.display = 'block';
+}
+
+// ===== 渲染课前预习与课后微复习 =====
+function renderPreviewAndNudge(data) {
+  if (!data) return;
+
+  // 1. 课前预习清单
+  var prev = data.preview;
+  var prevSec = document.getElementById('preview-section');
+  if (prevSec && prev && prev.has_preview && ((prev.vocab_preview && prev.vocab_preview.length > 0) || (prev.patterns_preview && prev.patterns_preview.length > 0) || prev.teacher_preview_note)) {
+    var tagEl = document.getElementById('preview-unit-tag');
+    if (tagEl) tagEl.textContent = 'Unit ' + prev.unit_number;
+
+    var titleEl = document.getElementById('preview-title');
+    if (titleEl) titleEl.textContent = (prev.textbook_name || prev.textbook_code) + ' · ' + (prev.unit_title || ('Unit ' + prev.unit_number));
+
+    var subEl = document.getElementById('preview-sub');
+    if (subEl) subEl.textContent = prev.next_class_date ? ('上课时间：' + prev.next_class_date + (prev.next_class_time ? ' ' + prev.next_class_time : '')) : '即将开课 · 提前熟悉重点，课堂开口更自信！';
+
+    // 核心词汇胶囊
+    var vListEl = document.getElementById('preview-vocab-list');
+    if (vListEl && prev.vocab_preview && prev.vocab_preview.length > 0) {
+      var vHtml = '';
+      for (var i = 0; i < prev.vocab_preview.length; i++) {
+        var item = prev.vocab_preview[i];
+        var word = typeof item === 'string' ? item : (item.word || '');
+        var trans = typeof item === 'object' && item.translation ? item.translation : '';
+        vHtml += '<span style="background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;padding:4px 10px;border-radius:100px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">' +
+                 spEsc(word) + (trans ? '<span style="color:#60A5FA;font-size:11px;">' + spEsc(trans) + '</span>' : '') +
+                 '</span>';
+      }
+      vListEl.innerHTML = vHtml;
+      document.getElementById('preview-vocab-wrap').style.display = 'block';
+    } else {
+      document.getElementById('preview-vocab-wrap').style.display = 'none';
+    }
+
+    // 重点句型
+    var pWrap = document.getElementById('preview-patterns-wrap');
+    var pListEl = document.getElementById('preview-patterns-list');
+    if (pWrap && pListEl && prev.patterns_preview && prev.patterns_preview.length > 0) {
+      var pHtml = '';
+      for (var j = 0; j < prev.patterns_preview.length; j++) {
+        var pItem = prev.patterns_preview[j];
+        var pattern = typeof pItem === 'string' ? pItem : (pItem.pattern || '');
+        var pTrans = typeof pItem === 'object' && pItem.translation ? pItem.translation : '';
+        pHtml += '<div style="margin-bottom:4px;">• <b>' + spEsc(pattern) + '</b>' + (pTrans ? ' <span style="color:#64748B;font-size:12px;">(' + spEsc(pTrans) + ')</span>' : '') + '</div>';
+      }
+      pListEl.innerHTML = pHtml;
+      pWrap.style.display = 'block';
+    } else if (pWrap) {
+      pWrap.style.display = 'none';
+    }
+
+    // 老师预告
+    var noteWrap = document.getElementById('preview-teacher-note-wrap');
+    var noteEl = document.getElementById('preview-teacher-note');
+    if (noteWrap && noteEl && prev.teacher_preview_note) {
+      noteEl.textContent = prev.teacher_preview_note;
+      noteWrap.style.display = 'block';
+    } else if (noteWrap) {
+      noteWrap.style.display = 'none';
+    }
+
+    prevSec.style.display = 'block';
+  } else if (prevSec) {
+    prevSec.style.display = 'none';
+  }
+
+  // 2. 课后微复习卡片
+  var rev = data.review;
+  var revCard = document.getElementById('review-nudge-card');
+  if (revCard && rev && rev.has_review && ((rev.words && rev.words.length > 0) || rev.homework)) {
+    var dateTag = document.getElementById('review-date-tag');
+    if (dateTag && rev.last_class_date) dateTag.textContent = rev.last_class_date + (rev.unit_number ? ' · Unit ' + rev.unit_number : '');
+
+    var promptEl = document.getElementById('review-prompt');
+    if (promptEl && rev.nudge_prompt) promptEl.textContent = rev.nudge_prompt;
+
+    var wListEl = document.getElementById('review-words-list');
+    if (wListEl && rev.words && rev.words.length > 0) {
+      var wHtml = '';
+      for (var k = 0; k < rev.words.length; k++) {
+        wHtml += '<span style="background:#FFF;color:#92400E;border:1px solid #FCD34D;padding:4px 10px;border-radius:100px;font-size:12px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,0.03);">' +
+                 '✨ ' + spEsc(rev.words[k]) + '</span>';
+      }
+      wListEl.innerHTML = wHtml;
+      wListEl.style.display = 'flex';
+    } else if (wListEl) {
+      wListEl.style.display = 'none';
+    }
+
+    var hwWrap = document.getElementById('review-homework-wrap');
+    var hwText = document.getElementById('review-homework-text');
+    if (hwWrap && hwText && rev.homework) {
+      hwText.textContent = rev.homework;
+      hwWrap.style.display = 'block';
+    } else if (hwWrap) {
+      hwWrap.style.display = 'none';
+    }
+
+    revCard.style.display = 'block';
+  } else if (revCard) {
+    revCard.style.display = 'none';
   }
 }
 
