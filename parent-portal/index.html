@@ -2,12 +2,23 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>SunnyBridge 家长端 - 学生详情</title>
   <link rel="icon" type="image/webp" href="sunblogo.webp">
+  <link rel="apple-touch-icon" href="sunblogo.png">
+  <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <script src="assets/html2canvas.min.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => {
+          console.warn('PWA ServiceWorker registration failed: ', err);
+        });
+      });
+    }
+  </script>
   <style>
     :root {
       --sb-blue: #4B9FE0;

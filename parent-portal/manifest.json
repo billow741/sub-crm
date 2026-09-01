@@ -1,0 +1,16 @@
+{
+  "name": "SunnyBridge",
+  "short_name": "家校通",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#F7FAFC",
+  "theme_color": "#4B9FE0",
+  "icons": [
+    {
+      "src": "sunblogo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
