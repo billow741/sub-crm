@@ -1061,7 +1061,45 @@ textbooks.post('/books-manage', async (c) => {
     `INSERT INTO textbooks (code, name, series, level, publisher, total_units, description, is_active)
      VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
   ).bind(body.code, body.name, body.series || '未分类系列', body.level || null, body.publisher || null, body.total_units || 8, body.description || null).run();
-  return c.json({ data: { action: 'inserted', code: body.code, id: r.meta?.last_row_id } });
+
+  const bookId = r.meta?.last_row_id;
+  const totalUnits = parseInt(body.total_units) || 8;
+
+  // 自动为新教材创建 Unit 1 ~ totalUnits 初始目录
+  try {
+    for (let u = 1; u <= totalUnits; u++) {
+      await DB.prepare(
+        `INSERT INTO textbook_units (textbook_id, textbook_code, unit_number, unit_title, lesson_count, is_active)
+         VALUES (?, ?, ?, ?, 1, 1)`
+      ).bind(bookId, body.code, u, `Unit ${u}`).run();
+    }
+  } catch (err) {
+    console.warn('初始化单元大纲警告:', err.message);
+  }
+
+  return c.json({ data: { action: 'inserted', code: body.code, id: bookId, units_created: totalUnits } });
+});
+
+// POST /init-units/:code — 一键补全/初始化教材的所有单元
+textbooks.post('/init-units/:code', async (c) => {
+  const DB = c.env.DB;
+  const code = c.req.param('code');
+  const book = await DB.prepare('SELECT id, total_units FROM textbooks WHERE code = ?').bind(code).first();
+  if (!book) return c.json({ error: { code: 'NOT_FOUND', message: '教材不存在' } }, 404);
+
+  const total = book.total_units || 8;
+  let added = 0;
+  for (let u = 1; u <= total; u++) {
+    const exists = await DB.prepare('SELECT id FROM textbook_units WHERE textbook_code = ? AND unit_number = ?').bind(code, u).first();
+    if (!exists) {
+      await DB.prepare(
+        `INSERT INTO textbook_units (textbook_id, textbook_code, unit_number, unit_title, lesson_count, is_active)
+         VALUES (?, ?, ?, ?, 1, 1)`
+      ).bind(book.id, code, u, `Unit ${u}`).run();
+      added++;
+    }
+  }
+  return c.json({ data: { code, added, total } });
 });
 
 // PATCH /books-manage/:code — 改教材元数据

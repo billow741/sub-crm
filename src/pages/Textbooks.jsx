@@ -117,6 +117,19 @@ export default function Textbooks() {
     setLoadingUnits(false);
   };
 
+  // 一键初始化单元大纲
+  const handleInitUnits = async (code) => {
+    if (!code) return;
+    try {
+      setLoadingUnits(true);
+      await request(`/textbooks/init-units/${code}`, { method: 'POST' });
+      await selectBook(code);
+    } catch (e) {
+      alert('初始化单元失败: ' + e.message);
+      setLoadingUnits(false);
+    }
+  };
+
   // 切换选中单元
   const selectUnit = async (code, unitNum) => {
     setSelectedUnitNum(unitNum);
@@ -470,11 +483,11 @@ export default function Textbooks() {
           <Button variant="outline" size="sm" onClick={() => setShowLlmSettingsModal(true)} className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800">
             <Sparkles className="w-4 h-4 mr-1.5" /> AI 模型设置
           </Button>
-          <Button variant="primary" size="sm" onClick={() => setShowBatchBookModal(true)}>
+          <Button variant="outline" size="sm" onClick={() => setShowBatchBookModal(true)} className="border-primary-200 text-primary-700 hover:bg-primary-50">
             <Book className="w-4 h-4 mr-1.5" /> 整本 PDF 批量导入
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowBooksManage(true)}>
-            <Layers className="w-4 h-4 mr-1.5" /> 教材管理
+          <Button variant="primary" size="sm" onClick={() => setShowBooksManage(true)} className="bg-primary-600 hover:bg-primary-700 text-white shadow-sm font-bold">
+            <Plus className="w-4 h-4 mr-1.5" /> ➕ 新增/管理教材
           </Button>
         </div>
       </div>
@@ -489,8 +502,8 @@ export default function Textbooks() {
               <Layers className="w-4 h-4 text-primary-600 shrink-0" />
               <span className="text-xs font-bold text-gray-800 uppercase tracking-wider truncate">教材系列 ({seriesList.length})</span>
             </div>
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setShowBooksManage(true)}>
-              <Plus className="w-3.5 h-3.5 mr-1" /> 管理系列
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-primary-600 hover:bg-primary-50 font-bold" onClick={() => setShowBooksManage(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> 新增教材
             </Button>
           </div>
 
@@ -603,7 +616,20 @@ export default function Textbooks() {
                 <Loader className="w-3.5 h-3.5 animate-spin" /> 加载中...
               </div>
             ) : bookUnits.length === 0 ? (
-              <div className="py-8 text-center text-xs text-gray-400">暂无单元数据</div>
+              <div className="py-10 text-center px-4 space-y-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 m-2">
+                <BookOpen className="w-8 h-8 text-gray-300 mx-auto opacity-40" />
+                <div className="text-xs text-gray-500 font-medium">该教材暂未生成单元目录</div>
+                {selectedBookCode && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    className="w-full text-xs shadow-sm py-1.5"
+                    onClick={() => handleInitUnits(selectedBookCode)}
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" /> 一键生成各单元大纲
+                  </Button>
+                )}
+              </div>
             ) : (
               bookUnits.map(u => {
                 const isSelected = u.unit_number === selectedUnitNum;
