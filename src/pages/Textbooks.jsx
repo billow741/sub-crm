@@ -118,15 +118,52 @@ export default function Textbooks() {
   };
 
   // 一键初始化单元大纲
-  const handleInitUnits = async (code) => {
+  const handleInitUnits = async (code, structType = 'unit') => {
     if (!code) return;
     try {
       setLoadingUnits(true);
-      await request(`/textbooks/init-units/${code}`, { method: 'POST' });
+      await request(`/textbooks/init-units/${code}`, { method: 'POST', body: { structure_type: structType } });
       await selectBook(code);
     } catch (e) {
-      alert('初始化单元失败: ' + e.message);
+      alert('初始化大纲失败: ' + e.message);
       setLoadingUnits(false);
+    }
+  };
+
+  // 课时/单元大纲标题编辑与新增
+  const [editingUnitNum, setEditingUnitNum] = useState(null);
+  const [editingUnitTitle, setEditingUnitTitle] = useState('');
+
+  const handleSaveUnitTitle = async (code, num, newTitle) => {
+    if (!newTitle.trim()) return setEditingUnitNum(null);
+    try {
+      await request(`/textbooks/units-manage/${code}/${num}`, {
+        method: 'PATCH',
+        body: { unit_title: newTitle.trim() }
+      });
+      setBookUnits(prev => prev.map(u => u.unit_number === num ? { ...u, unit_title: newTitle.trim() } : u));
+      setEditingUnitNum(null);
+    } catch (e) {
+      alert('修改失败: ' + e.message);
+    }
+  };
+
+  const handleAddNewUnit = async (code) => {
+    const nextNum = bookUnits.length > 0 ? Math.max(...bookUnits.map(u => u.unit_number)) + 1 : 1;
+    const firstTitle = bookUnits[0]?.unit_title || '';
+    const prefix = firstTitle.includes('Lesson') ? 'Lesson' : firstTitle.includes('Chapter') ? 'Chapter' : firstTitle.includes('Story') ? 'Story' : 'Unit';
+    const defaultTitle = `${prefix} ${nextNum}`;
+    const customTitle = prompt(`请输入第 ${nextNum} 课/单元的标题名称:`, defaultTitle);
+    if (!customTitle) return;
+
+    try {
+      await request(`/textbooks/units-manage/${code}`, {
+        method: 'POST',
+        body: { unit_number: nextNum, unit_title: customTitle.trim(), lesson_count: 1 }
+      });
+      await selectBook(code);
+    } catch (e) {
+      alert('添加失败: ' + e.message);
     }
   };
 
@@ -599,15 +636,26 @@ export default function Textbooks() {
           </div>
         </div>
 
-        {/* ================= 第二栏：单元大纲列表 (280px) ================= */}
+        {/* ================= 第二栏：课时/单元大纲列表 (280px) ================= */}
         <div className="w-72 bg-white border-r border-gray-200 flex flex-col shrink-0 z-0">
-          <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+          <div className="p-3.5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
             <span className="text-xs font-bold text-gray-700 uppercase tracking-wider truncate mr-2">
-              {selectedBook ? `${selectedBook.code} 大纲` : '单元大纲'}
+              {selectedBook ? `${selectedBook.code} 目录` : '大纲目录'}
             </span>
-            <Badge variant="secondary" className="bg-gray-100 text-[10px]">
-              共 {bookUnits.length} 单元
-            </Badge>
+            <div className="flex items-center gap-1.5">
+              <Badge variant="secondary" className="bg-gray-100 text-[10px]">
+                {bookUnits.length} 项
+              </Badge>
+              {selectedBookCode && (
+                <button
+                  onClick={() => handleAddNewUnit(selectedBookCode)}
+                  className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                  title="添加新课时/单元"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
@@ -616,54 +664,106 @@ export default function Textbooks() {
                 <Loader className="w-3.5 h-3.5 animate-spin" /> 加载中...
               </div>
             ) : bookUnits.length === 0 ? (
-              <div className="py-10 text-center px-4 space-y-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 m-2">
+              <div className="py-8 text-center px-4 space-y-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 m-2">
                 <BookOpen className="w-8 h-8 text-gray-300 mx-auto opacity-40" />
-                <div className="text-xs text-gray-500 font-medium">该教材暂未生成单元目录</div>
+                <div className="text-xs text-gray-500 font-medium">该教材暂未生成目录</div>
                 {selectedBookCode && (
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    className="w-full text-xs shadow-sm py-1.5"
-                    onClick={() => handleInitUnits(selectedBookCode)}
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> 一键生成各单元大纲
-                  </Button>
+                  <div className="space-y-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="w-full text-xs shadow-sm py-1.5"
+                      onClick={() => handleInitUnits(selectedBookCode, 'lesson')}
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" /> 按 Lesson 生成 (如拼读)
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full text-xs shadow-sm py-1.5"
+                      onClick={() => handleInitUnits(selectedBookCode, 'unit')}
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" /> 按 Unit 生成 (综合课本)
+                    </Button>
+                  </div>
                 )}
               </div>
             ) : (
               bookUnits.map(u => {
                 const isSelected = u.unit_number === selectedUnitNum;
                 const hasContent = u.has_content || u.content_count > 0;
+                const title = u.unit_title || `Unit ${u.unit_number}`;
+                const isLesson = title.toLowerCase().includes('lesson') || selectedBook?.name?.toLowerCase().includes('phonics');
+                const isChapter = title.toLowerCase().includes('chapter');
+                const isStory = title.toLowerCase().includes('story');
+                const badgeText = isLesson ? `L${u.unit_number}` : isChapter ? `Ch${u.unit_number}` : isStory ? `St${u.unit_number}` : `U${u.unit_number}`;
+
                 return (
                   <div
                     key={u.unit_number}
                     onClick={() => selectUnit(selectedBookCode, u.unit_number)}
-                    className={`p-3 rounded-xl cursor-pointer transition-all flex items-center justify-between border ${
+                    className={`p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-between border ${
                       isSelected
-                        ? 'bg-primary-600 text-white border-primary-600 shadow-md transform scale-[1.02]'
+                        ? 'bg-primary-600 text-white border-primary-600 shadow-md transform scale-[1.01]'
                         : 'bg-white border-gray-100 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                    <div className="flex items-center gap-2 min-w-0 flex-1 mr-1.5">
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${
                         isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
                       }`}>
-                        U{u.unit_number}
+                        {badgeText}
                       </span>
-                      <span className={`text-xs font-medium truncate ${isSelected ? 'text-white' : 'text-gray-900'}`} title={u.unit_title || `Unit ${u.unit_number}`}>
-                        {u.unit_title || `Unit ${u.unit_number}`}
-                      </span>
+
+                      {editingUnitNum === u.unit_number ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleSaveUnitTitle(selectedBookCode, u.unit_number, editingUnitTitle);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex-1 flex items-center gap-1"
+                        >
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingUnitTitle}
+                            onChange={(e) => setEditingUnitTitle(e.target.value)}
+                            onBlur={() => handleSaveUnitTitle(selectedBookCode, u.unit_number, editingUnitTitle)}
+                            className="w-full text-xs px-1.5 py-0.5 border border-primary-400 rounded bg-white text-gray-900 focus:outline-none"
+                          />
+                        </form>
+                      ) : (
+                        <div className="flex items-center gap-1 min-w-0 flex-1 group/title">
+                          <span className={`text-xs font-medium truncate ${isSelected ? 'text-white' : 'text-gray-900'}`} title={title}>
+                            {title}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingUnitNum(u.unit_number);
+                              setEditingUnitTitle(title);
+                            }}
+                            className={`opacity-0 group-hover/title:opacity-100 p-0.5 rounded transition-opacity shrink-0 ${
+                              isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 text-gray-400 hover:text-gray-700'
+                            }`}
+                            title="重命名名称"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="shrink-0 flex items-center pl-2">
+                    <div className="shrink-0 flex items-center">
                       {hasContent ? (
-                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-1 ${
                           isSelected ? 'bg-white/20 text-white border border-white/20' : 'bg-success-50 text-success-700 border border-success-200'
                         }`}>
                           <CheckCircle className="w-3 h-3" /> 已录入
                         </span>
                       ) : (
-                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
                           isSelected ? 'bg-white/10 text-white/80 border-white/20' : 'bg-gray-50 text-gray-400 border-gray-200'
                         }`}>
                           待录入
@@ -1678,7 +1778,7 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
 function BooksManageModal({ books, onClose }) {
   const [list, setList] = useState(books || []);
   const [editingCode, setEditingCode] = useState(null);
-  const [form, setForm] = useState({ code: '', name: '', series: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+  const [form, setForm] = useState({ code: '', name: '', series: '', structure_type: 'unit', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
 
   // 提取现有系列列表
   const existingSeries = Array.from(new Set(list.map(b => b.series).filter(Boolean)));
@@ -1689,14 +1789,14 @@ function BooksManageModal({ books, onClose }) {
 
     try {
       if (editingCode) {
-        await request(`/textbooks/books-manage/${editingCode}`, { method: 'PATCH', body: JSON.stringify(form) });
+        await request(`/textbooks/books-manage/${editingCode}`, { method: 'PATCH', body: form });
       } else {
-        await request('/textbooks/books-manage', { method: 'POST', body: JSON.stringify(form) });
+        await request('/textbooks/books-manage', { method: 'POST', body: form });
       }
       const resp = await request('/textbooks');
       setList(resp.data || []);
       setEditingCode(null);
-      setForm({ code: '', name: '', series: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+      setForm({ code: '', name: '', series: '', structure_type: 'unit', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
     } catch (err) {
       alert('保存失败: ' + err.message);
     }
@@ -1747,6 +1847,7 @@ function BooksManageModal({ books, onClose }) {
                   {existingSeries.map(s => <option key={s} value={s} />)}
                   <option value="Everybody Up" />
                   <option value="Oxford Phonics World" />
+                  <option value="自然拼读 (Phonics)" />
                   <option value="Wonders" />
                   <option value="Reach Higher" />
                   <option value="剑桥少儿英语" />
@@ -1760,23 +1861,39 @@ function BooksManageModal({ books, onClose }) {
                   disabled={!!editingCode}
                   value={form.code}
                   onChange={e => setForm({ ...form, code: e.target.value })}
-                  placeholder="如 EU-L4 / OPW-1"
+                  placeholder="如 EU-L4 / WE-P / OPW-1"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-bold text-gray-900 disabled:opacity-60"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">教材全称</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={e => setForm({ ...form, name: e.target.value })}
-                  placeholder="如 Everybody Up 4"
+                  placeholder="如 Phonics 1 / Everybody Up 4"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">目录结构类型 (Structure Type)</label>
+                <select
+                  value={form.structure_type || 'unit'}
+                  onChange={e => setForm({ ...form, structure_type: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-medium text-gray-800"
+                >
+                  <option value="unit">按 Unit 单元 (如 Unit 1 ~ 8，适合综合课本)</option>
+                  <option value="lesson">按 Lesson 课时 (如 Lesson 1 ~ 16，适合拼读/专项)</option>
+                  <option value="chapter">按 Chapter 章节 (如 Chapter 1 ~ 10，适合阅读)</option>
+                  <option value="story">按 Story 故事/绘本 (适合绘本分级)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">CEFR 等级</label>
                 <select
@@ -1792,7 +1909,7 @@ function BooksManageModal({ books, onClose }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">总单元数</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">总单元/课时数</label>
                 <input
                   type="number"
                   value={form.total_units}
