@@ -411,6 +411,30 @@ function ParentStudentView() {
                           </div>
                         )}
 
+                        {/* 录播回放 */}
+                        {cls.fb_recording && (() => {
+                          const urlMatch = cls.fb_recording.match(/https?:\/\/[^\s"'<>]+/i);
+                          const url = urlMatch ? urlMatch[0] : null;
+                          return (
+                            <div className="mt-2 bg-blue-50/70 border border-blue-200 p-3 rounded-lg">
+                              <span className="text-blue-900 text-xs font-bold flex items-center gap-1 mb-1.5">📹 课堂录播回放:</span>
+                              {url && (
+                                <div className="mb-1.5">
+                                  <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
+                                  >
+                                    ▶️ 点击观看录播回放
+                                  </a>
+                                </div>
+                              )}
+                              <div className="text-xs text-gray-600 whitespace-pre-wrap">{cls.fb_recording}</div>
+                            </div>
+                          );
+                        })()}
+
                         {/* 上课内容 */}
                         {cls.content && cls.content !== teacherMsg && (
                           <div className="flex gap-2">

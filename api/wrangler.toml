@@ -2,7 +2,7 @@ name = "sunnybridge-crm-api"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
-account_id = "3ec55f7fdb8c8b5f03f10da9ae5c9591"
+account_id = "50bcb6bbd4e10f2f1bea0adac4d3c617"
 
 # workers.dev 子域名
 workers_dev = true
@@ -23,7 +23,7 @@ LLM_MODEL = "meta/llama-3.2-11b-vision-instruct"
 [[d1_databases]]
 binding = "DB"
 database_name = "sunnybridge-crm"
-database_id = "07e4b171-ca90-45ce-86b6-7bb59e8e7411"
+database_id = "e4457991-ecf6-47cf-a4f4-9ccf13a8b21d"
 
 # R2 存储配置 (教材 PDF & 页面切图)
 [[r2_buckets]]

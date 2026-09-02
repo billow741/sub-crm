@@ -252,6 +252,17 @@
       <div><label class="block text-xs text-gray-500 mb-1">🎯 Next Lesson Preview</label><textarea id="fb-next" rows="2" placeholder="What will be covered next..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea></div>
     </div>
   </div>
+  <!-- 📹 Lesson Recording -->
+  <div class="border rounded-lg p-3 bg-blue-50/50 border-blue-100">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="font-semibold text-gray-800 text-sm flex items-center gap-1.5">
+        <span>📹</span> Lesson Recording (课堂录播)
+      </h3>
+      <span class="text-xs text-gray-400">Optional</span>
+    </div>
+    <textarea id="fb-recording" rows="3" placeholder="Paste recording link or notification text, e.g.&#10;Recording: Started by 雲飛揚&#10;Date: 2026-09-02 10:03:03&#10;Recording file: https://voovmeeting.com/crm/8PLKaL48eb" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
+    <p class="text-[11px] text-gray-500 mt-1">💡 支持直接粘贴腾讯会议/VOOV录制通知全文或播放链接，家长端可一键点击回放</p>
+  </div>
   <div id="status-field">
   <label class="block text-sm font-medium text-gray-700 mb-1">Class Status</label>
   <select id="input-status" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
@@ -275,6 +286,25 @@ function escapeHtml(text) {
   var div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// ===== Parse Recording Info / URL =====
+function parseRecordingInfo(text) {
+  if (!text || typeof text !== 'string') return null;
+  var trimmed = text.trim();
+  if (!trimmed) return null;
+  var urlMatch = trimmed.match(/https?:\/\/[^\s"'<>]+/i);
+  var url = urlMatch ? urlMatch[0] : null;
+  var startedByMatch = trimmed.match(/(?:Recording:\s*Started\s*by|Started\s*by[:：]?|发起人[:：]?|录制人[:：]?|主持人[:：]?)\s*([^\r\n]+)/i);
+  var startedBy = startedByMatch ? startedByMatch[1].trim() : null;
+  var dateMatch = trimmed.match(/(?:Date|时间|日期)[:：]\s*([^\r\n]+)/i);
+  var recDate = dateMatch ? dateMatch[1].trim() : null;
+  return {
+    raw: trimmed,
+    url: url,
+    startedBy: startedBy,
+    date: recDate
+  };
 }
 
 // ===== Global Variables =====
@@ -534,6 +564,27 @@ function showViewFeedback(idx) {
     if (cls.fb_homework) html += '<div class="mb-2 text-sm"><b>📝 Homework:</b><div class="text-gray-600 mt-1">' + esc(cls.fb_homework) + '</div></div>';
     if (cls.fb_next_preview) html += '<div class="mb-2 text-sm"><b>🎯 Next Lesson:</b><div class="text-gray-600 mt-1">' + esc(cls.fb_next_preview) + '</div></div>';
     html += '</div>';
+  }
+
+  // 📹 Lesson Recording
+  if (cls.fb_recording) {
+    var rec = parseRecordingInfo(cls.fb_recording);
+    if (rec) {
+      html += '<div class="border border-blue-200 rounded-lg p-3 bg-blue-50/60">';
+      html += '<div class="font-medium text-blue-900 text-sm mb-2 flex items-center gap-1.5"><span>📹</span> Lesson Recording (课堂录播)</div>';
+      if (rec.url) {
+        html += '<div class="mb-2"><a href="' + escapeAttr(rec.url) + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all">▶️ Play Recording (观看录播)</a></div>';
+      }
+      if (rec.startedBy || rec.date) {
+        html += '<div class="text-xs text-gray-600 space-y-0.5">';
+        if (rec.startedBy) html += '<div><b>Started by:</b> ' + esc(rec.startedBy) + '</div>';
+        if (rec.date) html += '<div><b>Date:</b> ' + esc(rec.date) + '</div>';
+        html += '</div>';
+      } else if (rec.raw && !rec.url) {
+        html += '<div class="text-xs text-gray-600 whitespace-pre-wrap">' + esc(rec.raw) + '</div>';
+      }
+      html += '</div>';
+    }
   }
 
   // Old format fallback (content / homework / notes 字段)
@@ -1009,6 +1060,7 @@ function openFeedback(cls) {
   document.getElementById('fb-homework').value = cls.fb_homework || '';
   document.getElementById('fb-next').value = cls.fb_next_preview || '';
   document.getElementById('fb-message').value = cls.fb_teacher_message || '';
+  document.getElementById('fb-recording').value = cls.fb_recording || '';
 
   // 教材页码 (textbook + unit + page range)
   document.getElementById('fb-textbook-code').value = cls.textbook_code || '';
@@ -1355,6 +1407,7 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
     fb_teacher_message: document.getElementById('fb-message').value,
     fb_homework: document.getElementById('fb-homework').value,
     fb_next_preview: document.getElementById('fb-next').value,
+    fb_recording: document.getElementById('fb-recording').value.trim() || null,
     // 教材页码引用 (配合 R2 page-img/<code>/<unit>/<page>, 家长端嵌入 PDF 页面图)
     textbook_code: document.getElementById('fb-textbook-code').value || null,
     unit_number: document.getElementById('fb-unit-num').value ? parseInt(document.getElementById('fb-unit-num').value) : null,

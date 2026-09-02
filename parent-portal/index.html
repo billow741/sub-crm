@@ -1409,6 +1409,25 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// ===== Parse Recording Info / URL =====
+function parseRecordingInfo(text) {
+  if (!text || typeof text !== 'string') return null;
+  var trimmed = text.trim();
+  if (!trimmed) return null;
+  var urlMatch = trimmed.match(/https?:\/\/[^\s"'<>]+/i);
+  var url = urlMatch ? urlMatch[0] : null;
+  var startedByMatch = trimmed.match(/(?:Recording:\s*Started\s*by|Started\s*by[:：]?|发起人[:：]?|录制人[:：]?|主持人[:：]?)\s*([^\r\n]+)/i);
+  var startedBy = startedByMatch ? startedByMatch[1].trim() : null;
+  var dateMatch = trimmed.match(/(?:Date|时间|日期)[:：]\s*([^\r\n]+)/i);
+  var recDate = dateMatch ? dateMatch[1].trim() : null;
+  return {
+    raw: trimmed,
+    url: url,
+    startedBy: startedBy,
+    date: recDate
+  };
+}
+
 // ===== 全局变量 =====
 var API_BASE = 'https://api.sunnybridge.qzz.io/api/v1';
 var API_KEY = '***'; // 同登录页
@@ -1987,6 +2006,26 @@ function showViewFeedback(idx) {
     html += '</div></div>';
   }
 
+  // 📹 课堂录播回放
+  if (cls.fb_recording) {
+    var rec = parseRecordingInfo(cls.fb_recording);
+    if (rec) {
+      html += '<div class="modal-feedback__group"><label>📹 课堂录播回放</label><div class="modal-feedback__box" style="background:linear-gradient(135deg,rgba(75,159,224,0.06),rgba(46,122,196,0.1));border:1px solid rgba(75,159,224,0.25);border-radius:12px;padding:14px 16px;">';
+      if (rec.url) {
+        html += '<div style="margin-bottom:10px;"><a href="' + esc(rec.url) + '" target="_blank" rel="noopener noreferrer" class="meeting-join-btn" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;font-size:14px;font-weight:700;border-radius:10px;box-shadow:0 3px 12px rgba(75,159,224,0.3);">▶️ 点击观看录播回放</a></div>';
+      }
+      if (rec.startedBy || rec.date) {
+        html += '<div style="font-size:12px;color:#64748B;line-height:1.6;">';
+        if (rec.startedBy) html += '<div><b>录制发起人：</b>' + esc(rec.startedBy) + '</div>';
+        if (rec.date) html += '<div><b>录制时间：</b>' + esc(rec.date) + '</div>';
+        html += '</div>';
+      } else if (rec.raw && !rec.url) {
+        html += '<div style="font-size:12px;color:#64748B;white-space:pre-wrap;">' + esc(rec.raw) + '</div>';
+      }
+      html += '</div></div>';
+    }
+  }
+
   // 兼容旧格式 / 补充内容: content / notes
   if (cls.content && cls.content !== teacherMsg) {
     html += '<div class="modal-feedback__group"><label>📖 上课内容</label><div class="modal-feedback__box">' + esc(cls.content) + '</div></div>';
@@ -2408,7 +2447,7 @@ function renderStudyProfile(student, allClasses) {
       var hasFb = c.fb_vocab || c.fb_patterns || c.fb_grammar ||
                   c.fb_pronunciation_errors || c.fb_grammar_errors ||
                   c.fb_homework || c.fb_teacher_message || c.fb_next_preview ||
-                  c.content || c.homework;
+                  c.fb_recording || c.content || c.homework;
       var isTrialWithReport = c.is_trial === 1 && window_allAssessments && window_allAssessments.some(function(a) { return parseInt(a.class_id) === parseInt(c.id); });
       var globalIdx = window_allPastClasses ? window_allPastClasses.indexOf(c) : -1;
 
@@ -2507,6 +2546,12 @@ function renderStudyProfile(student, allClasses) {
         }
         if (c.fb_homework) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📝 作业</div><div class="sp-feedback-text">' + spEsc(c.fb_homework) + '</div></div>';
         if (c.fb_teacher_message) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师反馈</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:8px 10px;border-radius:8px;">' + spEsc(c.fb_teacher_message) + '</div></div>';
+        if (c.fb_recording) {
+          var rec = parseRecordingInfo(c.fb_recording);
+          if (rec && rec.url) {
+            histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📹 录播回放</div><div class="sp-feedback-text"><a href="' + spEsc(rec.url) + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#4B9FE0,#2E7AC4);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 2px 6px rgba(75,159,224,0.25);">▶️ 观看录播回放</a></div></div>';
+          }
+        }
         
         // Old format fallback
         if (!c.fb_vocab && !c.fb_homework) {

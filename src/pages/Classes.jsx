@@ -745,6 +745,31 @@ function Classes() {
                   {showFeedbackModal.fb_next_preview && <div className="mb-2 text-sm"><span className="font-medium text-gray-700">🎯 下节课预告</span><div className="text-gray-600 whitespace-pre-wrap mt-1">{showFeedbackModal.fb_next_preview}</div></div>}
                 </div>
               )}
+              {/* 📹 课堂录播回放 */}
+              {showFeedbackModal.fb_recording && (() => {
+                const urlMatch = showFeedbackModal.fb_recording.match(/https?:\/\/[^\s"'<>]+/i);
+                const url = urlMatch ? urlMatch[0] : null;
+                return (
+                  <div className="border border-blue-200 rounded-lg p-3 bg-blue-50/60">
+                    <div className="font-medium text-blue-900 text-sm mb-2 flex items-center justify-between">
+                      <span className="flex items-center gap-1">📹 课堂录播回放</span>
+                      {url && (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
+                        >
+                          ▶️ 点击观看回放
+                        </a>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-700 whitespace-pre-wrap bg-white p-2.5 rounded-lg border border-blue-100 leading-relaxed">
+                      {showFeedbackModal.fb_recording}
+                    </div>
+                  </div>
+                );
+              })()}
               {/* 旧格式兼容：content/homework/notes */}
               {(showFeedbackModal.content || showFeedbackModal.homework || showFeedbackModal.notes) && !showFeedbackModal.fb_teacher_message && !showFeedbackModal.fb_vocab && (
                 <div className="border rounded-lg p-3">

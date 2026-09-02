@@ -225,6 +225,11 @@ return c.json(success({
   fb_teacher_message: cls.fb_teacher_message,
   fb_homework: cls.fb_homework,
   fb_next_preview: cls.fb_next_preview,
+  fb_recording: cls.fb_recording,
+  textbook_code: cls.textbook_code,
+  unit_number: cls.unit_number,
+  page_from: cls.page_from,
+  page_to: cls.page_to,
   duration: cls.duration,
 }));
 });
@@ -449,6 +454,11 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
     fb_teacher_message: newClass.fb_teacher_message,
     fb_homework: newClass.fb_homework,
     fb_next_preview: newClass.fb_next_preview,
+    fb_recording: newClass.fb_recording,
+    textbook_code: newClass.textbook_code,
+    unit_number: newClass.unit_number,
+    page_from: newClass.page_from,
+    page_to: newClass.page_to,
     duration: newClass.duration,
   }), 201);
 });

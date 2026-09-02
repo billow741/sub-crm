@@ -125,6 +125,7 @@ export default function TeacherPortal() {
       fb_teacher_message: cls.fb_teacher_message || '',
       fb_homework: cls.fb_homework || '',
       fb_next_preview: cls.fb_next_preview || '',
+      fb_recording: cls.fb_recording || '',
       textbook_code: cls.textbook_code || '',
       unit_number: cls.unit_number || '',
       page_from: cls.page_from || '',
@@ -629,6 +630,24 @@ export default function TeacherPortal() {
                         className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
+                  </div>
+
+                  {/* Block 7: 课堂录播 */}
+                  <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-bold text-blue-900 text-sm flex items-center gap-1.5">
+                        <span className="w-1.5 h-4 bg-blue-600 rounded-full"></span> 📹 课堂录播 (Lesson Recording)
+                      </div>
+                      <span className="text-xs text-blue-600">可选 (Optional)</span>
+                    </div>
+                    <textarea
+                      value={feedbackForm.fb_recording || ''}
+                      onChange={(e) => setFeedbackForm({ ...feedbackForm, fb_recording: e.target.value })}
+                      rows={3}
+                      placeholder={"粘贴腾讯会议/VOOV录播信息或链接，例如：\nRecording: Started by 雲飛揚\nDate: 2026-09-02 10:03:03\nRecording file: https://voovmeeting.com/crm/8PLKaL48eb"}
+                      className="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-[11px] text-gray-500 mt-1">💡 支持直接粘贴腾讯会议/VOOV录制通知全文或链接，家长端可一键点击回放</p>
                   </div>
 
                   {/* 课程状态 */}

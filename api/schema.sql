@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS classes (
   fb_teacher_message TEXT,
   fb_homework TEXT,
   fb_next_preview TEXT,
+  fb_recording TEXT,
   textbook_code TEXT,
   unit_number INTEGER,
   page_from INTEGER,
