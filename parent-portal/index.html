@@ -2007,10 +2007,29 @@ function showViewFeedback(idx) {
   }
 
   // 📹 课堂录播回放
-  if (cls.fb_recording) {
+  if (cls.fb_recording_r2_key || cls.fb_recording_status === 'ready') {
+    html += '<div class="modal-feedback__group">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
+    html += '<label style="margin:0;font-size:13px;font-weight:700;color:#1E293B;">📹 课堂录播回放 (私有高清)</label>';
+    html += '<span style="font-size:11px;padding:2px 8px;background:#DCFCE7;color:#15803D;border-radius:12px;font-weight:600;">✅ 已归档</span>';
+    html += '</div>';
+    html += '<div class="modal-feedback__box" style="background:#0F172A;border:1px solid #334155;border-radius:12px;padding:8px;">';
+    html += '<video controls playsinline style="width:100%;max-height:260px;border-radius:8px;outline:none;background:#000;" preload="metadata">';
+    html += '<source src="' + API_BASE + '/classes/video/' + cls.id + '" type="video/mp4">';
+    html += '您的浏览器暂不支持直接播放该视频';
+    html += '</video>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px 2px;font-size:11px;color:#94A3B8;">';
+    html += '<span>💡 支持倍速、全屏播放与进度拖拽复习</span>';
+    html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" download="lesson_' + cls.id + '.mp4" style="color:#38BDF8;text-decoration:none;">⬇️ 下载保存</a>';
+    html += '</div>';
+    html += '</div></div>';
+  } else if (cls.fb_recording) {
     var rec = parseRecordingInfo(cls.fb_recording);
     if (rec) {
       html += '<div class="modal-feedback__group"><label>📹 课堂录播回放</label><div class="modal-feedback__box" style="background:linear-gradient(135deg,rgba(75,159,224,0.06),rgba(46,122,196,0.1));border:1px solid rgba(75,159,224,0.25);border-radius:12px;padding:14px 16px;">';
+      if (cls.fb_recording_status === 'pending') {
+        html += '<div style="margin-bottom:8px;font-size:11px;color:#D97706;background:#FEF3C7;padding:4px 8px;border-radius:6px;display:inline-block;font-weight:600;">⏳ 正在自动转存至私有云，您可先点击下方直接观看</div>';
+      }
       if (rec.url) {
         html += '<div style="margin-bottom:10px;"><a href="' + esc(rec.url) + '" target="_blank" rel="noopener noreferrer" class="meeting-join-btn" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;font-size:14px;font-weight:700;border-radius:10px;box-shadow:0 3px 12px rgba(75,159,224,0.3);">▶️ 点击观看录播回放</a></div>';
       }
@@ -2546,7 +2565,9 @@ function renderStudyProfile(student, allClasses) {
         }
         if (c.fb_homework) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📝 作业</div><div class="sp-feedback-text">' + spEsc(c.fb_homework) + '</div></div>';
         if (c.fb_teacher_message) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师反馈</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:8px 10px;border-radius:8px;">' + spEsc(c.fb_teacher_message) + '</div></div>';
-        if (c.fb_recording) {
+        if (c.fb_recording_r2_key || c.fb_recording_status === 'ready') {
+          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;"><span>📹 录播回放 (私有高清)</span><span style="font-size:10px;color:#15803D;font-weight:600;">✅ 已归档</span></div><div class="sp-feedback-text" style="padding:6px;background:#0F172A;border-radius:8px;"><video controls playsinline style="width:100%;max-height:200px;border-radius:6px;outline:none;background:#000;" preload="metadata"><source src="' + API_BASE + '/classes/video/' + c.id + '" type="video/mp4"></video></div></div>';
+        } else if (c.fb_recording) {
           var rec = parseRecordingInfo(c.fb_recording);
           if (rec && rec.url) {
             histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📹 录播回放</div><div class="sp-feedback-text"><a href="' + spEsc(rec.url) + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#4B9FE0,#2E7AC4);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 2px 6px rgba(75,159,224,0.25);">▶️ 观看录播回放</a></div></div>';

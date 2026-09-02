@@ -258,10 +258,17 @@
       <h3 class="font-semibold text-gray-800 text-sm flex items-center gap-1.5">
         <span>📹</span> Lesson Recording (课堂录播)
       </h3>
-      <span class="text-xs text-gray-400">Optional</span>
+      <div id="fb-recording-status-tag" class="text-xs"></div>
     </div>
     <textarea id="fb-recording" rows="3" placeholder="Paste recording link or notification text, e.g.&#10;Recording: Started by 雲飛揚&#10;Date: 2026-09-02 10:03:03&#10;Recording file: https://voovmeeting.com/crm/8PLKaL48eb" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
-    <p class="text-[11px] text-gray-500 mt-1">💡 支持直接粘贴腾讯会议/VOOV录制通知全文或播放链接，家长端可一键点击回放</p>
+    <div class="flex items-center justify-between mt-2 pt-1 border-t border-blue-100/60">
+      <p class="text-[11px] text-gray-500">💡 粘贴腾讯会议/VOOV链接自动归档，或直接上传本地录屏</p>
+      <label class="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-medium rounded shadow-sm">
+        <span>📤 上传 MP4</span>
+        <input type="file" id="fb-recording-file" accept="video/mp4,video/webm" class="hidden" onchange="handleRecordingUpload(this)">
+      </label>
+    </div>
+    <div id="fb-upload-progress" class="hidden text-xs text-blue-600 font-medium mt-1">⏳ 正在上传视频到私有云...</div>
   </div>
   <div id="status-field">
   <label class="block text-sm font-medium text-gray-700 mb-1">Class Status</label>
@@ -567,11 +574,31 @@ function showViewFeedback(idx) {
   }
 
   // 📹 Lesson Recording
-  if (cls.fb_recording) {
+  if (cls.fb_recording_r2_key || cls.fb_recording_status === 'ready') {
+    html += '<div class="border border-blue-200 rounded-lg p-3 bg-blue-50/60 space-y-2">';
+    html += '<div class="font-medium text-blue-900 text-sm flex items-center justify-between">';
+    html += '<span class="flex items-center gap-1.5"><span>📹</span> Lesson Recording (私有高清录播)</span>';
+    html += '<span class="text-[11px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">✅ 已归档至机构私有云</span>';
+    html += '</div>';
+    html += '<video controls playsinline class="w-full rounded-lg bg-black max-h-60" style="max-height:240px;" preload="metadata">';
+    html += '<source src="' + API_BASE + '/classes/video/' + cls.id + '" type="video/mp4">';
+    html += 'Your browser does not support HTML5 video.';
+    html += '</video>';
+    html += '<div class="flex items-center justify-between text-xs text-gray-500 pt-1">';
+    html += '<span>💡 支持倍速播放与进度拖拽</span>';
+    html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" download="lesson_' + cls.id + '.mp4" class="text-blue-600 hover:underline">⬇️ 下载视频</a>';
+    html += '</div>';
+    html += '</div>';
+  } else if (cls.fb_recording) {
     var rec = parseRecordingInfo(cls.fb_recording);
     if (rec) {
       html += '<div class="border border-blue-200 rounded-lg p-3 bg-blue-50/60">';
-      html += '<div class="font-medium text-blue-900 text-sm mb-2 flex items-center gap-1.5"><span>📹</span> Lesson Recording (课堂录播)</div>';
+      html += '<div class="font-medium text-blue-900 text-sm mb-2 flex items-center justify-between">';
+      html += '<span class="flex items-center gap-1.5"><span>📹</span> Lesson Recording (课堂录播)</span>';
+      if (cls.fb_recording_status === 'pending') {
+        html += '<span class="text-[11px] px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full font-medium">⏳ 自动转存中</span>';
+      }
+      html += '</div>';
       if (rec.url) {
         html += '<div class="mb-2"><a href="' + escapeAttr(rec.url) + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all">▶️ Play Recording (观看录播)</a></div>';
       }
@@ -1074,6 +1101,11 @@ function openFeedback(cls) {
   // Render grammar error rows
   renderErrorRows('gram', cls.fb_grammar_errors);
 
+  // 录播状态标签
+  updateRecordingStatusTag(cls);
+  var uploadProg = document.getElementById('fb-upload-progress');
+  if (uploadProg) uploadProg.classList.add('hidden');
+
   var statusValue = cls.status === 'scheduled' ? 'completed' : (cls.status || 'completed');
   document.getElementById('input-status').value = statusValue;
   document.getElementById('feedback-modal').classList.remove('hidden');
@@ -1081,6 +1113,55 @@ function openFeedback(cls) {
 
   // 自动触发教材词汇/句型推荐
   refreshTextbookSuggestions();
+}
+
+function updateRecordingStatusTag(cls) {
+  var el = document.getElementById('fb-recording-status-tag');
+  if (!el) return;
+  if (cls.fb_recording_r2_key || cls.fb_recording_status === 'ready') {
+    el.innerHTML = '<span class="px-2 py-0.5 bg-green-100 text-green-700 font-medium rounded-full">✅ 已归档至私有云</span>';
+  } else if (cls.fb_recording_status === 'pending') {
+    el.innerHTML = '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 font-medium rounded-full">⏳ 自动转存中</span>';
+  } else if (cls.fb_recording) {
+    el.innerHTML = '<span class="px-2 py-0.5 bg-blue-100 text-blue-800 font-medium rounded-full">📹 外部链接</span>';
+  } else {
+    el.innerHTML = '<span class="text-gray-400">Optional</span>';
+  }
+}
+
+async function handleRecordingUpload(input) {
+  var file = input.files && input.files[0];
+  if (!file || !selectedClass) return;
+  var progressEl = document.getElementById('fb-upload-progress');
+  if (progressEl) {
+    progressEl.classList.remove('hidden');
+    progressEl.className = 'text-xs text-blue-600 font-medium mt-1';
+    progressEl.textContent = '⏳ 正在上传视频到私有云 (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)...';
+  }
+  var formData = new FormData();
+  formData.append('video', file);
+  try {
+    var res = await fetch(API_BASE + '/classes/upload-recording/' + selectedClass.id, {
+      method: 'POST',
+      headers: { 'X-API-Key': API_KEY },
+      body: formData
+    });
+    var json = await res.json();
+    if (res.ok && json.data) {
+      if (progressEl) {
+        progressEl.textContent = '✅ 上传成功！已生成私有高清回放';
+        progressEl.className = 'text-xs text-green-600 font-medium mt-1';
+      }
+      selectedClass.fb_recording_status = 'ready';
+      selectedClass.fb_recording_r2_key = json.data.key;
+      updateRecordingStatusTag(selectedClass);
+    } else {
+      throw new Error(json.error?.message || '上传失败');
+    }
+  } catch (err) {
+    alert('视频上传失败: ' + err.message);
+    if (progressEl) progressEl.classList.add('hidden');
+  }
 }
 
 // ===== 智能教材词汇/句型推荐与一键勾选交互 =====

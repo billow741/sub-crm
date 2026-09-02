@@ -84,6 +84,10 @@ export const classSchema = z.object({
   fb_homework: z.string().optional().nullable().transform(v => v || null),               // 课后作业(选填)
   fb_next_preview: z.string().optional().nullable().transform(v => v || null),           // 下节课预告(选填)
   fb_recording: z.string().optional().nullable().transform(v => v || null),              // 课堂录播地址/信息(选填)
+  fb_recording_r2_key: z.string().optional().nullable().transform(v => v || null),       // 私有 R2 存储路径
+  fb_recording_status: z.string().optional().nullable().transform(v => v || 'none'),     // none | pending | processing | ready | failed
+  fb_recording_duration: z.coerce.number().int().optional().nullable(),                   // 视频时长(秒)
+  fb_recording_size: z.coerce.number().int().optional().nullable(),                       // 视频大小(字节)
   // 教材页码引用 (用于家长端嵌入 PDF 页图, 配合 R2 page-img/<code>/<unit>/<page>)
   textbook_code: z.string().optional().nullable().transform(v => v || null),              // 如 EU-S
   unit_number: z.coerce.number().int().optional().nullable(),                             // 如 1

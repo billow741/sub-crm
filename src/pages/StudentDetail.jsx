@@ -1200,13 +1200,44 @@ export default function StudentDetail() {
               )}
 
               {/* 📹 课堂录播回放 */}
-              {showFeedbackModal.fb_recording && (() => {
+              {showFeedbackModal.fb_recording_r2_key || showFeedbackModal.fb_recording_status === 'ready' ? (
+                <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/60 space-y-2">
+                  <div className="font-bold text-blue-900 text-sm flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">📹 课堂录播回放 (私有高清)</span>
+                    <span className="text-[11px] px-2 py-0.5 bg-green-100 text-green-700 font-semibold rounded-full">✅ 已归档</span>
+                  </div>
+                  <video
+                    controls
+                    playsInline
+                    className="w-full rounded-lg bg-black max-h-64"
+                    preload="metadata"
+                  >
+                    <source src={`${API_BASE_URL}/classes/video/${showFeedbackModal.id}`} type="video/mp4" />
+                    您的浏览器不支持视频播放
+                  </video>
+                  <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
+                    <span>💡 支持倍速播放与拖拽快进</span>
+                    <a
+                      href={`${API_BASE_URL}/classes/video/${showFeedbackModal.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={`lesson_${showFeedbackModal.id}.mp4`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      ⬇️ 下载保存
+                    </a>
+                  </div>
+                </div>
+              ) : showFeedbackModal.fb_recording ? (() => {
                 const urlMatch = showFeedbackModal.fb_recording.match(/https?:\/\/[^\s"'<>]+/i);
                 const url = urlMatch ? urlMatch[0] : null;
                 return (
                   <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/60 space-y-2">
                     <div className="font-bold text-blue-900 text-sm flex items-center justify-between">
                       <span className="flex items-center gap-1.5">📹 课堂录播回放</span>
+                      {showFeedbackModal.fb_recording_status === 'pending' && (
+                        <span className="text-[11px] px-2 py-0.5 bg-yellow-100 text-yellow-800 font-medium rounded-full">⏳ 自动转存中</span>
+                      )}
                       {url && (
                         <a
                           href={url}
@@ -1223,7 +1254,7 @@ export default function StudentDetail() {
                     </div>
                   </div>
                 );
-              })()}
+              })() : null}
 
               {/* 旧格式兼容：content/homework/notes */}
               {(showFeedbackModal.content || showFeedbackModal.homework || showFeedbackModal.notes) && !showFeedbackModal.fb_teacher_message && !showFeedbackModal.fb_vocab && (

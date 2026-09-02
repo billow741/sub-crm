@@ -226,6 +226,10 @@ return c.json(success({
   fb_homework: cls.fb_homework,
   fb_next_preview: cls.fb_next_preview,
   fb_recording: cls.fb_recording,
+  fb_recording_r2_key: cls.fb_recording_r2_key,
+  fb_recording_status: cls.fb_recording_status || 'none',
+  fb_recording_duration: cls.fb_recording_duration || 0,
+  fb_recording_size: cls.fb_recording_size || 0,
   textbook_code: cls.textbook_code,
   unit_number: cls.unit_number,
   page_from: cls.page_from,
@@ -455,6 +459,10 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
     fb_homework: newClass.fb_homework,
     fb_next_preview: newClass.fb_next_preview,
     fb_recording: newClass.fb_recording,
+    fb_recording_r2_key: newClass.fb_recording_r2_key,
+    fb_recording_status: newClass.fb_recording_status || 'none',
+    fb_recording_duration: newClass.fb_recording_duration || 0,
+    fb_recording_size: newClass.fb_recording_size || 0,
     textbook_code: newClass.textbook_code,
     unit_number: newClass.unit_number,
     page_from: newClass.page_from,
@@ -724,6 +732,10 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
       fb_homework: updated.fb_homework,
       fb_next_preview: updated.fb_next_preview,
       fb_recording: updated.fb_recording,
+      fb_recording_r2_key: updated.fb_recording_r2_key,
+      fb_recording_status: updated.fb_recording_status || 'none',
+      fb_recording_duration: updated.fb_recording_duration || 0,
+      fb_recording_size: updated.fb_recording_size || 0,
       textbook_code: updated.textbook_code,
       unit_number: updated.unit_number,
       page_from: updated.page_from,
@@ -834,6 +846,157 @@ classes.delete('/:id', validateParams(idParamSchema), async (c) => {
     console.error('DELETE /classes/:id 失败:', err);
     return c.json(error('DATABASE_ERROR', '删除课程失败: ' + err.message), 500);
   }
+});
+
+// ============================================================
+// 📹 录播视频流播放与管理 (私有 R2 视频流媒体支持)
+// ============================================================
+
+// GET /video/:id — 获取指定课程的私有录播视频流 (支持 HTTP 206 Range 拖拽快进)
+classes.get('/video/:id', async (c) => {
+  const DB = c.env.DB;
+  const R2 = c.env.TEXTBOOKS_R2;
+  const id = c.req.param('id');
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 存储未配置' } }, 500);
+
+  const cls = await DB.prepare('SELECT id, fb_recording_r2_key, fb_recording_status FROM classes WHERE id = ?').bind(id).first();
+  if (!cls || !cls.fb_recording_r2_key) {
+    return c.json({ error: { code: 'NOT_FOUND', message: '该课程暂无私有录播视频' } }, 404);
+  }
+
+  const objHead = await R2.head(cls.fb_recording_r2_key);
+  if (!objHead) {
+    return c.json({ error: { code: 'FILE_NOT_FOUND', message: '视频文件在存储桶中不存在' } }, 404);
+  }
+
+  const fileSize = objHead.size;
+  const ct = objHead.httpMetadata?.contentType || 'video/mp4';
+  const rangeHeader = c.req.header('range');
+
+  if (rangeHeader) {
+    const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (match) {
+      const start = parseInt(match[1], 10);
+      const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+      const chunkSize = (end - start) + 1;
+
+      const objRange = await R2.get(cls.fb_recording_r2_key, {
+        range: { offset: start, length: chunkSize }
+      });
+
+      return new Response(objRange.body, {
+        status: 206,
+        headers: {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': String(chunkSize),
+          'Content-Type': ct,
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'public, max-age=86400'
+        }
+      });
+    }
+  }
+
+  const fullObj = await R2.get(cls.fb_recording_r2_key);
+  return new Response(fullObj.body, {
+    status: 200,
+    headers: {
+      'Content-Length': String(fileSize),
+      'Accept-Ranges': 'bytes',
+      'Content-Type': ct,
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'public, max-age=86400'
+    }
+  });
+});
+
+// POST /upload-recording/:id — 直接上传本地录制的 MP4 视频到私有 R2
+classes.post('/upload-recording/:id', async (c) => {
+  const DB = c.env.DB;
+  const R2 = c.env.TEXTBOOKS_R2;
+  const id = c.req.param('id');
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 存储未配置' } }, 500);
+
+  const cls = await DB.prepare('SELECT id, student_id FROM classes WHERE id = ?').bind(id).first();
+  if (!cls) return c.json({ error: { code: 'NOT_FOUND', message: '课程不存在' } }, 404);
+
+  const formData = await c.req.formData();
+  const file = formData.get('video') || formData.get('file');
+  if (!file) return c.json({ error: { code: 'BAD_REQUEST', message: '请选择要上传的视频文件' } }, 400);
+
+  const key = `recordings/cls_${id}_${Date.now()}.mp4`;
+  const arrayBuffer = await file.arrayBuffer();
+  const size = arrayBuffer.byteLength;
+
+  await R2.put(key, arrayBuffer, {
+    httpMetadata: { contentType: file.type || 'video/mp4' }
+  });
+
+  await DB.prepare(`
+    UPDATE classes
+    SET fb_recording_r2_key = ?, fb_recording_status = 'ready', fb_recording_size = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(key, size, new Date().toISOString(), id).run();
+
+  return c.json(success({
+    message: '录播视频上传成功',
+    key,
+    size,
+    status: 'ready'
+  }));
+});
+
+// POST /transfer-recording/:id — 触发自动转存任务 (从外部录播链接抓取或重试)
+classes.post('/transfer-recording/:id', async (c) => {
+  const DB = c.env.DB;
+  const R2 = c.env.TEXTBOOKS_R2;
+  const id = c.req.param('id');
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 存储未配置' } }, 500);
+
+  const cls = await DB.prepare('SELECT id, fb_recording, fb_recording_r2_key, fb_recording_status FROM classes WHERE id = ?').bind(id).first();
+  if (!cls || !cls.fb_recording) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '该课程未录入录播链接' } }, 400);
+  }
+
+  const urlMatch = cls.fb_recording.match(/https?:\/\/[^\s"'<>]+/i);
+  if (!urlMatch) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '未找到有效的录播 URL' } }, 400);
+  }
+  const recUrl = urlMatch[0];
+
+  // 若为直链视频，直接拉取并存入 R2
+  if (/\.(mp4|webm|mov)(\?.*)?$/i.test(recUrl)) {
+    try {
+      const vidRes = await fetch(recUrl);
+      if (vidRes.ok) {
+        const key = `recordings/cls_${id}_${Date.now()}.mp4`;
+        const buf = await vidRes.arrayBuffer();
+        await R2.put(key, buf, { httpMetadata: { contentType: 'video/mp4' } });
+        await DB.prepare(`
+          UPDATE classes
+          SET fb_recording_r2_key = ?, fb_recording_status = 'ready', fb_recording_size = ?, updated_at = ?
+          WHERE id = ?
+        `).bind(key, buf.byteLength, new Date().toISOString(), id).run();
+        return c.json(success({ status: 'ready', key, size: buf.byteLength }));
+      }
+    } catch (err) {
+      console.warn('Direct stream transfer error:', err.message);
+    }
+  }
+
+  // 更新为待转存状态
+  await DB.prepare(`
+    UPDATE classes
+    SET fb_recording_status = 'pending', updated_at = ?
+    WHERE id = ?
+  `).bind(new Date().toISOString(), id).run();
+
+  return c.json(success({
+    message: '已加入后台转存任务队列',
+    status: 'pending',
+    url: recUrl
+  }));
 });
 
 export default classes;

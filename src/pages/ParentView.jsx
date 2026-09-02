@@ -412,12 +412,45 @@ function ParentStudentView() {
                         )}
 
                         {/* 录播回放 */}
-                        {cls.fb_recording && (() => {
+                        {cls.fb_recording_r2_key || cls.fb_recording_status === 'ready' ? (
+                          <div className="mt-2 bg-slate-900 border border-slate-700 p-3 rounded-lg text-white">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sky-400 text-xs font-bold flex items-center gap-1">📹 课堂录播回放 (私有高清)</span>
+                              <span className="text-[10px] px-2 py-0.5 bg-emerald-900/80 text-emerald-300 font-semibold rounded-full">✅ 已归档</span>
+                            </div>
+                            <video
+                              controls
+                              playsInline
+                              className="w-full rounded bg-black max-h-56"
+                              preload="metadata"
+                            >
+                              <source src={`${API_BASE_URL}/classes/video/${cls.id}`} type="video/mp4" />
+                              您的浏览器不支持视频播放
+                            </video>
+                            <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
+                              <span>💡 支持倍速、全屏播放与进度拖拽</span>
+                              <a
+                                href={`${API_BASE_URL}/classes/video/${cls.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download={`lesson_${cls.id}.mp4`}
+                                className="text-sky-400 hover:underline"
+                              >
+                                ⬇️ 下载保存
+                              </a>
+                            </div>
+                          </div>
+                        ) : cls.fb_recording ? (() => {
                           const urlMatch = cls.fb_recording.match(/https?:\/\/[^\s"'<>]+/i);
                           const url = urlMatch ? urlMatch[0] : null;
                           return (
                             <div className="mt-2 bg-blue-50/70 border border-blue-200 p-3 rounded-lg">
-                              <span className="text-blue-900 text-xs font-bold flex items-center gap-1 mb-1.5">📹 课堂录播回放:</span>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-blue-900 text-xs font-bold flex items-center gap-1">📹 课堂录播回放:</span>
+                                {cls.fb_recording_status === 'pending' && (
+                                  <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-800 font-medium rounded-full">⏳ 自动转存中</span>
+                                )}
+                              </div>
                               {url && (
                                 <div className="mb-1.5">
                                   <a
@@ -433,7 +466,7 @@ function ParentStudentView() {
                               <div className="text-xs text-gray-600 whitespace-pre-wrap">{cls.fb_recording}</div>
                             </div>
                           );
-                        })()}
+                        })() : null}
 
                         {/* 上课内容 */}
                         {cls.content && cls.content !== teacherMsg && (
