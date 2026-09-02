@@ -1260,6 +1260,23 @@ textbooks.post('/delete-r2-key', async (c) => {
   }
 });
 
+// POST /put-r2-object — 上传单个 R2 对象 (用于迁移同步)
+textbooks.post('/put-r2-object', async (c) => {
+  const R2 = c.env.TEXTBOOKS_R2;
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 未配置' } }, 500);
+  const formData = await c.req.formData();
+  const file = formData.get('file');
+  const key = formData.get('key');
+  if (!key || !file) return c.json({ error: { code: 'BAD_REQUEST', message: 'Missing key or file' } }, 400);
+
+  const arrayBuffer = await file.arrayBuffer();
+  await R2.put(key, arrayBuffer, {
+    httpMetadata: { contentType: file.type || (key.endsWith('.jpg') || key.endsWith('.jpeg') ? 'image/jpeg' : key.endsWith('.png') ? 'image/png' : 'application/octet-stream') }
+  });
+
+  return c.json({ data: { success: true, key, size: arrayBuffer.byteLength } });
+});
+
 // DELETE /unit-pages/:code/:num — 一键清空某 unit 在 R2 的所有切图
 textbooks.delete('/unit-pages/:code/:num', async (c) => {
   const R2 = c.env.TEXTBOOKS_R2;

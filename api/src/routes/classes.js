@@ -723,6 +723,11 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
       fb_teacher_message: updated.fb_teacher_message,
       fb_homework: updated.fb_homework,
       fb_next_preview: updated.fb_next_preview,
+      fb_recording: updated.fb_recording,
+      textbook_code: updated.textbook_code,
+      unit_number: updated.unit_number,
+      page_from: updated.page_from,
+      page_to: updated.page_to,
       duration: updated.duration,
       milestone: milestone
     }));
