@@ -1581,6 +1581,44 @@ const DEFAULT_OUTLINES = {
     { unit_number: 17, unit_title: 'The Phonics Song', page_from: 88, page_to: 89 },
     { unit_number: 18, unit_title: 'Picture Bank', page_from: 90, page_to: 91 }
   ],
+  'WE_P3': [
+    { unit_number: 1, unit_title: 'Lesson 1: Consonant Blends: bl · cl · fl', page_from: 6, page_to: 11 },
+    { unit_number: 2, unit_title: 'Lesson 2: Consonant Blends: gl · pl · sl', page_from: 12, page_to: 17 },
+    { unit_number: 3, unit_title: 'Lesson 3: Review 1', page_from: 18, page_to: 21 },
+    { unit_number: 4, unit_title: 'Lesson 4: Consonant Blends: br · cr · fr', page_from: 22, page_to: 27 },
+    { unit_number: 5, unit_title: 'Lesson 5: Consonant Blends: dr · pr · tr', page_from: 28, page_to: 33 },
+    { unit_number: 6, unit_title: 'Lesson 6: Review 2', page_from: 34, page_to: 37 },
+    { unit_number: 7, unit_title: 'Lesson 7: Consonant Blends: sm · sn', page_from: 38, page_to: 43 },
+    { unit_number: 8, unit_title: 'Lesson 8: Consonant Blends: st · sw', page_from: 44, page_to: 49 },
+    { unit_number: 9, unit_title: 'Lesson 9: Review 3', page_from: 50, page_to: 53 },
+    { unit_number: 10, unit_title: 'Lesson 10: Consonant Blends: nd · nt', page_from: 54, page_to: 59 },
+    { unit_number: 11, unit_title: 'Lesson 11: Consonant Digraph & Blend: ng · nk', page_from: 60, page_to: 65 },
+    { unit_number: 12, unit_title: 'Lesson 12: Review 4', page_from: 66, page_to: 69 },
+    { unit_number: 13, unit_title: 'Lesson 13: Consonant Digraphs: ch · sh', page_from: 70, page_to: 75 },
+    { unit_number: 14, unit_title: 'Lesson 14: Consonant Digraphs: ph · th · wh', page_from: 76, page_to: 81 },
+    { unit_number: 15, unit_title: 'Lesson 15: Review 5', page_from: 82, page_to: 85 },
+    { unit_number: 16, unit_title: 'Lesson 16: Progress Test', page_from: 86, page_to: 89 },
+    { unit_number: 17, unit_title: 'Word Bank', page_from: 90, page_to: 91 }
+  ],
+  'WE-P3': [
+    { unit_number: 1, unit_title: 'Lesson 1: Consonant Blends: bl · cl · fl', page_from: 6, page_to: 11 },
+    { unit_number: 2, unit_title: 'Lesson 2: Consonant Blends: gl · pl · sl', page_from: 12, page_to: 17 },
+    { unit_number: 3, unit_title: 'Lesson 3: Review 1', page_from: 18, page_to: 21 },
+    { unit_number: 4, unit_title: 'Lesson 4: Consonant Blends: br · cr · fr', page_from: 22, page_to: 27 },
+    { unit_number: 5, unit_title: 'Lesson 5: Consonant Blends: dr · pr · tr', page_from: 28, page_to: 33 },
+    { unit_number: 6, unit_title: 'Lesson 6: Review 2', page_from: 34, page_to: 37 },
+    { unit_number: 7, unit_title: 'Lesson 7: Consonant Blends: sm · sn', page_from: 38, page_to: 43 },
+    { unit_number: 8, unit_title: 'Lesson 8: Consonant Blends: st · sw', page_from: 44, page_to: 49 },
+    { unit_number: 9, unit_title: 'Lesson 9: Review 3', page_from: 50, page_to: 53 },
+    { unit_number: 10, unit_title: 'Lesson 10: Consonant Blends: nd · nt', page_from: 54, page_to: 59 },
+    { unit_number: 11, unit_title: 'Lesson 11: Consonant Digraph & Blend: ng · nk', page_from: 60, page_to: 65 },
+    { unit_number: 12, unit_title: 'Lesson 12: Review 4', page_from: 66, page_to: 69 },
+    { unit_number: 13, unit_title: 'Lesson 13: Consonant Digraphs: ch · sh', page_from: 70, page_to: 75 },
+    { unit_number: 14, unit_title: 'Lesson 14: Consonant Digraphs: ph · th · wh', page_from: 76, page_to: 81 },
+    { unit_number: 15, unit_title: 'Lesson 15: Review 5', page_from: 82, page_to: 85 },
+    { unit_number: 16, unit_title: 'Lesson 16: Progress Test', page_from: 86, page_to: 89 },
+    { unit_number: 17, unit_title: 'Word Bank', page_from: 90, page_to: 91 }
+  ],
   'DEFAULT': [
     { unit_number: 0, unit_title: 'Welcome / Starter', page_from: 2, page_to: 3 },
     { unit_number: 1, unit_title: 'Unit 1', page_from: 4, page_to: 11 },
@@ -1600,9 +1638,10 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
   
   // 页码偏移量 (PDF 真实页码 = 课本印刷页码 + pageOffset)
   // 若课本第 6 页在 PDF 中就是第 6 页，则 offset = 0
-  const [pageOffset, setPageOffset] = useState(bookCode === 'WE-P' ? 0 : 2);
+  const isPhonics = bookCode?.includes('P') || bookCode?.toLowerCase().includes('phonics');
+  const [pageOffset, setPageOffset] = useState(isPhonics ? 0 : 2);
   const [previewThumbnail, setPreviewThumbnail] = useState(null);
-  const [previewingPdfPage, setPreviewingPdfPage] = useState(bookCode === 'WE-P' ? 8 : 4);
+  const [previewingPdfPage, setPreviewingPdfPage] = useState(isPhonics ? 6 : 4);
 
   // 单元目录大纲列表
   const [outline, setOutline] = useState(() => {
@@ -2682,6 +2721,47 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                   </div>
                 </div>
 
+                {/* 常用教材一键快速排课 */}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-xl border border-gray-200">
+                  <span className="font-bold text-gray-700 shrink-0">📚 一键载入标准大纲预设:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = DEFAULT_OUTLINES['WE-P'];
+                      setOutline(p.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extraCount: 0, extractedData: null })));
+                      setPageOffset(0);
+                      if (pdfDoc) renderOffsetSample(pdfDoc, p[1].page_from);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-primary-50 text-primary-700 border border-gray-200 rounded-lg font-medium transition-colors shadow-sm"
+                  >
+                    Phonics 1 (单字母 Aa-Zz)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = DEFAULT_OUTLINES['WE_P3'];
+                      setOutline(p.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extraCount: 0, extractedData: null })));
+                      setPageOffset(0);
+                      if (pdfDoc) renderOffsetSample(pdfDoc, p[0].page_from);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 rounded-lg font-bold transition-colors shadow-sm"
+                  >
+                    Phonics 3 (辅音连缀 bl·cl·fl)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = DEFAULT_OUTLINES['DEFAULT'];
+                      setOutline(p.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extraCount: 0, extractedData: null })));
+                      setPageOffset(2);
+                      if (pdfDoc) renderOffsetSample(pdfDoc, p[1].page_from + 2);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg font-medium transition-colors shadow-sm"
+                  >
+                    Everybody Up (8单元)
+                  </button>
+                </div>
+
                 {statusMsg && (
                   <div className="text-sm text-primary-800 bg-primary-50 border border-primary-100 p-3 rounded-xl font-medium flex items-center gap-2">
                     {(processing || slicingUnits || extractingAi || detectingToc) && <Loader className="w-4 h-4 animate-spin shrink-0" />}
@@ -2690,17 +2770,17 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                 )}
 
                 {/* 大纲表格 */}
-                <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-                  <table className="w-full text-sm text-left">
+                <div className="border border-gray-200 rounded-xl overflow-x-auto bg-white shadow-sm">
+                  <table className="w-full text-sm text-left min-w-[760px]">
                     <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold">
                       <tr>
-                        <th className="px-4 py-3 w-12 text-center">选</th>
-                        <th className="px-4 py-3 w-20">课时</th>
-                        <th className="px-4 py-3">单元/课时标题</th>
-                        <th className="px-4 py-3 w-40">印刷页码</th>
-                        <th className="px-4 py-3 w-40 text-center">对应 PDF</th>
-                        <th className="px-4 py-3 w-32 text-center">状态</th>
-                        <th className="px-4 py-3 w-56">切图核对与提取结果</th>
+                        <th className="px-3 py-3 w-10 text-center">选</th>
+                        <th className="px-3 py-3 w-16">课时</th>
+                        <th className="px-3 py-3 min-w-[260px]">单元/课时标题</th>
+                        <th className="px-3 py-3 w-40">印刷页码</th>
+                        <th className="px-3 py-3 w-36 text-center">对应 PDF</th>
+                        <th className="px-3 py-3 w-28 text-center">状态</th>
+                        <th className="px-3 py-3 w-56">切图核对与提取结果</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">

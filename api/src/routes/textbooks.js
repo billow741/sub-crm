@@ -1969,32 +1969,28 @@ textbooks.post('/detect-toc/:code', async (c) => {
     return c.json({ error: { code: 'CONFIG_ERROR', message: 'LLM API key is not configured' } }, 400);
   }
 
-  const prompt = `You are an expert OCR and textbook curriculum reader.
-Analyze the Table of Contents image provided for textbook "${code}".
+  const prompt = `You are an expert OCR and textbook Table of Contents reader.
+Carefully read the provided Table of Contents image.
 
 CRITICAL OCR READING INSTRUCTIONS:
-1. Each row in the Table of Contents represents a lesson or section:
-   - On the left: badge or name (e.g. "The Alphabet Song", "LESSON 01", "LESSON 02"... up to "LESSON 16", "The Phonics Song", "Picture Bank").
-   - In the middle: title text (e.g. "Aa · Bb · Cc", "Dd · Ee · Ff", "Review 1", "Progress Test 1").
-   - On the far right of the row: a printed two-digit page number (e.g. 04, 08, 14, 20, 24, 30, 36, 40, 44, 48, 54, 60, 64, 70, 76, 80, 84, 88, 90).
-2. The number on the right of each row is THAT SPECIFIC ROW'S starting printed page ("page_from").
-   For example:
-   - "The Alphabet Song" has 04 on its right -> page_from = 4
-   - "LESSON 01 Aa · Bb · Cc" has 08 on its right -> page_from = 8
-   - "LESSON 02 Dd · Ee · Ff" has 14 on its right -> page_from = 14
-   - "LESSON 03 Review 1" has 20 on its right -> page_from = 20
-   - "LESSON 04 Gg · Hh · Ii" has 24 on its right -> page_from = 24
-3. "page_to" is the page immediately before the next row starts (e.g. 7 for Alphabet Song, 13 for Lesson 1, 19 for Lesson 2, 23 for Lesson 3).
-4. "unit_number": Use the lesson badge number (0 for intro song, 1 for LESSON 01, 2 for LESSON 02... 16 for LESSON 16, etc.).
-5. "unit_title": The full title (e.g. "The Alphabet Song", "Lesson 1: Aa · Bb · Cc", "Lesson 2: Dd · Ee · Ff", "Lesson 3: Review 1").
-You MUST extract ALL rows and lessons across the entire Table of Contents into the "units" array (typically 10 to 25 items). Do NOT stop after the first item!
+1. READ ONLY WHAT IS ACTUALLY PRINTED IN THE IMAGE.
+   Do not guess, do not hallucinate, and do not copy content from other books.
+2. Read each row/entry from top to bottom (if multi-column or multi-page, read the left column/page first, then the right):
+   - On the left of the row: the badge or title (e.g. "LESSON 01", "LESSON 02", "Review 1", "Progress Test", "Word Bank", etc.).
+   - In the middle: the exact topic or title text printed on that row.
+   - On the far right: the printed starting page number for that specific row (e.g. 06, 12, 18, 22...).
+3. Fields to extract for each row:
+   - "unit_number": The integer number of the lesson (1 for Lesson 1, 2 for Lesson 2, etc. Use 0 for an intro/starter song if present).
+   - "unit_title": The full title text (e.g. "Lesson 1: Consonant Blends: bl · cl · fl", "Lesson 2: Consonant Blends: gl · pl · sl", "Review 1", "Word Bank").
+   - "page_from": The starting page number on the right of this row.
+   - "page_to": The page number right before the next row starts. For the final row, page_from + 3.
+
+Extract ALL rows visible in the Table of Contents image (typically 10 to 25 items). Do NOT stop early.
 
 Return strict JSON only matching:
 {
   "units": [
-    { "unit_number": 0, "unit_title": "The Alphabet Song", "page_from": 4, "page_to": 7 },
-    { "unit_number": 1, "unit_title": "Lesson 1: Aa · Bb · Cc", "page_from": 8, "page_to": 13 },
-    { "unit_number": 2, "unit_title": "Lesson 2: Dd · Ee · Ff", "page_from": 14, "page_to": 19 }
+    { "unit_number": 1, "unit_title": "Lesson 1: ...", "page_from": 6, "page_to": 11 }
   ]
 }`;
 
