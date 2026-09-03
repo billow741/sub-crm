@@ -143,7 +143,7 @@
     .container {
       max-width: 1040px;
       margin: 0 auto;
-      padding: 0 24px 60px;
+      padding: 0 16px 40px;
     }
 
     /* ===== Stats Card ===== */
@@ -860,22 +860,35 @@
       .trial-badge { display: inline-block; font-size: 11px; background: #F5A623; color: white; padding: 1px 8px; border-radius: 100px; margin-left: 4px; vertical-align: middle; font-weight: 600; }
 
       /* ===== Study Profile Section ===== */
-      .sp-section { margin-top: 28px; }
-      .sp-info-card { background: rgba(255,255,255,0.72); backdrop-filter: blur(24px) saturate(1.8); -webkit-backdrop-filter: blur(24px) saturate(1.8); border-radius: 20px; padding: 24px 20px; box-shadow: 0 2px 20px rgba(28,36,75,0.06),0 0 0 1px rgba(28,36,75,0.05); margin-bottom: 20px; }
-      .sp-info-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
-      .sp-avatar { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, var(--sb-accent), var(--sb-orange)); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; font-weight: 700; flex-shrink: 0; box-shadow: 0 3px 12px rgba(226,107,49,0.2); }
-      .sp-info-name { font-size: 20px; font-weight: 700; color: var(--sb-dark); }
-      .sp-info-sub { font-size: 13px; color: var(--sb-muted); margin-top: 2px; }
-      .sp-rubric-badge-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 100px; background: linear-gradient(135deg, rgba(75,159,224,0.12), rgba(245,166,35,0.15)); border: 1px solid rgba(245,166,35,0.35); color: var(--sb-dark); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(245,166,35,0.08); }
-      .sp-rubric-badge-btn:hover { background: linear-gradient(135deg, rgba(75,159,224,0.22), rgba(245,166,35,0.28)); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(245,166,35,0.18); }
+      .sp-section { margin-top: 0; }
+      .sp-info-card { background: rgba(255,255,255,0.8); backdrop-filter: blur(24px) saturate(1.8); -webkit-backdrop-filter: blur(24px) saturate(1.8); border-radius: 16px; padding: 14px 18px; box-shadow: 0 2px 14px rgba(28,36,75,0.05),0 0 0 1px rgba(28,36,75,0.04); margin-top: 10px; margin-bottom: 12px; }
+      .sp-info-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+      .sp-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--sb-accent), var(--sb-orange)); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 17px; font-weight: 700; flex-shrink: 0; box-shadow: 0 2px 8px rgba(226,107,49,0.2); }
+      .sp-info-name { font-size: 18px; font-weight: 700; color: var(--sb-dark); }
+      .sp-info-sub { font-size: 12px; color: var(--sb-muted); margin-top: 2px; }
+      .sp-rubric-badge-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 100px; background: linear-gradient(135deg, rgba(75,159,224,0.12), rgba(245,166,35,0.15)); border: 1px solid rgba(245,166,35,0.35); color: var(--sb-dark); font-size: 11.5px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 4px rgba(245,166,35,0.08); }
+      .sp-rubric-badge-btn:hover { background: linear-gradient(135deg, rgba(75,159,224,0.22), rgba(245,166,35,0.28)); transform: translateY(-1px); }
       .sp-rubric-badge-btn:active { transform: translateY(0); }
-      .sp-info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-      .sp-info-item { text-align: center; padding: 8px 4px; border-radius: 10px; background: rgba(75,159,224,0.06); }
-      .sp-info-item__label { font-size: 11px; color: var(--sb-muted); margin-bottom: 4px; }
-      .sp-info-item__value { font-size: 18px; font-weight: 700; color: var(--sb-dark); }
+      .sp-info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .sp-info-item { text-align: center; padding: 6px 4px; border-radius: 8px; background: rgba(75,159,224,0.05); }
+      .sp-info-item__label { font-size: 10.5px; color: var(--sb-muted); margin-bottom: 2px; }
+      .sp-info-item__value { font-size: 16px; font-weight: 700; color: var(--sb-dark); }
       .sp-info-item__value.warn { color: #e24545; }
       .sp-info-item__value.accent { color: var(--sb-accent); }
       .sp-info-item__value.blue { color: var(--sb-blue); }
+      .sp-progress-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+      @media (max-width: 680px) { .sp-progress-row { grid-template-columns: 1fr; gap: 8px; } }
+
+      /* ===== Portal Grid Layout (Schedule & Preview Dashboard) ===== */
+      .portal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; align-items: stretch; }
+      @media (max-width: 768px) { .portal-grid { grid-template-columns: 1fr; gap: 10px; } }
+      .portal-grid.single-col { grid-template-columns: 1fr !important; }
+      .portal-col { display: flex; flex-direction: column; }
+      .compact-card { background: rgba(255,255,255,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 14px; padding: 12px 14px; border: 1px solid rgba(75,159,224,0.16); box-shadow: 0 2px 10px rgba(28,36,75,0.04); height: 100%; box-sizing: border-box; }
+      .compact-card__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+      .compact-badge { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 100px; background: rgba(28,36,75,0.06); color: var(--sb-muted); }
+      .compact-badge--accent { background: rgba(245,166,35,0.12); color: var(--sb-accent-dark); }
+      .compact-badge--blue { background: #EFF6FF; color: #2563EB; }
       .sp-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
       .sp-overview-card { background: rgba(255,255,255,0.72); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 16px; padding: 20px 14px; text-align: center; box-shadow: 0 2px 12px rgba(28,36,75,0.05); cursor: pointer; transition: transform 0.15s; }
       .sp-overview-card:active { transform: scale(0.97); }
@@ -1165,144 +1178,142 @@
 </header>
 
 <div class="container">
-  <!-- ===== Today's Classes ===== -->
-  <section class="section">
-    <div class="section__header">
-      <span class="section__label section__label--accent">Today's Classes</span>
-      <span class="section__count" id="today-count">0</span>
-    </div>
-    <div id="today-classes" class="today-grid">
-      <div class="loading-state">
-        <div class="spinner"></div>
-        Loading...
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== Upcoming ===== -->
-  <section id="upcoming-section" class="section" style="display: none;">
-    <div class="section__header">
-      <span class="section__label">Upcoming</span>
-      <span class="section__count" id="upcoming-count">0</span>
-    </div>
-    <div class="table-card">
-      <table class="sb-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Time</th>
-            <th>Subject</th>
-            <th>Teacher</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="upcoming-body"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- ===== 📋 课前预习清单 (Next Lesson Preview) ===== -->
-  <section id="preview-section" class="section" style="display: none;">
-    <div class="section__header">
-      <span class="section__label" style="background:linear-gradient(135deg, #4B9FE0, #2563EB);color:#fff;">👀 课前预习清单</span>
-      <span class="section__count" id="preview-unit-tag" style="background:#EFF6FF;color:#2563EB;font-weight:700;">Unit 1</span>
-    </div>
-    <div style="background:#fff;border-radius:16px;padding:18px;border:1px solid rgba(75,159,224,0.2);box-shadow:0 4px 20px rgba(75,159,224,0.06);">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+  <!-- ===== 1. 学员核心档案卡片 (Compact Student Profile Card) ===== -->
+  <div class="sp-info-card">
+    <div class="sp-info-top">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="sp-avatar" id="sp-avatar">?</div>
         <div>
-          <div style="font-weight:700;font-size:15px;color:#1E293B;" id="preview-title">下节课内容预告</div>
-          <div style="font-size:12px;color:#64748B;margin-top:2px;" id="preview-sub">提前熟悉重点，课堂开口更自信！</div>
+          <div class="sp-info-name" id="sp-name">-</div>
+          <div class="sp-info-sub" id="sp-subinfo">-</div>
         </div>
-        <div style="font-size:11px;background:#F0FDF4;color:#16A34A;padding:4px 8px;border-radius:6px;font-weight:600;" id="preview-time-tag">即将开课</div>
       </div>
-      
-      <!-- 核心词汇胶囊 -->
-      <div id="preview-vocab-wrap" style="margin-bottom:12px;">
-        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">🔤 重点预习词汇：</div>
-        <div id="preview-vocab-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-      </div>
-
-      <!-- 核心句型 -->
-      <div id="preview-patterns-wrap" style="margin-bottom:12px;display:none;">
-        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">💬 重点句型预览：</div>
-        <div id="preview-patterns-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-      </div>
-
-      <!-- 老师预告备注 -->
-      <div id="preview-teacher-note-wrap" style="margin-bottom:10px;display:none;background:#FEF9C3;padding:8px 12px;border-radius:8px;font-size:12px;color:#854D0E;">
-        <b>👩‍🏫 老师预告：</b><span id="preview-teacher-note"></span>
-      </div>
-
-      <div style="font-size:11px;color:#94A3B8;text-align:right;">
-        💡 不需要提前背诵，和宝贝一起混个脸熟就好 😊
-      </div>
+      <!-- 右侧能力进阶图谱快捷入口 -->
+      <button type="button" class="sp-rubric-badge-btn" onclick="toggleCollapse('rubric-matrix-top-body')">
+        <span>🎯 能力进阶标准图谱</span>
+        <span id="rubric-matrix-top-body-txt" style="color:var(--sb-blue);font-weight:800;">展开 ▼</span>
+      </button>
     </div>
-  </section>
 
-  <!-- ===== Study Profile Section ===== -->
-  <section id="sp-section" class="sp-section">
-    <!-- Info Card -->
-    <div class="sp-info-card">
-      <div class="sp-info-top">
-        <div style="display:flex;align-items:center;gap:16px;">
-          <div class="sp-avatar" id="sp-avatar">?</div>
-          <div>
-            <div class="sp-info-name" id="sp-name">-</div>
-            <div class="sp-info-sub" id="sp-subinfo">-</div>
-          </div>
-        </div>
-        <!-- 右侧图谱快捷入口 -->
-        <button type="button" class="sp-rubric-badge-btn" onclick="toggleCollapse('rubric-matrix-top-body')">
-          <span>🎯 能力进阶标准图谱</span>
-          <span id="rubric-matrix-top-body-txt" style="color:var(--sb-blue);font-weight:800;">展开 ▼</span>
-        </button>
+    <!-- 嵌入在顶部卡片中的能力进阶标准图谱（默认收起，点击展开） -->
+    <div id="rubric-matrix-top-body" class="sp-collapse-body collapsed" style="margin:10px 0;padding:12px 14px;background:linear-gradient(180deg,#FFFFFF 0%,#F9FBFE 100%);border-radius:14px;border:1px solid rgba(75,159,224,0.2);box-shadow:0 4px 20px rgba(28,36,75,0.05);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #E2E8F0;">
+        <div style="font-size:13px;font-weight:700;color:var(--sb-dark);">🎯 SunnyBridge 少儿英语能力进阶体系 (CEFR & 剑桥对标)</div>
+        <button type="button" class="sp-toggle-btn" style="pointer-events:auto;" onclick="toggleCollapse('rubric-matrix-top-body')">收起图谱 ▲</button>
       </div>
+      <div id="rubric-matrix-content"></div>
+    </div>
 
-      <!-- 嵌入在顶部卡片中的能力进阶标准图谱（默认收起，点击展开） -->
-      <div id="rubric-matrix-top-body" class="sp-collapse-body collapsed" style="margin:16px 0;padding:16px;background:linear-gradient(180deg,#FFFFFF 0%,#F9FBFE 100%);border-radius:16px;border:1px solid rgba(75,159,224,0.2);box-shadow:0 4px 20px rgba(28,36,75,0.05);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:1px dashed #E2E8F0;">
-          <div style="font-size:14px;font-weight:700;color:var(--sb-dark);">🎯 SunnyBridge 少儿英语能力进阶体系 (CEFR & 剑桥对标)</div>
-          <button type="button" class="sp-toggle-btn" style="pointer-events:auto;" onclick="toggleCollapse('rubric-matrix-top-body')">收起图谱 ▲</button>
-        </div>
-        <div id="rubric-matrix-content"></div>
-      </div>
+    <div class="sp-info-grid">
+      <div class="sp-info-item"><div class="sp-info-item__label">专属老师</div><div class="sp-info-item__value blue" id="sp-teacher">-</div></div>
+      <div class="sp-info-item"><div class="sp-info-item__label">当前级别</div><div class="sp-info-item__value accent" id="sp-level">-</div></div>
+      <div class="sp-info-item"><div class="sp-info-item__label">课时余额</div><div class="sp-info-item__value" id="sp-balance">-</div></div>
+      <div class="sp-info-item"><div class="sp-info-item__label">已完课程</div><div class="sp-info-item__value" id="sp-total-lessons">-</div></div>
+    </div>
 
-      <div class="sp-info-grid">
-        <div class="sp-info-item"><div class="sp-info-item__label">专属老师</div><div class="sp-info-item__value blue" id="sp-teacher">-</div></div>
-        <div class="sp-info-item"><div class="sp-info-item__label">当前级别</div><div class="sp-info-item__value accent" id="sp-level">-</div></div>
-        <div class="sp-info-item"><div class="sp-info-item__label">课时余额</div><div class="sp-info-item__value" id="sp-balance">-</div></div>
-        <div class="sp-info-item"><div class="sp-info-item__label">已完课程</div><div class="sp-info-item__value" id="sp-total-lessons">-</div></div>
-      </div>
-
-      <!-- 📖 教材学习进度条 (Textbook Progress Banner) -->
-      <div id="sp-textbook-progress-banner" style="display:none;margin-top:14px;padding:12px 14px;background:linear-gradient(135deg, rgba(75,159,224,0.08), rgba(99,102,241,0.06));border-radius:12px;border:1px solid rgba(75,159,224,0.2);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;font-weight:700;">
-          <span style="color:var(--sb-dark);display:flex;align-items:center;gap:6px;">
-            <span style="font-size:14px;">📖</span> <span id="sp-tb-name">教材学习进度</span>
+    <!-- 进度条双栏 (宽屏下并排) -->
+    <div class="sp-progress-row">
+      <!-- 📖 教材学习进度条 -->
+      <div id="sp-textbook-progress-banner" style="display:none;padding:8px 12px;background:linear-gradient(135deg, rgba(75,159,224,0.08), rgba(99,102,241,0.06));border-radius:10px;border:1px solid rgba(75,159,224,0.2);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:11.5px;font-weight:700;">
+          <span style="color:var(--sb-dark);display:flex;align-items:center;gap:4px;">
+            <span>📖</span> <span id="sp-tb-name">教材学习进度</span>
           </span>
-          <span style="color:var(--sb-blue);background:#fff;padding:2px 8px;border-radius:100px;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,0.05);" id="sp-tb-unit-badge">Unit 0 / 0</span>
+          <span style="color:var(--sb-blue);background:#fff;padding:1px 6px;border-radius:100px;font-size:10.5px;box-shadow:0 1px 2px rgba(0,0,0,0.04);" id="sp-tb-unit-badge">Unit 0 / 0</span>
         </div>
-        <div style="height:6px;background:rgba(28,36,75,0.08);border-radius:3px;overflow:hidden;">
+        <div style="height:5px;background:rgba(28,36,75,0.08);border-radius:3px;overflow:hidden;">
           <div id="sp-tb-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg, #4B9FE0, #6366F1);border-radius:3px;transition:width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
         </div>
-        <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--sb-muted);">
+        <div style="margin-top:4px;display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:var(--sb-muted);">
           <span id="sp-tb-desc">已学完 0 个单元</span>
           <span id="sp-tb-pct" style="font-weight:700;color:var(--sb-blue);">0%</span>
         </div>
       </div>
 
-      <!-- Milestone Progress Banner -->
-      <div id="sp-milestone-banner" style="margin-top:14px;padding:12px 14px;background:rgba(75,159,224,0.06);border-radius:12px;border:1px solid rgba(75,159,224,0.12);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;font-weight:600;">
+      <!-- 🎯 阶段目标进度条 -->
+      <div id="sp-milestone-banner" style="padding:8px 12px;background:rgba(75,159,224,0.06);border-radius:10px;border:1px solid rgba(75,159,224,0.12);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:11.5px;font-weight:600;">
           <span style="color:var(--sb-dark);" id="sp-milestone-title">🎯 进阶里程碑目标</span>
           <span style="color:var(--sb-blue);" id="sp-milestone-pct">0%</span>
         </div>
-        <div style="height:6px;background:rgba(28,36,75,0.08);border-radius:3px;overflow:hidden;">
+        <div style="height:5px;background:rgba(28,36,75,0.08);border-radius:3px;overflow:hidden;">
           <div id="sp-milestone-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--sb-accent),var(--sb-orange));border-radius:3px;transition:width 0.5s ease;"></div>
         </div>
-        <div style="margin-top:6px;font-size:11px;color:var(--sb-muted);" id="sp-milestone-desc">正在加载成长进度...</div>
+        <div style="margin-top:4px;font-size:10.5px;color:var(--sb-muted);" id="sp-milestone-desc">正在加载成长进度...</div>
       </div>
     </div>
+  </div>
+
+  <!-- ===== 2. 近期排课 & 课前预习并排双栏 (Schedule & Preview Dashboard Grid) ===== -->
+  <div class="portal-grid" id="portal-grid">
+    <!-- 左栏：📅 近期课表 (今日课程 + 待上课程) -->
+    <div class="portal-col" id="col-schedule">
+      <div class="compact-card">
+        <div class="compact-card__head">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:13px;font-weight:700;color:#1E293B;">📅 近期课表</span>
+            <span class="compact-badge compact-badge--accent" id="today-count">0</span>
+          </div>
+        </div>
+        <div id="today-classes">
+          <div class="loading-state" style="padding:10px;font-size:11.5px;"><div class="spinner" style="width:20px;height:20px;margin-bottom:6px;"></div>加载课程...</div>
+        </div>
+
+        <!-- 待上课程列表 (紧凑清单) -->
+        <div id="upcoming-section" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed #E2E8F0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:11.5px;font-weight:700;color:#64748B;">待上课程 (Upcoming)</span>
+            <span class="compact-badge" id="upcoming-count" style="font-size:10.5px;">0</span>
+          </div>
+          <div id="upcoming-list"></div>
+          <!-- 兼容旧表格容器 -->
+          <div style="display:none;"><table class="sb-table"><tbody id="upcoming-body"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右栏：👀 课前预习清单 -->
+    <div class="portal-col" id="col-preview">
+      <div id="preview-section" class="compact-card" style="display:none;">
+        <div class="compact-card__head">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:13px;font-weight:700;color:#1E293B;">👀 课前预习清单</span>
+            <span class="compact-badge compact-badge--blue" id="preview-unit-tag">Unit 1</span>
+          </div>
+          <span style="font-size:10.5px;background:#F0FDF4;color:#16A34A;padding:2px 7px;border-radius:6px;font-weight:600;" id="preview-time-tag">即将开课</span>
+        </div>
+
+        <div style="margin-bottom:8px;">
+          <div style="font-weight:700;font-size:13px;color:#1E293B;" id="preview-title">下节课内容预告</div>
+          <div style="font-size:11px;color:#64748B;margin-top:1px;" id="preview-sub">提前熟悉重点，课堂开口更自信！</div>
+        </div>
+
+        <!-- 词汇胶囊 -->
+        <div id="preview-vocab-wrap" style="margin-bottom:8px;">
+          <div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:4px;">🔤 重点预习词汇：</div>
+          <div id="preview-vocab-list" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+        </div>
+
+        <!-- 句型胶囊 -->
+        <div id="preview-patterns-wrap" style="margin-bottom:8px;display:none;">
+          <div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:4px;">💬 重点句型预览：</div>
+          <div id="preview-patterns-list" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+        </div>
+
+        <!-- 老师预告寄语 -->
+        <div id="preview-teacher-note-wrap" style="margin-bottom:6px;display:none;background:#FEF9C3;padding:6px 10px;border-radius:8px;font-size:11px;color:#854D0E;line-height:1.4;">
+          <b>👩‍🏫 老师预告：</b><span id="preview-teacher-note"></span>
+        </div>
+
+        <div style="font-size:10.5px;color:#94A3B8;text-align:right;">
+          💡 不需要提前背诵，和宝贝一起混个脸熟就好 😊
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 3. 学习记录 Tabs & 课程历史 ===== -->
+  <section id="sp-section" class="sp-section">
 
     <!-- Tabs -->
     <div class="sp-tabs">
@@ -1739,8 +1750,16 @@ function renderPreviewAndNudge(data) {
     }
 
     prevSec.style.display = 'block';
+    var colPrev = document.getElementById('col-preview');
+    if (colPrev) colPrev.style.display = 'block';
+    var pGrid = document.getElementById('portal-grid');
+    if (pGrid) pGrid.classList.remove('single-col');
   } else if (prevSec) {
     prevSec.style.display = 'none';
+    var colPrev = document.getElementById('col-preview');
+    if (colPrev) colPrev.style.display = 'none';
+    var pGrid = document.getElementById('portal-grid');
+    if (pGrid) pGrid.classList.add('single-col');
   }
 }
 
@@ -1777,20 +1796,18 @@ function buildMeetingHTML(c) {
   if (!c.class_link) return '';
   var info = parseMeetingInfo(c.class_link);
   if (!info) return '';
-  var html = '<div class="class-card__link">';
-  html += '<span class="class-card__link-label">📱 上课信息</span>';
+  var html = '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #E2E8F0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
   if (info.url) {
-    html += '<a href="' + escapeHtml(info.url) + '" target="_blank" rel="noopener" class="meeting-join-btn">';
-    html += '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>';
-    html += '加入' + escapeHtml(info.platform || '会议');
+    html += '<a href="' + escapeHtml(info.url) + '" target="_blank" rel="noopener" class="meeting-join-btn" style="padding:3.5px 10px;font-size:11.5px;border-radius:6px;gap:4px;">';
+    html += '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>';
+    html += '进入' + escapeHtml(info.platform || '会议');
     html += '</a>';
   }
   if (info.meetingId) {
-    html += '<div class="meeting-id-box">会议号：<strong>' + escapeHtml(info.meetingId) + '</strong></div>';
+    html += '<span style="font-size:11px;color:#64748B;background:#F1F5F9;padding:2px 7px;border-radius:4px;">会议号：<b style="color:#0F172A;">' + escapeHtml(info.meetingId) + '</b></span>';
   }
-  // 如果没有提取到 URL 也没有会议号，直接显示原始文本
   if (!info.url && !info.meetingId) {
-    html += '<div class="class-card__link-box">' + escapeHtml(c.class_link) + '</div>';
+    html += '<div style="font-size:11px;color:#64748B;">' + escapeHtml(c.class_link) + '</div>';
   }
   html += '</div>';
   return html;
@@ -1798,9 +1815,12 @@ function buildMeetingHTML(c) {
 
 // ===== 渲染 Today's Classes =====
 function renderTodayClasses(classes) {
-  document.getElementById('today-count').textContent = classes.length;
+  var countEl = document.getElementById('today-count');
+  if (countEl) countEl.textContent = classes.length;
+  var container = document.getElementById('today-classes');
+  if (!container) return;
   if (classes.length === 0) {
-    document.getElementById('today-classes').innerHTML = '<div class="empty-state">今日无课程</div>';
+    container.innerHTML = '<div style="padding:10px 12px;background:#F8FAFC;border-radius:8px;color:#94A3B8;font-size:11.5px;text-align:center;">今日暂无待上课程</div>';
     return;
   }
   var html = '';
@@ -1808,21 +1828,23 @@ function renderTodayClasses(classes) {
     var c = classes[i];
     var statusCss = STATUS_CSS[c.status] || '';
     var statusLabel = STATUS_LABELS[c.status] || c.status;
-    html += '<div class="class-card">';
-    html += '<div class="class-card__top">';
-    html += '<div class="class-card__time"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>' + formatTime(c.start_time) + ' - ' + formatTime(c.end_time) + '</div>';
-    html += '<span class="status-badge ' + statusCss + '">' + statusLabel + '</span>';
+    html += '<div style="background:#F8FAFC;border:1px solid rgba(75,159,224,0.2);border-radius:10px;padding:9px 12px;margin-bottom:6px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:13.5px;color:#0F172A;">';
+    html += '<svg style="width:13px;height:13px;color:#64748B;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+    html += formatTime(c.start_time) + ' - ' + formatTime(c.end_time) + '</div>';
+    html += '<span class="status-badge ' + statusCss + '" style="font-size:10px;padding:1px 6px;">' + statusLabel + '</span>';
     html += '</div>';
-    html += '<div class="class-card__body">';
-    html += '<div class="class-card__row"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg><span class="class-card__teacher">' + (c.teacher_name || '未知老师') + '</span></div>';
-    html += '<div class="class-card__row"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 4.477 9.246 4 7.5 4S4.168 4.477 3 5.253v13C4.168 17.477 5.754 17 7.5 17s3.332.477 4.5 1.253m0-13C13.168 4.477 14.754 4 16.5 4c1.747 0 3.332.477 4.5 1.253v13C19.832 17.477 18.247 17 16.5 17c-1.746 0-3.332.477-4.5 1.253"></path></svg><span class="class-card__subject">' + (c.subject || '英语') + '</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:12px;font-size:11.5px;color:#475569;">';
+    html += '<span>👨‍🏫 <b>' + spEsc(c.teacher_name || '未知老师') + '</b></span>';
+    html += '<span>📚 ' + spEsc(c.subject || '英语') + '</span>';
+    html += '</div>';
     if (c.class_link) {
       html += buildMeetingHTML(c);
     }
     html += '</div>';
-    html += '</div>';
   }
-  document.getElementById('today-classes').innerHTML = html;
+  container.innerHTML = html;
 }
 
 function getDayOfWeek(dateStr) {
@@ -1833,26 +1855,45 @@ function getDayOfWeek(dateStr) {
 
 // ===== 渲染 Upcoming =====
 function renderUpcoming(classes) {
+  var sec = document.getElementById('upcoming-section');
+  if (!sec) return;
   if (classes.length === 0) {
-    document.getElementById('upcoming-section').style.display = 'none';
+    sec.style.display = 'none';
     return;
   }
-  document.getElementById('upcoming-count').textContent = classes.length;
-  var html = '';
-  for (var i = 0; i < classes.length; i++) {
-    var c = classes[i];
-    var statusCss = STATUS_CSS[c.status] || '';
-    var statusLabel = STATUS_LABELS[c.status] || c.status;
-    html += '<tr>';
-    html += '<td data-label="日期">' + c.date + ' <span class="day-of-week">' + getDayOfWeek(c.date) + '</span></td>';
-    html += '<td data-label="时间">' + formatTime(c.start_time) + '</td>';
-    html += '<td data-label="科目">' + (c.subject || '英语') + '</td>';
-    html += '<td data-label="老师">' + (c.teacher_name || '未知老师') + '</td>';
-    html += '<td data-label="状态"><span class="status-badge ' + statusCss + '">' + statusLabel + '</span></td>';
-    html += '</tr>';
+  var countEl = document.getElementById('upcoming-count');
+  if (countEl) countEl.textContent = classes.length;
+
+  var listEl = document.getElementById('upcoming-list');
+  if (listEl) {
+    var lHtml = '';
+    for (var i = 0; i < classes.length; i++) {
+      var c = classes[i];
+      var statusCss = STATUS_CSS[c.status] || '';
+      var statusLabel = STATUS_LABELS[c.status] || c.status;
+      lHtml += '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;margin-bottom:4px;font-size:11.5px;">';
+      lHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+      lHtml += '<span style="font-weight:700;color:#1E293B;">' + c.date + ' <span style="color:#D97706;font-size:10.5px;">' + getDayOfWeek(c.date) + '</span></span>';
+      lHtml += '<span style="color:#2563EB;font-weight:600;">' + formatTime(c.start_time) + '</span>';
+      lHtml += '<span style="color:#64748B;">' + spEsc(c.subject || '英语') + ' · ' + spEsc(c.teacher_name || '老师') + '</span>';
+      lHtml += '</div>';
+      lHtml += '<span class="status-badge ' + statusCss + '" style="font-size:10px;padding:1px 6px;">' + statusLabel + '</span>';
+      lHtml += '</div>';
+    }
+    listEl.innerHTML = lHtml;
   }
-  document.getElementById('upcoming-body').innerHTML = html;
-  document.getElementById('upcoming-section').style.display = '';
+  var bodyEl = document.getElementById('upcoming-body');
+  if (bodyEl) {
+    var bHtml = '';
+    for (var i = 0; i < classes.length; i++) {
+      var c = classes[i];
+      var statusCss = STATUS_CSS[c.status] || '';
+      var statusLabel = STATUS_LABELS[c.status] || c.status;
+      bHtml += '<tr><td>' + c.date + ' ' + getDayOfWeek(c.date) + '</td><td>' + formatTime(c.start_time) + '</td><td>' + (c.subject || '英语') + '</td><td>' + (c.teacher_name || '') + '</td><td><span class="status-badge ' + statusCss + '">' + statusLabel + '</span></td></tr>';
+    }
+    bodyEl.innerHTML = bHtml;
+  }
+  sec.style.display = 'block';
 }
 
 // ===== 渲染 History (已整合到上课记录Tab,保留空函数兼容旧引用) =====
