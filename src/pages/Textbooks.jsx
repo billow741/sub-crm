@@ -60,10 +60,10 @@ export default function Textbooks() {
       if (saved) return JSON.parse(saved);
     } catch {}
     return {
-      provider: 'nvidia_90b',
+      provider: 'nvidia_11b',
       baseUrl: 'https://integrate.api.nvidia.com/v1',
       apiKey: '',
-      model: 'meta/llama-3.2-90b-vision-instruct'
+      model: 'meta/llama-3.2-11b-vision-instruct'
     };
   });
 
@@ -2632,18 +2632,18 @@ function BooksManageModal({ books, onClose }) {
 // ============================================================
 const LLM_PRESETS = [
   {
-    id: 'nvidia_90b',
-    name: 'NVIDIA Llama-3.2-90B Vision (首选推荐, 900亿旗舰视觉多模态)',
-    baseUrl: 'https://integrate.api.nvidia.com/v1',
-    model: 'meta/llama-3.2-90b-vision-instruct',
-    desc: 'NVIDIA 免费提供，900亿参数超强多模态，精准识别微小印刷体英文与排版'
-  },
-  {
     id: 'nvidia_11b',
-    name: 'NVIDIA Llama-3.2-11B Vision (高速轻量版)',
+    name: 'NVIDIA Llama-3.2-11B Vision (首选极速推荐 · ~500ms)',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
     model: 'meta/llama-3.2-11b-vision-instruct',
-    desc: 'Meta 11B 视觉模型，响应速度快'
+    desc: 'NVIDIA NIM 官方高吞吐模型，约 0.5 秒极速响应，英文课本 OCR 与版式识别极准'
+  },
+  {
+    id: 'nvidia_90b',
+    name: 'NVIDIA Llama-3.2-90B Vision (900亿旗舰版)',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    model: 'meta/llama-3.2-90b-vision-instruct',
+    desc: '900亿参数超大视觉模型（若遇官方队列高峰，系统会自动切换到 11B 备选）'
   },
   {
     id: 'zhipu',
@@ -2695,12 +2695,8 @@ function LlmSettingsModal({ config, onSave, onClose }) {
     setTestResult(null);
   };
 
-  // 测试连接性
+  // 测试连接性 (未填 Key 时自动使用服务端预置配置)
   const handleTestConnection = async () => {
-    if (!form.apiKey) {
-      alert('请先输入 API Key');
-      return;
-    }
     setTesting(true);
     setTestResult(null);
 
@@ -2713,16 +2709,17 @@ function LlmSettingsModal({ config, onSave, onClose }) {
         },
         body: JSON.stringify({
           base_url: form.baseUrl,
-          api_key: form.apiKey,
+          api_key: form.apiKey || undefined,
           model: form.model
         })
       });
       const json = await resp.json();
 
       if (json.data?.success) {
+        const keyInfo = form.apiKey ? '自定义 API Key' : '服务端预置 NVIDIA Key';
         setTestResult({
           success: true,
-          msg: `✅ 连接成功！响应耗时: ${json.data.elapsed_ms}ms\n模型回复: "${json.data.reply}"`
+          msg: `✅ 连接成功！(使用: ${keyInfo})\n响应耗时: ${json.data.elapsed_ms}ms\n生效模型: ${json.data.model}\n模型回复: "${json.data.reply}"`
         });
       } else {
         setTestResult({
@@ -2740,10 +2737,7 @@ function LlmSettingsModal({ config, onSave, onClose }) {
   };
 
   const handleSave = (e) => {
-    e.preventDefault();
-    if (!form.apiKey) {
-      if (!confirm('您尚未填写 API Key，确定保存吗？(未配置 Key 将无法使用 AI 识别)')) return;
-    }
+    if (e && e.preventDefault) e.preventDefault();
     onSave(form);
     alert('✅ AI 视觉模型配置已保存并生效！');
     onClose();
@@ -2839,7 +2833,7 @@ function LlmSettingsModal({ config, onSave, onClose }) {
                 type="password"
                 value={form.apiKey || ''}
                 onChange={e => setForm({ ...form, apiKey: e.target.value })}
-                placeholder="粘贴对应的 API Key (如 nvapi-... / sk-...)"
+                placeholder="留空则自动使用服务端配置的 NVIDIA NIM Key (如需覆盖可输入 nvapi-...)"
                 className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-shadow"
               />
             </div>
@@ -2859,8 +2853,9 @@ function LlmSettingsModal({ config, onSave, onClose }) {
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
           <Button
             variant="outline"
+            type="button"
             onClick={handleTestConnection}
-            disabled={testing || !form.apiKey}
+            disabled={testing}
             className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 bg-white"
           >
             {testing ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}

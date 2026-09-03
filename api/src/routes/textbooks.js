@@ -822,6 +822,29 @@ textbooks.post('/test-llm', async (c) => {
 });
 
 // ============================================================
+// GET /llm-models — 查询当前提供商支持的模型列表
+// ============================================================
+textbooks.get('/llm-models', async (c) => {
+  const baseUrl = c.req.query('base_url') || c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
+  const apiKey = c.req.query('api_key') || c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
+  if (!apiKey) return c.json({ error: { code: 'NO_API_KEY', message: '未配置 API Key' } }, 400);
+
+  try {
+    const resp = await fetch(`${baseUrl}/models`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` }
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      return c.json({ error: { code: 'FETCH_ERROR', message: err } }, 400);
+    }
+    const json = await resp.json();
+    return c.json({ success: true, data: json.data || json });
+  } catch (err) {
+    return c.json({ error: { code: 'NETWORK_ERROR', message: err.message } }, 500);
+  }
+});
+
+// ============================================================
 // Vision LLM: 用图片直接读 (优先使用 Header 传入的动态配置)
 // ============================================================
 async function callLLMWithImages(c, imageFiles, opts = {}) {
