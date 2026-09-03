@@ -2247,7 +2247,7 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
   const lastCompletedClass = await DB.prepare(`
     SELECT id, date, start_time, teacher, textbook_code, unit_number,
            fb_unit, fb_lesson, fb_lesson_level, fb_vocab, fb_patterns, fb_grammar,
-           fb_teacher_message, fb_homework, fb_next_preview
+           fb_teacher_message, fb_homework, fb_next_preview, next_textbook_code, next_unit_number
     FROM classes
     WHERE student_id = ? AND status = 'completed'
     ORDER BY date DESC, start_time DESC
@@ -2269,16 +2269,26 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
   let targetUnit = null;
 
   if (nextScheduledClass && nextScheduledClass.textbook_code && nextScheduledClass.unit_number) {
-    // 排课时如果已明确指定教材和单元，直接使用
+    // 1. 排课记录中已明确指定教材和课时
     targetCode = nextScheduledClass.textbook_code;
     targetUnit = nextScheduledClass.unit_number;
+  } else if (lastCompletedClass && (lastCompletedClass.next_unit_number || lastCompletedClass.next_textbook_code)) {
+    // 2. 老师在上一节课反馈中明确选择/指定的下节课预习单元！(支持继续当前单元或自选任意单元)
+    targetCode = lastCompletedClass.next_textbook_code || lastCompletedClass.textbook_code || lastCompletedClass.fb_lesson_level;
+    targetUnit = lastCompletedClass.next_unit_number;
   } else if (lastCompletedClass) {
-    // 预习必须是【下节课】的内容！如果下节排课未指定单元，根据上一节完课记录自动顺延至下一课时（+1）
     targetCode = lastCompletedClass.textbook_code || lastCompletedClass.fb_lesson_level;
-    const completedUnit = parseInt(lastCompletedClass.unit_number || lastCompletedClass.fb_unit || '0', 10);
-    targetUnit = completedUnit > 0 ? completedUnit + 1 : 1;
+    // 3. 检查老师是否在自定义备注中写了 Unit X 或 Lesson X
+    const noteMatch = (lastCompletedClass.fb_next_preview || '').match(/(?:Unit|Lesson)\s*(\d+)/i);
+    if (noteMatch) {
+      targetUnit = parseInt(noteMatch[1], 10);
+    } else {
+      // 4. 默认兜底：若老师未单独指定，顺延至下一课时 (+1)
+      const completedUnit = parseInt(lastCompletedClass.unit_number || lastCompletedClass.fb_unit || '0', 10);
+      targetUnit = completedUnit > 0 ? completedUnit + 1 : 1;
+    }
   } else {
-    // 检查学生教材进度表兜底
+    // 5. 检查学生教材进度表兜底
     try {
       const progress = await DB.prepare(`
         SELECT textbook_code, current_unit

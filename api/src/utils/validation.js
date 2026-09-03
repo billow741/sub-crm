@@ -93,6 +93,9 @@ export const classSchema = z.object({
   unit_number: z.coerce.number().int().optional().nullable(),                             // 如 1
   page_from: z.coerce.number().int().optional().nullable(),                                // 起始页
   page_to: z.coerce.number().int().optional().nullable(),                                  // 结束页
+  // 下节课预习教材与课时 (供教师端指定与家长端预习展示)
+  next_textbook_code: z.string().optional().nullable().transform(v => v || null),
+  next_unit_number: z.coerce.number().int().optional().nullable(),
 });
 
 export const classUpdateSchema = classSchema.partial();

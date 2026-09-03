@@ -682,6 +682,31 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
       console.warn('同步教材学习进度跳过:', e.message);
     }
 
+    // ── 自动同步下节待上课程的预习教材与单元 ──
+    try {
+      if (data.next_unit_number || data.next_textbook_code) {
+        const nextTbCode = data.next_textbook_code || data.textbook_code || existing.textbook_code;
+        const nextUnitNum = data.next_unit_number;
+        if (nextTbCode && nextUnitNum) {
+          const nextScheduled = await DB.prepare(`
+            SELECT id FROM classes
+            WHERE student_id = ? AND status = 'scheduled' AND date >= date('now', '-1 day') AND id != ?
+            ORDER BY date ASC, start_time ASC
+            LIMIT 1
+          `).bind(existing.student_id, id).first();
+          if (nextScheduled) {
+            await DB.prepare(`
+              UPDATE classes
+              SET textbook_code = ?, unit_number = ?, updated_at = datetime('now')
+              WHERE id = ?
+            `).bind(nextTbCode, nextUnitNum, nextScheduled.id).run();
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('自动同步下节课教材单元异常:', e.message);
+    }
+
     // 重新查询更新后的记录
     let updated = await DB.prepare(`
       SELECT c.*, s.name as student_name, s.grade as student_grade, p.name as package_name, t.name as teacher_name
@@ -731,6 +756,8 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
       fb_teacher_message: updated.fb_teacher_message,
       fb_homework: updated.fb_homework,
       fb_next_preview: updated.fb_next_preview,
+      next_textbook_code: updated.next_textbook_code,
+      next_unit_number: updated.next_unit_number,
       fb_recording: updated.fb_recording,
       fb_recording_r2_key: updated.fb_recording_r2_key,
       fb_recording_status: updated.fb_recording_status || 'none',
