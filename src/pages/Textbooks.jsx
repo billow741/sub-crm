@@ -598,27 +598,29 @@ export default function Textbooks() {
             </Button>
           </div>
 
-          {/* 系列筛选胶囊 */}
+          {/* 系列筛选标签 (自适应换行，彻底消除横向滚动条) */}
           {seriesList.length > 1 && (
-            <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-slate-50/60 shrink-0">
+            <div className="px-3 py-2 border-b border-gray-100 flex flex-wrap items-center gap-1.5 bg-slate-50/60 shrink-0">
               <button
+                type="button"
                 onClick={() => setSelectedSeries('ALL')}
-                className={`px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 transition-all ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                   selectedSeries === 'ALL'
-                    ? 'bg-primary-600 text-white shadow-2xs'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                    ? 'bg-primary-600 text-white shadow-xs'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100 hover:text-gray-900'
                 }`}
               >
                 全部 ({books.length})
               </button>
               {seriesList.map(s => (
                 <button
+                  type="button"
                   key={s}
                   onClick={() => setSelectedSeries(s)}
-                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 transition-all ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                     selectedSeries === s
-                      ? 'bg-primary-600 text-white shadow-2xs'
-                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                      ? 'bg-primary-600 text-white shadow-xs'
+                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
                   {s} ({groupedBooks[s]?.length || 0})
