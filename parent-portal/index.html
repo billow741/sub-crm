@@ -1694,10 +1694,16 @@ function renderPreviewAndNudge(data) {
   var prevSec = document.getElementById('preview-section');
   if (prevSec && prev && prev.has_preview && ((prev.vocab_preview && prev.vocab_preview.length > 0) || (prev.patterns_preview && prev.patterns_preview.length > 0) || prev.teacher_preview_note)) {
     var tagEl = document.getElementById('preview-unit-tag');
-    if (tagEl) tagEl.textContent = 'Unit ' + prev.unit_number;
+    if (tagEl) {
+      var shortTag = prev.unit_title ? prev.unit_title.split(/[:：]/)[0].trim() : ('Unit ' + prev.unit_number);
+      tagEl.textContent = shortTag;
+    }
 
     var titleEl = document.getElementById('preview-title');
-    if (titleEl) titleEl.textContent = (prev.textbook_name || prev.textbook_code) + ' · ' + (prev.unit_title || ('Unit ' + prev.unit_number));
+    if (titleEl) {
+      var unitText = prev.unit_title || ('Unit ' + prev.unit_number);
+      titleEl.textContent = (prev.textbook_name || prev.textbook_code) + ' · ' + unitText;
+    }
 
     var subEl = document.getElementById('preview-sub');
     if (subEl) subEl.textContent = prev.next_class_date ? ('上课时间：' + prev.next_class_date + (prev.next_class_time ? ' ' + prev.next_class_time : '')) : '即将开课 · 提前熟悉重点，课堂开口更自信！';

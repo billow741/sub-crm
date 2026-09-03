@@ -2269,15 +2269,36 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
   let targetUnit = null;
 
   if (nextScheduledClass && nextScheduledClass.textbook_code && nextScheduledClass.unit_number) {
+    // 排课时如果已明确指定教材和单元，直接使用
     targetCode = nextScheduledClass.textbook_code;
     targetUnit = nextScheduledClass.unit_number;
   } else if (lastCompletedClass) {
+    // 预习必须是【下节课】的内容！如果下节排课未指定单元，根据上一节完课记录自动顺延至下一课时（+1）
     targetCode = lastCompletedClass.textbook_code || lastCompletedClass.fb_lesson_level;
-    targetUnit = lastCompletedClass.unit_number || lastCompletedClass.fb_unit || 1;
+    const completedUnit = parseInt(lastCompletedClass.unit_number || lastCompletedClass.fb_unit || '0', 10);
+    targetUnit = completedUnit > 0 ? completedUnit + 1 : 1;
+  } else {
+    // 检查学生教材进度表兜底
+    try {
+      const progress = await DB.prepare(`
+        SELECT textbook_code, current_unit
+        FROM student_textbook_progress
+        WHERE student_id = ?
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `).bind(studentId).first();
+      if (progress) {
+        targetCode = progress.textbook_code;
+        targetUnit = (progress.current_unit || 0) + 1;
+      } else if (nextScheduledClass && nextScheduledClass.textbook_code) {
+        targetCode = nextScheduledClass.textbook_code;
+        targetUnit = 1;
+      }
+    } catch (_) {}
   }
 
   if (targetCode && targetUnit) {
-    const uc = await DB.prepare(`
+    let uc = await DB.prepare(`
       SELECT uc.vocab, uc.patterns, uc.grammar, tu.unit_title, t.name as textbook_name
       FROM unit_content uc
       LEFT JOIN textbook_units tu ON uc.unit_id = tu.id
@@ -2285,6 +2306,23 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
       WHERE (uc.textbook_code = ? OR t.code = ?) AND uc.unit_number = ?
       LIMIT 1
     `).bind(targetCode, targetCode, targetUnit).first();
+
+    if (!uc && targetUnit > 1) {
+      // 若已超过最后一单元，尝试查询该教材最后一单元作为兜底
+      const lastUc = await DB.prepare(`
+        SELECT uc.vocab, uc.patterns, uc.grammar, tu.unit_title, t.name as textbook_name, uc.unit_number
+        FROM unit_content uc
+        LEFT JOIN textbook_units tu ON uc.unit_id = tu.id
+        LEFT JOIN textbooks t ON tu.textbook_id = t.id
+        WHERE (uc.textbook_code = ? OR t.code = ?)
+        ORDER BY uc.unit_number DESC
+        LIMIT 1
+      `).bind(targetCode, targetCode).first();
+      if (lastUc) {
+        uc = lastUc;
+        targetUnit = lastUc.unit_number;
+      }
+    }
 
     let vocabList = [];
     let patternsList = [];
