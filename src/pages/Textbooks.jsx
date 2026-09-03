@@ -1594,6 +1594,29 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
   const [detectingToc, setDetectingToc] = useState(false);
   const [currentProcessingUnit, setCurrentProcessingUnit] = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
+  const [showTocPicker, setShowTocPicker] = useState(false);
+  const [tocStartPage, setTocStartPage] = useState(6);
+  const [tocEndPage, setTocEndPage] = useState(8);
+  const [tocSampleThumb, setTocSampleThumb] = useState(null);
+
+  const renderTocSample = async (doc, pageNum) => {
+    if (!doc || pageNum < 1 || pageNum > doc.numPages) return;
+    try {
+      const page = await doc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 0.6 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.8));
+      if (tocSampleThumb) URL.revokeObjectURL(tocSampleThumb);
+      setTocSampleThumb(URL.createObjectURL(blob));
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
   const [showRuleGenerator, setShowRuleGenerator] = useState(false);
   const [ruleConfig, setRuleConfig] = useState({
     prefix: 'Lesson',
@@ -1759,18 +1782,21 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
     setDetectingToc(false);
   };
 
-  // 2. 截取前几页目录页，拼接成单张大图并调用后端 AI 视觉模型深度识别 (适配 NVIDIA NIM 单图限制)
-  const handleAiTocDetection = async () => {
+  // 2. 截取用户指定页码范围的目录页，拼接成单张全景图并调用后端 AI 视觉模型深度识别
+  const handleAiTocDetection = async (overrideStart, overrideEnd) => {
     if (!pdfDoc) return;
     setDetectingToc(true);
-    setStatusMsg('🤖 正在截取 PDF 目录并合成全景图调用 AI 视觉深度解析...');
+
+    const fromP = Math.max(1, overrideStart || parseInt(tocStartPage) || 6);
+    const toP = Math.min(pdfDoc.numPages, Math.max(fromP, overrideEnd || parseInt(tocEndPage) || fromP + 2));
+
+    setStatusMsg(`🤖 正在截取 PDF 第 ${fromP}-${toP} 页目录并合成全景图调用 AI 视觉深度解析...`);
 
     try {
       const pageCanvases = [];
-      const scanPages = Math.min(4, pdfDoc.numPages);
       let tocText = '';
 
-      for (let p = 1; p <= scanPages; p++) {
+      for (let p = fromP; p <= toP; p++) {
         const page = await pdfDoc.getPage(p);
         try {
           const textContent = await page.getTextContent();
@@ -1780,7 +1806,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
           }
         } catch (e) {}
 
-        const viewport = page.getViewport({ scale: 1.0 });
+        const viewport = page.getViewport({ scale: 1.1 });
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -1794,7 +1820,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
       if (pageCanvases.length > 0) {
         const cols = pageCanvases.length <= 2 ? pageCanvases.length : 2;
         const rows = Math.ceil(pageCanvases.length / cols);
-        const cellW = 750;
+        const cellW = 800;
         const cellH = Math.round((pageCanvases[0].height / pageCanvases[0].width) * cellW);
 
         const collageCanvas = document.createElement('canvas');
@@ -1810,7 +1836,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
           cCtx.drawImage(canv, c * cellW, r * cellH, cellW, cellH);
         });
 
-        const blob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.82));
+        const blob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
         singleCollageBase64 = await new Promise(res => {
           const reader = new FileReader();
           reader.onloadend = () => res(reader.result);
@@ -1856,11 +1882,21 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
             extractedData: null
           };
         });
+
+        // 自动计算建议 offset (目录结束物理页之后对应第一课)
+        if (detected.length > 0) {
+          const firstFrom = detected[0].page_from;
+          const estOffset = Math.max(0, toP + 1 - firstFrom);
+          setPageOffset(estOffset);
+          renderOffsetSample(pdfDoc, firstFrom + estOffset);
+        }
+
         setOutline(detected);
-        setStatusMsg(`🎉 AI 视觉目录解析成功！已提取 ${detected.length} 个课时/单元，请核对右侧页码偏移量`);
+        setShowTocPicker(false);
+        setStatusMsg(`🎉 AI 视觉目录解析成功！已提取 ${detected.length} 个课时/单元，并已自动对齐页码偏移量`);
       } else {
-        const msg = json.error?.message || '未在目录图中识别到明确课时列表';
-        alert(`AI 目录解析提示: ${msg}\n\n建议使用右侧【📐 规律排课生成】快速生成完整课时大纲！`);
+        const msg = json.error?.message || '未在指定目录页中识别到明确课时列表';
+        alert(`AI 目录解析提示: ${msg}\n\n请确认目录页码范围是否准确（当前扫描第 ${fromP}-${toP} 页），或使用【📐 规律排课生成】！`);
       }
     } catch (err) {
       alert('AI 目录扫描失败: ' + err.message);
@@ -1886,6 +1922,23 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
       setTotalPages(doc.numPages);
       setStatusMsg(`PDF 加载成功！共 ${doc.numPages} 页，正在进行智能目录初筛...`);
       
+      // 快速探测目录在第几页 (扫描前 15 页寻找 Contents / Table of Contents)
+      let foundTocPage = 6;
+      for (let p = 1; p <= Math.min(15, doc.numPages); p++) {
+        try {
+          const pg = await doc.getPage(p);
+          const tc = await pg.getTextContent();
+          const str = tc.items.map(it => it.str).join(' ');
+          if (/(?:Table\s*of\s*Contents|Contents|Scope\s*&?\s*Sequence|Syllabus)/i.test(str)) {
+            foundTocPage = p;
+            break;
+          }
+        } catch (e) {}
+      }
+      setTocStartPage(foundTocPage);
+      setTocEndPage(Math.min(doc.numPages, foundTocPage + 2));
+      renderTocSample(doc, foundTocPage);
+
       // 渲染校准对照图 (默认取 PDF 第 4 页)
       renderOffsetSample(doc, 2 + pageOffset);
 
@@ -2279,13 +2332,15 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleAiTocDetection}
+                      onClick={() => setShowTocPicker(!showTocPicker)}
                       disabled={detectingToc || processing || loadingPdf}
-                      className="h-8 text-xs bg-white border-blue-200 text-blue-700 hover:bg-blue-50"
-                      title="截取前 2-4 页目录合成全景图给 AI 视觉大模型深度解析 (针对图片扫描版 PDF)"
+                      className={`h-8 text-xs font-bold transition-colors ${
+                        showTocPicker ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50'
+                      }`}
+                      title="自定义指定课本目录所在页码并让 AI 视觉识别"
                     >
                       {detectingToc ? <Loader className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5 text-blue-500" />}
-                      🤖 AI 视觉扫描目录
+                      🤖 AI 视觉扫描目录 {showTocPicker ? '▲' : '▼'}
                     </Button>
 
                     <Button
@@ -2294,14 +2349,89 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                       type="button"
                       onClick={() => setShowRuleGenerator(!showRuleGenerator)}
                       disabled={processing || loadingPdf}
-                      className="h-8 text-xs bg-white border-amber-300 text-amber-800 hover:bg-amber-50"
+                      className={`h-8 text-xs font-bold transition-colors ${
+                        showRuleGenerator ? 'bg-amber-100 border-amber-400 text-amber-900' : 'bg-white border-amber-300 text-amber-800 hover:bg-amber-50'
+                      }`}
                       title="适用于无目录或固定课时的教材，一键生成 Lesson 1 ~ N 的标准起止页大纲"
                     >
                       <Layers className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
-                      📐 规律排课生成
+                      📐 规律排课生成 {showRuleGenerator ? '▲' : '▼'}
                     </Button>
                   </div>
                 </div>
+
+                {/* AI 目录视觉扫描设置抽屉 */}
+                {showTocPicker && (
+                  <div className="p-4 bg-gradient-to-r from-blue-50/90 to-indigo-50/70 border border-blue-200 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-blue-600" />
+                        AI 视觉扫描目录配置（请指定课本目录页在 PDF 中的真实页码）
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowTocPicker(false)}
+                        className="text-blue-700 hover:text-blue-950 font-bold text-xs"
+                      >
+                        ✕ 关闭
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 bg-white p-3 rounded-xl border border-blue-100 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-700">PDF 目录所在页：第</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max={totalPages || 200}
+                          value={tocStartPage}
+                          onChange={e => {
+                            const p = parseInt(e.target.value) || 1;
+                            setTocStartPage(p);
+                            if (pdfDoc) renderTocSample(pdfDoc, p);
+                          }}
+                          className="w-16 px-2.5 py-1 text-sm border-2 border-blue-300 rounded-lg font-bold text-center text-blue-800 bg-blue-50/30 focus:ring-2 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-gray-500 font-bold">页 至 第</span>
+                        <input
+                          type="number"
+                          min={tocStartPage}
+                          max={totalPages || 200}
+                          value={tocEndPage}
+                          onChange={e => setTocEndPage(parseInt(e.target.value) || tocStartPage)}
+                          className="w-16 px-2.5 py-1 text-sm border-2 border-blue-300 rounded-lg font-bold text-center text-blue-800 bg-blue-50/30 focus:ring-2 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-gray-700 font-bold">页</span>
+                      </div>
+
+                      {/* 目录页实时缩略图 */}
+                      {tocSampleThumb && (
+                        <div className="flex items-center gap-2 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
+                          <img src={tocSampleThumb} alt="TOC preview" className="h-10 w-auto object-contain rounded border border-gray-200 shadow-sm bg-white" />
+                          <span className="text-[11px] text-gray-600 font-medium">第 {tocStartPage} 页采样确认</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 ml-auto">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          type="button"
+                          onClick={() => handleAiTocDetection(tocStartPage, tocEndPage)}
+                          disabled={detectingToc || processing}
+                          className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
+                        >
+                          {detectingToc ? <Loader className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
+                          {detectingToc ? '正在调用 AI 解析中...' : `🚀 确认扫描第 ${tocStartPage} - ${tocEndPage} 页并生成大纲`}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-blue-800 leading-relaxed">
+                      💡 <b>使用说明</b>：大部分教材前几页为封面、说明或版权页，目录通常在 <b>第 5~8 页</b>。调整页码时，中间的小缩略图会实时更新，当核对确认是目录页后，点击右侧蓝色按钮，AI 就会自动提取所有 Lesson/课时并切分好起止页码！
+                    </p>
+                  </div>
+                )}
 
                 {/* 快速规则生成大纲抽屉 */}
                 {showRuleGenerator && (
