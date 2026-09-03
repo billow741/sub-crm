@@ -1808,6 +1808,33 @@ textbooks.post('/preview-book/:code', async (c) => {
 });
 
 // ============================================================
+// POST /upload-unit-slices/:code/:num — 仅上传保存单单元的切片原图到 R2 (不调用 LLM)
+// ============================================================
+textbooks.post('/upload-unit-slices/:code/:num', async (c) => {
+  const code = c.req.param('code');
+  const num = parseInt(c.req.param('num'));
+  let formData;
+  try { formData = await c.req.formData(); } catch { return c.json({ error: { code: 'BAD_REQUEST', message: 'Invalid form data' } }, 400); }
+
+  const images = formData.getAll ? formData.getAll('images').filter(f => f && f.name) : [];
+  const R2 = c.env.TEXTBOOKS_R2;
+  let pagesSaved = 0;
+
+  if (R2 && images.length > 0) {
+    const images_arr = Array.isArray(images) ? images : [images];
+    pagesSaved = images_arr.length;
+    for (let i = 0; i < images_arr.length; i++) {
+      const f = images_arr[i];
+      const buf = await f.arrayBuffer();
+      const key = `${code}/Unit${num}/${f.name || `page-${String(i + 1).padStart(2, '0')}.jpg`}`;
+      await R2.put(key, buf, { httpMetadata: { contentType: f.type || 'image/jpeg' } });
+    }
+  }
+
+  return c.json({ success: true, data: { unit_number: num, pages_saved: pagesSaved } });
+});
+
+// ============================================================
 // POST /commit-units/:code — 接收校对后的 unit array → 写入 D1
 // Body JSON: { units: [{unit_number, unit_title, vocab, patterns, grammar}, ...] }
 // 用途: Admin 校对完点"确认保存到此 unit"

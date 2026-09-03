@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Book, FileText, Upload, Sparkles, Loader, CheckCircle, XCircle, 
   Trash2, Plus, Edit3, Save, Eye, RefreshCw, AlertCircle, 
-  ExternalLink, Layers, ChevronRight, Check, X, ArrowRight, Play, CheckCheck, BookOpen
+  ExternalLink, Layers, ChevronRight, Check, X, ArrowRight, Play, CheckCheck, BookOpen, Camera
 } from 'lucide-react';
 import { request, API_BASE_URL, API_KEY } from '../store/api';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
@@ -1611,6 +1611,9 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
   });
 
   const [processing, setProcessing] = useState(false);
+  const [slicingUnits, setSlicingUnits] = useState(false);
+  const [extractingAi, setExtractingAi] = useState(false);
+  const [previewSliceModal, setPreviewSliceModal] = useState(null);
   const [savingAll, setSavingAll] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [detectingToc, setDetectingToc] = useState(false);
@@ -2045,26 +2048,29 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
     });
   };
 
-  // 开始按大纲精准流式提取
-  const handleStartOutlineExtraction = async () => {
+  // 📸 步骤一：极速逐课切片并生成原图预览 (不调 LLM，纯本地渲染 + R2 存储)
+  const handleSliceOutlineUnits = async (specificUnitIdx = null) => {
     if (!pdfDoc) return;
-    const selectedUnits = outline.filter(u => u.selected);
-    if (selectedUnits.length === 0) {
-      alert('请至少勾选一个需要提取的单元');
+    setSlicingUnits(true);
+
+    const indices = specificUnitIdx !== null
+      ? [specificUnitIdx]
+      : outline.map((u, i) => (u.selected ? i : -1)).filter(i => i !== -1);
+
+    if (indices.length === 0) {
+      alert('请至少勾选一个需要切片的单元');
+      setSlicingUnits(false);
       return;
     }
 
-    setProcessing(true);
+    setStatusMsg('📸 正在极速逐课切片原图并生成预览...');
 
     try {
-      for (let idx = 0; idx < outline.length; idx++) {
+      for (const idx of indices) {
         const item = outline[idx];
-        if (!item.selected) continue;
-
         setCurrentProcessingUnit(item.unit_number);
-        updateOutlineItem(idx, 'status', 'processing');
+        updateOutlineItem(idx, 'status', 'slicing');
 
-        // 计算本 Unit 对应的真实 PDF 页码范围
         const pdfStart = item.page_from + pageOffset;
         const pdfEnd = item.page_to + pageOffset;
 
@@ -2074,147 +2080,213 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
         }
 
         const realPdfEnd = Math.min(pdfEnd, totalPages);
-        setStatusMsg(`正在处理 U${item.unit_number} (${item.unit_title}): 切片课本第 ${item.page_from}-${item.page_to} 页 (对应 PDF 第 ${pdfStart}-${realPdfEnd} 页)...`);
+        setStatusMsg(`📸 正在切片 U${item.unit_number} (${item.unit_title}): 课本第 ${item.page_from}-${item.page_to} 页 (PDF 第 ${pdfStart}-${realPdfEnd} 页)...`);
 
+        const thumbs = [];
+        const fd = new FormData();
+
+        for (let p = pdfStart; p <= realPdfEnd; p++) {
+          const bookPageNum = p - pageOffset;
+          const page = await pdfDoc.getPage(p);
+
+          const viewport = page.getViewport({ scale: 1.2 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+          thumbs.push({ url: URL.createObjectURL(blob), pageNum: bookPageNum, pdfPage: p });
+          fd.append('images', blob, `page-${String(bookPageNum).padStart(2, '0')}.jpg`);
+        }
+
+        // 上传到 R2 (不调 LLM，纯存储切图)
         try {
-          const fd = new FormData();
-          const pageBlobs = [];
-          let unitTextContent = '';
+          await fetch(`${API_BASE_URL}/textbooks/upload-unit-slices/${bookCode}/${item.unit_number}`, {
+            method: 'POST',
+            headers: { 'X-API-Key': API_KEY },
+            body: fd
+          });
+        } catch (ue) {
+          console.warn('Upload slices to R2 failed:', ue);
+        }
 
-          // 1. 逐页高清切片与文字层提取
-          for (let p = pdfStart; p <= realPdfEnd; p++) {
-            const bookPageNum = p - pageOffset;
+        setOutline(prev => {
+          const list = [...prev];
+          list[idx] = {
+            ...list[idx],
+            status: 'sliced',
+            sliceThumbs: thumbs
+          };
+          return list;
+        });
+      }
+
+      setStatusMsg('🎉 切片生成完毕！请点击表格中的【👁️ 查看切图】核对，确认无误后点击【步骤二：开始 AI 提取】');
+    } catch (e) {
+      alert('切片过程出错: ' + e.message);
+    } finally {
+      setSlicingUnits(false);
+      setCurrentProcessingUnit(null);
+    }
+  };
+
+  // 🤖 步骤二：调用 AI 视觉模型提取词汇、句型与知识点 (可批量，也可单课)
+  const handleStartAiExtraction = async (specificUnitIdx = null) => {
+    if (!pdfDoc) return;
+    setExtractingAi(true);
+
+    const indices = specificUnitIdx !== null
+      ? [specificUnitIdx]
+      : outline.map((u, i) => (u.selected && u.status !== 'success' ? i : -1)).filter(i => i !== -1);
+
+    if (indices.length === 0) {
+      alert('所有选中的课时已提取完毕，或未勾选课时');
+      setExtractingAi(false);
+      return;
+    }
+
+    setStatusMsg('🤖 正在调用 AI 视觉大模型批量提取课本知识点...');
+
+    try {
+      for (const idx of indices) {
+        const item = outline[idx];
+        setCurrentProcessingUnit(item.unit_number);
+        updateOutlineItem(idx, 'status', 'extracting');
+        setStatusMsg(`🤖 AI 正在识别 U${item.unit_number} (${item.unit_title})...`);
+
+        const pdfStart = item.page_from + pageOffset;
+        const pdfEnd = Math.min(item.page_to + pageOffset, totalPages);
+
+        const fd = new FormData();
+        let unitTextContent = '';
+
+        // 提取文本层
+        for (let p = pdfStart; p <= pdfEnd; p++) {
+          try {
             const page = await pdfDoc.getPage(p);
+            const textObj = await page.getTextContent();
+            const pageStr = textObj.items.map(it => it.str).filter(Boolean).join(' ');
+            if (pageStr.trim()) unitTextContent += `\n[Page ${p - pageOffset}]: ${pageStr}`;
+          } catch (te) {}
+        }
+        if (unitTextContent.trim()) {
+          fd.append('unit_text', unitTextContent.trim());
+        }
 
-            try {
-              const textObj = await page.getTextContent();
-              const pageStr = textObj.items.map(it => it.str).filter(Boolean).join(' ');
-              if (pageStr.trim()) {
-                unitTextContent += `\n[Page ${bookPageNum}]: ${pageStr}`;
-              }
-            } catch (te) {
-              console.warn('Text extract error:', te);
-            }
-
-            const viewport = page.getViewport({ scale: 1.5 });
+        // 如果本地已存在 sliceThumbs，直接拼合全景图给 AI
+        let thumbs = item.sliceThumbs;
+        if (!thumbs || thumbs.length === 0) {
+          // 现场快速切图
+          thumbs = [];
+          for (let p = pdfStart; p <= pdfEnd; p++) {
+            const page = await pdfDoc.getPage(p);
+            const viewport = page.getViewport({ scale: 1.2 });
             const canvas = document.createElement('canvas');
             canvas.width = viewport.width;
             canvas.height = viewport.height;
             const ctx = canvas.getContext('2d');
             await page.render({ canvasContext: ctx, viewport }).promise;
             const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
-            pageBlobs.push({ blob, pageNum: bookPageNum });
-            fd.append('images', blob, `page-${String(bookPageNum).padStart(2, '0')}.jpg`);
+            thumbs.push({ url: URL.createObjectURL(blob), pageNum: p - pageOffset, pdfPage: p });
           }
+        }
 
-          // 2. 为 AI 视觉模型合成全景拼图
-          if (pageBlobs.length > 0) {
-            const loadedImgs = await Promise.all(pageBlobs.map(b => new Promise(res => {
-              const img = new Image();
-              img.onload = () => res(img);
-              img.src = URL.createObjectURL(b.blob);
-            })));
+        if (thumbs.length > 0) {
+          const loadedImgs = await Promise.all(thumbs.map(t => new Promise(res => {
+            const img = new Image();
+            img.onload = () => res(img);
+            img.src = t.url;
+          })));
 
-            const cols = loadedImgs.length <= 2 ? loadedImgs.length : (loadedImgs.length <= 4 ? 2 : 4);
-            const rows = Math.ceil(loadedImgs.length / cols);
-            const singleW = 800;
-            const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
+          const cols = loadedImgs.length <= 2 ? loadedImgs.length : (loadedImgs.length <= 4 ? 2 : 4);
+          const rows = Math.ceil(loadedImgs.length / cols);
+          const singleW = 800;
+          const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
 
-            const collageCanvas = document.createElement('canvas');
-            collageCanvas.width = singleW * cols;
-            collageCanvas.height = singleH * rows;
-            const cCtx = collageCanvas.getContext('2d');
-            cCtx.fillStyle = '#ffffff';
-            cCtx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
+          const collageCanvas = document.createElement('canvas');
+          collageCanvas.width = singleW * cols;
+          collageCanvas.height = singleH * rows;
+          const cCtx = collageCanvas.getContext('2d');
+          cCtx.fillStyle = '#ffffff';
+          cCtx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
 
-            loadedImgs.forEach((img, i) => {
-              const col = i % cols;
-              const row = Math.floor(i / cols);
-              cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
-            });
-
-            const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
-            fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
-          }
-
-          // 3. 注入课本文本层内容
-          if (unitTextContent.trim()) {
-            fd.append('unit_text', unitTextContent.trim());
-          }
-
-          // 4. 携带教材体系 Schema 配置
-          if (bookSchema) {
-            fd.append('content_schema', JSON.stringify(bookSchema));
-          }
-
-          // 同时在 FormData 和 Header 中携带配置
-          if (llmConfig?.baseUrl) fd.append('llm_base_url', llmConfig.baseUrl);
-          if (llmConfig?.apiKey) fd.append('llm_api_key', llmConfig.apiKey);
-          if (llmConfig?.model) fd.append('llm_model', llmConfig.model);
-
-          setStatusMsg(`正在调用 AI 视觉模型提取 Unit ${item.unit_number} 知识点...`);
-          const reqHeaders = { 'X-API-Key': API_KEY };
-          if (llmConfig?.baseUrl) reqHeaders['X-LLM-Base-Url'] = llmConfig.baseUrl;
-          if (llmConfig?.apiKey) reqHeaders['X-LLM-Api-Key'] = llmConfig.apiKey;
-          if (llmConfig?.model) reqHeaders['X-LLM-Model'] = llmConfig.model;
-
-          const res = await fetch(`${API_BASE_URL}/textbooks/preview-unit/${bookCode}/${item.unit_number}`, {
-            method: 'POST',
-            headers: reqHeaders,
-            body: fd
+          loadedImgs.forEach((img, i) => {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
           });
-          const json = await res.json();
 
-          if (json.data) {
-            const d = json.data;
-            const extraTotal = Object.values(d.extra_content || {}).reduce((acc, v) => acc + (Array.isArray(v) ? v.length : 0), 0);
+          const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
+          fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
+        }
 
-            setOutline(prev => {
-              const list = [...prev];
-              list[idx] = {
-                ...list[idx],
-                status: 'success',
-                vocabCount: (d.vocab || []).length,
-                patternCount: (d.patterns || []).length,
-                extraCount: extraTotal,
-                extractedData: {
-                  unit_number: item.unit_number,
-                  unit_title: d.unit_title || item.unit_title,
-                  page_from: item.page_from,
-                  page_to: item.page_to,
-                  vocab: d.vocab || [],
-                  patterns: d.patterns || [],
-                  grammar: d.grammar || [],
-                  extra_content: d.extra_content || {}
-                }
-              };
-              return list;
-            });
-          } else {
-            const errMsg = json.error?.message || '提取失败';
-            setOutline(prev => {
-              const list = [...prev];
-              list[idx] = { ...list[idx], status: 'error', errorMsg: errMsg };
-              return list;
-            });
-            setStatusMsg(`⚠️ Unit ${item.unit_number} 提取失败: ${errMsg}`);
-          }
-        } catch (err) {
-          console.error(err);
+        if (bookSchema) fd.append('content_schema', JSON.stringify(bookSchema));
+        if (llmConfig?.baseUrl) fd.append('llm_base_url', llmConfig.baseUrl);
+        if (llmConfig?.apiKey) fd.append('llm_api_key', llmConfig.apiKey);
+        if (llmConfig?.model) fd.append('llm_model', llmConfig.model);
+
+        const reqHeaders = { 'X-API-Key': API_KEY };
+        if (llmConfig?.baseUrl) reqHeaders['X-LLM-Base-Url'] = llmConfig.baseUrl;
+        if (llmConfig?.apiKey) reqHeaders['X-LLM-Api-Key'] = llmConfig.apiKey;
+        if (llmConfig?.model) reqHeaders['X-LLM-Model'] = llmConfig.model;
+
+        const res = await fetch(`${API_BASE_URL}/textbooks/preview-unit/${bookCode}/${item.unit_number}`, {
+          method: 'POST',
+          headers: reqHeaders,
+          body: fd
+        });
+        const json = await res.json();
+
+        if (json.data) {
+          const d = json.data;
+          const extraTotal = Object.values(d.extra_content || {}).reduce((acc, v) => acc + (Array.isArray(v) ? v.length : 0), 0);
+
           setOutline(prev => {
             const list = [...prev];
-            list[idx] = { ...list[idx], status: 'error', errorMsg: err.message };
+            list[idx] = {
+              ...list[idx],
+              status: 'success',
+              vocabCount: (d.vocab || []).length,
+              patternCount: (d.patterns || []).length,
+              extraCount: extraTotal,
+              extractedData: {
+                unit_number: item.unit_number,
+                unit_title: d.unit_title || item.unit_title,
+                page_from: item.page_from,
+                page_to: item.page_to,
+                vocab: d.vocab || [],
+                patterns: d.patterns || [],
+                grammar: d.grammar || [],
+                extra_content: d.extra_content || {}
+              }
+            };
             return list;
           });
-          setStatusMsg(`⚠️ Unit ${item.unit_number} 请求异常: ${err.message}`);
+        } else {
+          const errMsg = json.error?.message || '提取失败';
+          setOutline(prev => {
+            const list = [...prev];
+            list[idx] = { ...list[idx], status: 'error', errorMsg: errMsg };
+            return list;
+          });
+          setStatusMsg(`⚠️ Unit ${item.unit_number} 提取失败: ${errMsg}`);
         }
       }
 
-      setStatusMsg('🎉 批次处理完毕！请查看各单元状态并点击下方保存入库');
+      setStatusMsg('🎉 AI 提取完毕！请核对各单元数据并点击下方【全部保存入库】');
+    } catch (err) {
+      alert('AI 提取出错: ' + err.message);
     } finally {
-      setProcessing(false);
+      setExtractingAi(false);
       setCurrentProcessingUnit(null);
     }
+  };
+
+  // 一键两步走 (切片 + AI 提取)
+  const handleStartOutlineExtraction = async () => {
+    await handleSliceOutlineUnits();
+    await handleStartAiExtraction();
   };
 
   // 全部保存入库
@@ -2571,26 +2643,40 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                     </Button>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <Button variant="outline" size="sm" onClick={addOutlineUnit} disabled={processing || loadingPdf}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={addOutlineUnit} disabled={processing || slicingUnits || extractingAi || loadingPdf}>
                       <Plus className="w-4 h-4 mr-1" /> 添加单元
                     </Button>
 
                     <Button
-                      variant="primary" size="sm"
-                      onClick={handleStartOutlineExtraction}
-                      disabled={processing || detectingToc || loadingPdf}
-                      className="shadow-sm"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSliceOutlineUnits(null)}
+                      disabled={processing || slicingUnits || extractingAi || loadingPdf}
+                      className="bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 font-bold shadow-sm"
+                      title="仅从 PDF 极速切出页面并生成原图预览，不调用大模型，几秒钟即可完成并核对切图！"
                     >
-                      {processing ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : loadingPdf ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
-                      {processing ? '提取中...' : loadingPdf ? '解析中...' : '🚀 确认分页并开始切片提取'}
+                      {slicingUnits ? <Loader className="w-4 h-4 mr-1.5 animate-spin" /> : <Camera className="w-4 h-4 mr-1.5 text-amber-600" />}
+                      {slicingUnits ? '切片处理中...' : '📸 步骤一：极速批量切片'}
+                    </Button>
+
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleStartAiExtraction(null)}
+                      disabled={processing || slicingUnits || extractingAi || loadingPdf}
+                      className="bg-primary-600 hover:bg-primary-700 text-white font-bold shadow-sm"
+                      title="核对切片原图无误后，调用 AI 视觉大模型批量提取知识点"
+                    >
+                      {extractingAi ? <Loader className="w-4 h-4 mr-1.5 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1.5" />}
+                      {extractingAi ? 'AI 正在批量识别...' : '🤖 步骤二：批量 AI 知识点提取'}
                     </Button>
                   </div>
                 </div>
 
                 {statusMsg && (
                   <div className="text-sm text-primary-800 bg-primary-50 border border-primary-100 p-3 rounded-xl font-medium flex items-center gap-2">
-                    {(processing || detectingToc) && <Loader className="w-4 h-4 animate-spin shrink-0" />}
+                    {(processing || slicingUnits || extractingAi || detectingToc) && <Loader className="w-4 h-4 animate-spin shrink-0" />}
                     {statusMsg}
                   </div>
                 )}
@@ -2606,7 +2692,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                         <th className="px-4 py-3 w-40">印刷页码</th>
                         <th className="px-4 py-3 w-40 text-center">对应 PDF</th>
                         <th className="px-4 py-3 w-32 text-center">状态</th>
-                        <th className="px-4 py-3 w-44">提取结果</th>
+                        <th className="px-4 py-3 w-56">切图核对与提取结果</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -2659,31 +2745,68 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                               第 {pdfFrom} - {pdfTo} 页
                             </td>
                             <td className="px-4 py-3 text-center">
-                              {u.status === 'processing' ? (
-                                <Badge variant="primary" className="bg-primary-100 text-primary-700 animate-pulse">提取中</Badge>
+                              {u.status === 'slicing' ? (
+                                <Badge variant="primary" className="bg-amber-100 text-amber-800 animate-pulse">切片中...</Badge>
+                              ) : u.status === 'sliced' ? (
+                                <Badge className="bg-amber-100 text-amber-900 border border-amber-300">📸 已切片 ({u.sliceThumbs?.length || pageCount}P)</Badge>
+                              ) : u.status === 'extracting' ? (
+                                <Badge variant="primary" className="bg-blue-100 text-blue-800 animate-pulse">🤖 AI 识别中...</Badge>
                               ) : u.status === 'success' ? (
-                                <Badge variant="success">已就绪</Badge>
+                                <Badge variant="success">✅ 已就绪</Badge>
                               ) : u.status === 'error' ? (
-                                <div className="flex flex-col items-center gap-1">
-                                  <Badge variant="danger">失败</Badge>
-                                </div>
+                                <Badge variant="danger">失败</Badge>
                               ) : (
-                                <span className="text-gray-400 text-xs font-medium">待处理</span>
+                                <span className="text-gray-400 text-xs font-medium">待切片</span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-xs">
-                              {u.status === 'success' ? (
-                                <div className="flex flex-col gap-1 text-gray-600 font-medium bg-gray-50 p-1.5 rounded-lg border border-gray-100">
-                                  <span>{u.vocabCount} 词汇 · {u.patternCount} 句型</span>
-                                  {u.extraCount > 0 && (
-                                    <span className="text-primary-700 font-bold text-[11px]">✨ {u.extraCount} 拓展/拼读点</span>
-                                  )}
-                                </div>
-                              ) : u.errorMsg ? (
-                                <span className="text-danger-600 block max-w-[140px] truncate" title={u.errorMsg}>
-                                  {u.errorMsg}
-                                </span>
-                              ) : <span className="text-gray-300">-</span>}
+                              <div className="flex flex-wrap items-center gap-2">
+                                {/* 切片原图查看按钮 */}
+                                {u.sliceThumbs && u.sliceThumbs.length > 0 && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPreviewSliceModal({
+                                      title: `${u.unit_title} (印刷第 ${u.page_from}-${u.page_to} 页 / PDF 第 ${pdfFrom}-${pdfTo} 页)`,
+                                      thumbs: u.sliceThumbs
+                                    })}
+                                    className="h-6 px-2 text-[11px] bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 font-bold"
+                                    title="点击放大查看该课切出的所有高清原图，核对内容是否准确"
+                                  >
+                                    <Eye className="w-3 h-3 mr-1" /> 预览原图 ({u.sliceThumbs.length}P)
+                                  </Button>
+                                )}
+
+                                {/* 单课快捷触发 */}
+                                {u.status !== 'success' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleStartAiExtraction(idx)}
+                                    disabled={slicingUnits || extractingAi}
+                                    className="h-6 px-2 text-[11px] text-primary-700 hover:bg-primary-50 font-bold"
+                                    title="单独调用 AI 识别此课时"
+                                  >
+                                    ⚡ AI 识别此课
+                                  </Button>
+                                )}
+
+                                {/* 提取结果统计 */}
+                                {u.status === 'success' && (
+                                  <div className="flex items-center gap-1.5 text-gray-700 font-medium bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                                    <span>{u.vocabCount}词 · {u.patternCount}句</span>
+                                    {u.extraCount > 0 && (
+                                      <span className="text-primary-700 font-bold">✨{u.extraCount}拓展</span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {u.errorMsg && (
+                                  <span className="text-danger-600 block max-w-[140px] truncate" title={u.errorMsg}>
+                                    {u.errorMsg}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -2695,6 +2818,47 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
             </div>
           )}
         </div>
+
+        {/* 切片原图查看弹窗 */}
+        {previewSliceModal && (
+          <div className="fixed inset-0 z-[70] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200">
+              <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
+                <div className="flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-amber-600" />
+                  <span className="font-bold text-gray-900 text-sm">{previewSliceModal.title}</span>
+                  <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
+                    共 {previewSliceModal.thumbs.length} 页切图
+                  </Badge>
+                </div>
+                <button
+                  onClick={() => setPreviewSliceModal(null)}
+                  className="w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-5 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-4 bg-gray-100/60 flex-1">
+                {previewSliceModal.thumbs.map((t, i) => (
+                  <div key={i} className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center">
+                    <div className="w-full aspect-[3/4] bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center border border-gray-100 mb-2">
+                      <img src={t.url} alt={`Page ${t.pageNum}`} className="w-full h-full object-contain" />
+                    </div>
+                    <div className="text-xs font-bold text-gray-800 flex items-center justify-between w-full px-1">
+                      <span>课本第 {t.pageNum} 页</span>
+                      <span className="text-gray-400 font-normal">PDF P{t.pdfPage}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-3 bg-white border-t border-gray-100 flex justify-end">
+                <Button variant="primary" size="sm" onClick={() => setPreviewSliceModal(null)}>
+                  确认切片无误，关闭预览
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-gray-100 bg-white flex items-center justify-between shrink-0">
