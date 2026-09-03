@@ -2851,9 +2851,9 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                               {/* 📸 切片原图 */}
                               <td className="px-3 py-2.5 text-center whitespace-nowrap">
                                 {u.status === 'slicing' ? (
-                                  <Badge variant="primary" className="bg-amber-100 text-amber-800 animate-pulse whitespace-nowrap text-xs">
+                                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium animate-pulse whitespace-nowrap">
                                     📸 切片中...
-                                  </Badge>
+                                  </span>
                                 ) : u.sliceThumbs && u.sliceThumbs.length > 0 ? (
                                   <Button
                                     variant="outline"
@@ -2862,10 +2862,10 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                                       title: `${u.unit_title} (印刷第 ${u.page_from}-${u.page_to} 页 / PDF 第 ${pdfFrom}-${pdfTo} 页)`,
                                       thumbs: u.sliceThumbs
                                     })}
-                                    className="h-7 px-2.5 text-xs bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 font-bold shadow-sm whitespace-nowrap inline-flex items-center"
+                                    className="h-7 px-3 text-xs bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 rounded-lg font-bold shadow-sm whitespace-nowrap inline-flex items-center gap-1"
                                     title="点击放大查看该课切出的所有高清原图"
                                   >
-                                    <Eye className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                                    <Eye className="w-3.5 h-3.5 text-blue-600" />
                                     <span>预览原图 ({u.sliceThumbs.length}P)</span>
                                   </Button>
                                 ) : (
@@ -2876,11 +2876,11 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                               {/* 🤖 知识点提取结果 */}
                               <td className="px-3 py-2.5 text-center whitespace-nowrap">
                                 {u.status === 'extracting' ? (
-                                  <Badge variant="primary" className="bg-blue-100 text-blue-800 animate-pulse whitespace-nowrap text-xs">
+                                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 text-xs font-medium animate-pulse whitespace-nowrap">
                                     🤖 AI 识别中...
-                                  </Badge>
+                                  </span>
                                 ) : u.status === 'success' ? (
-                                  <div className="inline-flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg font-medium shadow-sm whitespace-nowrap">
+                                  <div className="inline-flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-lg font-medium shadow-sm whitespace-nowrap">
                                     <span className="font-bold">{u.vocabCount} 词</span>
                                     <span className="text-emerald-300">·</span>
                                     <span className="font-bold">{u.patternCount} 句</span>
@@ -2892,13 +2892,15 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                                     )}
                                   </div>
                                 ) : u.status === 'error' ? (
-                                  <div className="inline-flex items-center gap-1">
-                                    <Badge variant="danger" className="text-xs" title={u.errorMsg}>失败</Badge>
+                                  <div className="inline-flex items-center gap-1.5">
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-danger-50 text-danger-700 border border-danger-200 text-xs font-bold whitespace-nowrap" title={u.errorMsg}>
+                                      失败
+                                    </span>
                                     <Button
                                       variant="ghost" size="sm"
                                       onClick={() => handleStartAiExtraction(idx)}
                                       disabled={slicingUnits || extractingAi}
-                                      className="h-6 px-1.5 text-[11px] text-danger-700 hover:bg-danger-50 font-bold"
+                                      className="h-6 px-2 text-[11px] text-danger-700 hover:bg-danger-50 font-bold rounded-md"
                                     >
                                       重试
                                     </Button>
