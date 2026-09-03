@@ -2051,6 +2051,15 @@ Return strict JSON only matching:
 
     resultUnits.sort((a, b) => a.page_from - b.page_from);
 
+    // 核心自动校准：后一课若在 next.page_from 开始，当前课必在 (next.page_from - 1) 结束，绝不重叠！
+    for (let i = 0; i < resultUnits.length - 1; i++) {
+      const cur = resultUnits[i];
+      const next = resultUnits[i + 1];
+      if (next.page_from > cur.page_from) {
+        cur.page_to = next.page_from - 1;
+      }
+    }
+
     return c.json({
       success: true,
       data: {

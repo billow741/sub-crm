@@ -1930,12 +1930,12 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
       const json = await resp.json();
 
       if (json.data?.units && json.data.units.length > 0) {
-        const detected = json.data.units.map(u => {
+        const hasLessonKeyword = isPhonics || json.data.units.some(x => (x.unit_title || '').toLowerCase().includes('lesson'));
+        const detected = json.data.units.map((u, i) => {
           const rawTitle = u.unit_title || '';
-          const isLesson = rawTitle.toLowerCase().includes('lesson');
           return {
-            unit_number: u.unit_number !== undefined ? u.unit_number : 1,
-            unit_title: rawTitle || (isLesson ? `Lesson ${u.unit_number}` : `Unit ${u.unit_number}`),
+            unit_number: u.unit_number !== undefined ? u.unit_number : i + 1,
+            unit_title: rawTitle || (hasLessonKeyword ? `Lesson ${u.unit_number}` : `Unit ${u.unit_number}`),
             page_from: parseInt(u.page_from) || 4,
             page_to: parseInt(u.page_to) || (parseInt(u.page_from) + 3 || 7),
             selected: true,
@@ -1946,6 +1946,13 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
             extractedData: null
           };
         });
+
+        // 核心消除重叠页：若后一课从 N 页开始，前一课必须在 N - 1 结束！
+        for (let i = 0; i < detected.length - 1; i++) {
+          if (detected[i + 1].page_from > detected[i].page_from) {
+            detected[i].page_to = detected[i + 1].page_from - 1;
+          }
+        }
 
         // 自动计算建议 offset
         if (detected.length > 0) {
@@ -2062,6 +2069,12 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
     setOutline(prev => {
       const list = [...prev];
       list[index] = { ...list[index], [field]: val };
+      // 智能联动：如果修改了本课起始页，且前一课结束页大于等于本课起始页，则自动把前一课结束页调整为 val - 1
+      if (field === 'page_from' && index > 0 && typeof val === 'number') {
+        if (list[index - 1].page_to >= val) {
+          list[index - 1] = { ...list[index - 1], page_to: Math.max(list[index - 1].page_from, val - 1) };
+        }
+      }
       return list;
     });
   };
@@ -2784,26 +2797,28 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {outline.map((u, idx) => {
-                        const pdfFrom = u.page_from + pageOffset;
-                        const pdfTo = u.page_to + pageOffset;
-                        const pageCount = Math.max(1, u.page_to - u.page_from + 1);
-                        const isProcessingThis = currentProcessingUnit === u.unit_number;
+                      {(() => {
+                        const isLessonMode = isPhonics || outline.some(it => (it.unit_title || '').toLowerCase().includes('lesson'));
+                        return outline.map((u, idx) => {
+                          const pdfFrom = u.page_from + pageOffset;
+                          const pdfTo = u.page_to + pageOffset;
+                          const pageCount = Math.max(1, u.page_to - u.page_from + 1);
+                          const isProcessingThis = currentProcessingUnit === u.unit_number;
 
-                        return (
-                          <tr key={idx} className={`${isProcessingThis ? 'bg-primary-50/50' : 'hover:bg-gray-50'} transition-colors`}>
-                            <td className="px-4 py-3 text-center">
-                              <input
-                                type="checkbox"
-                                checked={u.selected}
-                                onChange={e => updateOutlineItem(idx, 'selected', e.target.checked)}
-                                className="rounded text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
-                              />
-                            </td>
-                            <td className="px-4 py-3 font-bold text-gray-900">
-                              {u.unit_number === 0 ? 'Intro' : (u.unit_title || '').toLowerCase().includes('lesson') ? `L${u.unit_number}` : `U${u.unit_number}`}
-                            </td>
-                            <td className="px-4 py-3">
+                          return (
+                            <tr key={idx} className={`${isProcessingThis ? 'bg-primary-50/50' : 'hover:bg-gray-50'} transition-colors`}>
+                              <td className="px-4 py-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={u.selected}
+                                  onChange={e => updateOutlineItem(idx, 'selected', e.target.checked)}
+                                  className="rounded text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
+                                />
+                              </td>
+                              <td className="px-4 py-3 font-bold text-gray-900">
+                                {u.unit_number === 0 ? 'Intro' : isLessonMode ? `L${u.unit_number}` : `U${u.unit_number}`}
+                              </td>
+                              <td className="px-4 py-3">
                               <input
                                 type="text"
                                 value={u.unit_title}
@@ -2898,7 +2913,8 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                             </td>
                           </tr>
                         );
-                      })}
+                      });
+                    })()}
                     </tbody>
                   </table>
                 </div>
