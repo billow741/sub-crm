@@ -250,6 +250,12 @@ export default function Textbooks() {
 
       setRenderedImages(imgs);
     } catch (err) {
+      if (err.message && (err.message.includes('dynamically imported module') || err.message.includes('MIME type'))) {
+        if (confirm('系统已发布更新版本，需要刷新浏览器以载入最新组件。是否立即刷新？')) {
+          window.location.reload();
+          return;
+        }
+      }
       alert('PDF 解析失败: ' + err.message);
     }
     setRendering(false);
@@ -1794,6 +1800,12 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
       // 立即触发文本关键词初筛分页
       scanKeywordsAndPaginate(doc);
     } catch (err) {
+      if (err.message && (err.message.includes('dynamically imported module') || err.message.includes('MIME type'))) {
+        if (confirm('系统刚刚部署了新版本，需要刷新浏览器以载入最新解析模块。是否立即刷新？')) {
+          window.location.reload();
+          return;
+        }
+      }
       alert('加载整本 PDF 失败: ' + err.message);
       setProcessing(false);
     }
