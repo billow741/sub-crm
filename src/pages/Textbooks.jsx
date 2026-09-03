@@ -2784,16 +2784,16 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
 
                 {/* 大纲表格 */}
                 <div className="border border-gray-200 rounded-xl overflow-x-auto bg-white shadow-sm">
-                  <table className="w-full text-sm text-left min-w-[760px]">
-                    <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold">
+                  <table className="w-full text-sm text-left min-w-[860px]">
+                    <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold text-xs">
                       <tr>
                         <th className="px-3 py-3 w-10 text-center">选</th>
-                        <th className="px-3 py-3 w-16">课时</th>
-                        <th className="px-3 py-3 min-w-[260px]">单元/课时标题</th>
-                        <th className="px-3 py-3 w-40">印刷页码</th>
-                        <th className="px-3 py-3 w-36 text-center">对应 PDF</th>
-                        <th className="px-3 py-3 w-28 text-center">状态</th>
-                        <th className="px-3 py-3 w-56">切图核对与提取结果</th>
+                        <th className="px-3 py-3 w-14 text-center">课时</th>
+                        <th className="px-3 py-3 min-w-[220px]">单元/课时标题</th>
+                        <th className="px-3 py-3 w-36 text-center">印刷页码</th>
+                        <th className="px-3 py-3 w-28 text-center">对应 PDF</th>
+                        <th className="px-3 py-3 w-36 text-center">📸 切片原图</th>
+                        <th className="px-3 py-3 min-w-[200px] text-center">🤖 知识点提取结果</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -2807,7 +2807,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
 
                           return (
                             <tr key={idx} className={`${isProcessingThis ? 'bg-primary-50/50' : 'hover:bg-gray-50'} transition-colors`}>
-                              <td className="px-4 py-3 text-center">
+                              <td className="px-3 py-2.5 text-center">
                                 <input
                                   type="checkbox"
                                   checked={u.selected}
@@ -2815,57 +2815,46 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                                   className="rounded text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
                                 />
                               </td>
-                              <td className="px-4 py-3 font-bold text-gray-900">
+                              <td className="px-3 py-2.5 font-bold text-gray-900 text-center">
                                 {u.unit_number === 0 ? 'Intro' : isLessonMode ? `L${u.unit_number}` : `U${u.unit_number}`}
                               </td>
-                              <td className="px-4 py-3">
-                              <input
-                                type="text"
-                                value={u.unit_title}
-                                onChange={e => updateOutlineItem(idx, 'unit_title', e.target.value)}
-                                className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none transition-shadow"
-                              />
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
+                              <td className="px-3 py-2.5">
                                 <input
-                                  type="number"
-                                  value={u.page_from}
-                                  onChange={e => updateOutlineItem(idx, 'page_from', parseInt(e.target.value) || 0)}
-                                  className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                  type="text"
+                                  value={u.unit_title}
+                                  onChange={e => updateOutlineItem(idx, 'unit_title', e.target.value)}
+                                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none transition-shadow"
                                 />
-                                <span className="text-gray-400">-</span>
-                                <input
-                                  type="number"
-                                  value={u.page_to}
-                                  onChange={e => updateOutlineItem(idx, 'page_to', parseInt(e.target.value) || 0)}
-                                  className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                                />
-                                <span className="text-[11px] text-gray-400 font-mono">({pageCount}P)</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-gray-500 font-bold text-center bg-gray-50/50">
-                              第 {pdfFrom} - {pdfTo} 页
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {u.status === 'slicing' ? (
-                                <Badge variant="primary" className="bg-amber-100 text-amber-800 animate-pulse">切片中...</Badge>
-                              ) : u.status === 'sliced' ? (
-                                <Badge className="bg-amber-100 text-amber-900 border border-amber-300">📸 已切片 ({u.sliceThumbs?.length || pageCount}P)</Badge>
-                              ) : u.status === 'extracting' ? (
-                                <Badge variant="primary" className="bg-blue-100 text-blue-800 animate-pulse">🤖 AI 识别中...</Badge>
-                              ) : u.status === 'success' ? (
-                                <Badge variant="success">✅ 已就绪</Badge>
-                              ) : u.status === 'error' ? (
-                                <Badge variant="danger">失败</Badge>
-                              ) : (
-                                <span className="text-gray-400 text-xs font-medium">待切片</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-xs">
-                              <div className="flex flex-wrap items-center gap-2">
-                                {/* 切片原图查看按钮 */}
-                                {u.sliceThumbs && u.sliceThumbs.length > 0 && (
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    value={u.page_from}
+                                    onChange={e => updateOutlineItem(idx, 'page_from', parseInt(e.target.value) || 0)}
+                                    className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                  />
+                                  <span className="text-gray-400">-</span>
+                                  <input
+                                    type="number"
+                                    value={u.page_to}
+                                    onChange={e => updateOutlineItem(idx, 'page_to', parseInt(e.target.value) || 0)}
+                                    className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                  />
+                                  <span className="text-[11px] text-gray-400 font-mono">({pageCount}P)</span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 text-gray-500 font-bold text-center bg-gray-50/50 whitespace-nowrap text-xs">
+                                第 {pdfFrom} - {pdfTo} 页
+                              </td>
+
+                              {/* 📸 切片原图 */}
+                              <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                                {u.status === 'slicing' ? (
+                                  <Badge variant="primary" className="bg-amber-100 text-amber-800 animate-pulse whitespace-nowrap text-xs">
+                                    📸 切片中...
+                                  </Badge>
+                                ) : u.sliceThumbs && u.sliceThumbs.length > 0 ? (
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -2873,48 +2862,64 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                                       title: `${u.unit_title} (印刷第 ${u.page_from}-${u.page_to} 页 / PDF 第 ${pdfFrom}-${pdfTo} 页)`,
                                       thumbs: u.sliceThumbs
                                     })}
-                                    className="h-6 px-2 text-[11px] bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 font-bold"
-                                    title="点击放大查看该课切出的所有高清原图，核对内容是否准确"
+                                    className="h-7 px-2.5 text-xs bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 font-bold shadow-sm whitespace-nowrap inline-flex items-center"
+                                    title="点击放大查看该课切出的所有高清原图"
                                   >
-                                    <Eye className="w-3 h-3 mr-1" /> 预览原图 ({u.sliceThumbs.length}P)
+                                    <Eye className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                                    <span>预览原图 ({u.sliceThumbs.length}P)</span>
                                   </Button>
+                                ) : (
+                                  <span className="text-gray-300 text-xs font-medium">待切片</span>
                                 )}
+                              </td>
 
-                                {/* 单课快捷触发 */}
-                                {u.status !== 'success' && (
+                              {/* 🤖 知识点提取结果 */}
+                              <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                                {u.status === 'extracting' ? (
+                                  <Badge variant="primary" className="bg-blue-100 text-blue-800 animate-pulse whitespace-nowrap text-xs">
+                                    🤖 AI 识别中...
+                                  </Badge>
+                                ) : u.status === 'success' ? (
+                                  <div className="inline-flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg font-medium shadow-sm whitespace-nowrap">
+                                    <span className="font-bold">{u.vocabCount} 词</span>
+                                    <span className="text-emerald-300">·</span>
+                                    <span className="font-bold">{u.patternCount} 句</span>
+                                    {u.extraCount > 0 && (
+                                      <>
+                                        <span className="text-emerald-300">·</span>
+                                        <span className="text-primary-700 font-bold">✨{u.extraCount} 拓展</span>
+                                      </>
+                                    )}
+                                  </div>
+                                ) : u.status === 'error' ? (
+                                  <div className="inline-flex items-center gap-1">
+                                    <Badge variant="danger" className="text-xs" title={u.errorMsg}>失败</Badge>
+                                    <Button
+                                      variant="ghost" size="sm"
+                                      onClick={() => handleStartAiExtraction(idx)}
+                                      disabled={slicingUnits || extractingAi}
+                                      className="h-6 px-1.5 text-[11px] text-danger-700 hover:bg-danger-50 font-bold"
+                                    >
+                                      重试
+                                    </Button>
+                                  </div>
+                                ) : (
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleStartAiExtraction(idx)}
                                     disabled={slicingUnits || extractingAi}
-                                    className="h-6 px-2 text-[11px] text-primary-700 hover:bg-primary-50 font-bold"
+                                    className="h-7 px-2.5 text-xs text-primary-700 hover:bg-primary-50 font-bold border border-primary-200 hover:border-primary-300 bg-white rounded-lg shadow-sm whitespace-nowrap inline-flex items-center"
                                     title="单独调用 AI 识别此课时"
                                   >
-                                    ⚡ AI 识别此课
+                                    ⚡ 提取此课
                                   </Button>
                                 )}
-
-                                {/* 提取结果统计 */}
-                                {u.status === 'success' && (
-                                  <div className="flex items-center gap-1.5 text-gray-700 font-medium bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
-                                    <span>{u.vocabCount}词 · {u.patternCount}句</span>
-                                    {u.extraCount > 0 && (
-                                      <span className="text-primary-700 font-bold">✨{u.extraCount}拓展</span>
-                                    )}
-                                  </div>
-                                )}
-
-                                {u.errorMsg && (
-                                  <span className="text-danger-600 block max-w-[140px] truncate" title={u.errorMsg}>
-                                    {u.errorMsg}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
                     </tbody>
                   </table>
                 </div>
