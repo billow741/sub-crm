@@ -166,11 +166,31 @@
     <div class="mt-3 pt-3 border-t border-gray-100">
       <div class="text-xs text-gray-500 mb-2">📖 Textbook Pages (可选, 家长端会显示这些 PDF 页面图)</div>
       <div class="grid grid-cols-4 gap-2">
-        <div>
+        <div class="relative" id="tb-dropdown-container">
           <label class="block text-xs text-gray-500 mb-1 font-medium">Textbook (教材)</label>
-          <select id="fb-textbook-code" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white">
-            <option value="">None (无)</option>
-          </select>
+          <button type="button" id="tb-dropdown-trigger" onclick="toggleTextbookDropdown(event)" class="w-full px-2.5 py-2 border rounded-lg text-sm bg-white cursor-pointer flex items-center justify-between focus:ring-2 focus:ring-purple-500 hover:border-purple-300 text-left">
+            <span id="tb-dropdown-label" class="truncate text-gray-800">None (无)</span>
+            <span class="text-gray-400 text-xs ml-1 shrink-0">▼</span>
+          </button>
+          <input type="hidden" id="fb-textbook-code" value="">
+
+          <!-- 下拉浮层 (支持按系列收起/展开) -->
+          <div id="tb-dropdown-menu" class="hidden absolute top-full left-0 mt-1 w-72 max-h-80 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 overflow-y-auto">
+            <div class="p-2 border-b border-gray-100 flex items-center justify-between bg-slate-50/80 sticky top-0 z-10 backdrop-blur-xs">
+              <span class="text-[11px] font-bold text-gray-600">按系列选择教材</span>
+              <button type="button" onclick="toggleAllSeriesCollapse()" id="tb-toggle-all-btn" class="text-[11px] text-purple-600 hover:text-purple-800 font-semibold px-1.5 py-0.5 rounded hover:bg-purple-50">
+                全部收起
+              </button>
+            </div>
+            <div class="p-1">
+              <div onclick="selectTextbookCustom('', 'None (无)')" class="px-3 py-1.5 hover:bg-gray-100 rounded-lg text-xs text-gray-600 cursor-pointer font-medium flex items-center justify-between">
+                <span>None (不选教材)</span>
+              </div>
+            </div>
+            <div id="tb-dropdown-groups" class="p-1 space-y-1.5">
+              <!-- 动态填充可折叠系列 -->
+            </div>
+          </div>
         </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1 font-medium" id="fb-unit-label">Unit / Lesson (课时)</label>
@@ -722,42 +742,163 @@ async function loadTeacherData() {
 }
 }
 
-// ===== 动态拉取教材库列表 (按系列分组) =====
+// ===== 动态拉取教材库列表 (按系列分组 & 可折叠收起) =====
 var window_textbooksCache = [];
 var window_textbookUnitsMap = {}; // code -> [units]
+var seriesCollapseState = {}; // seriesName -> boolean (true=收起, false=展开)
 
 async function loadTextbookOptions() {
-  var sel = document.getElementById('fb-textbook-code');
-  if (!sel) return;
   try {
     var res = await apiGet('/textbooks');
     var books = res.data || [];
     window_textbooksCache = books;
-    if (Array.isArray(books) && books.length > 0) {
-      var currentVal = sel.value;
-      var html = '<option value="">None (不选教材)</option>';
-      
-      // 按系列 Series 分组
-      var seriesGroups = {};
-      books.forEach(function(b) {
-        var s = b.series || '其他教材';
-        if (!seriesGroups[s]) seriesGroups[s] = [];
-        seriesGroups[s].push(b);
-      });
-
-      Object.keys(seriesGroups).forEach(function(sName) {
-        html += '<optgroup label="📚 ' + escapeAttr(sName) + '">';
-        seriesGroups[sName].forEach(function(b) {
-          html += '<option value="' + escapeAttr(b.code) + '">' + escapeHtml(b.name || b.code) + '</option>';
-        });
-        html += '</optgroup>';
-      });
-
-      sel.innerHTML = html;
-      if (currentVal) sel.value = currentVal;
-    }
+    renderTextbookDropdownMenu();
   } catch(e) {
     console.warn('Failed to load textbooks list:', e);
+  }
+}
+
+function toggleTextbookDropdown(e) {
+  if (e) e.stopPropagation();
+  var menu = document.getElementById('tb-dropdown-menu');
+  if (!menu) return;
+  var isHidden = menu.classList.contains('hidden');
+  if (isHidden) {
+    menu.classList.remove('hidden');
+    renderTextbookDropdownMenu();
+  } else {
+    menu.classList.add('hidden');
+  }
+}
+
+function closeTextbookDropdown() {
+  var menu = document.getElementById('tb-dropdown-menu');
+  if (menu) menu.classList.add('hidden');
+}
+
+// 点击浮层外侧自动收起
+document.addEventListener('click', function(e) {
+  var container = document.getElementById('tb-dropdown-container');
+  if (container && !container.contains(e.target)) {
+    closeTextbookDropdown();
+  }
+});
+
+function toggleSeriesAccordion(sName, e) {
+  if (e) e.stopPropagation();
+  seriesCollapseState[sName] = !seriesCollapseState[sName];
+  renderTextbookDropdownMenu();
+}
+
+function toggleAllSeriesCollapse() {
+  var books = window_textbooksCache || [];
+  var seriesGroups = {};
+  books.forEach(function(b) {
+    var s = b.series || '其他教材';
+    seriesGroups[s] = true;
+  });
+  var seriesNames = Object.keys(seriesGroups);
+  var anyOpen = seriesNames.some(function(s) { return !seriesCollapseState[s]; });
+  var nextCollapsed = anyOpen; // 若有展开的则全部收起，否则全部展开
+  seriesNames.forEach(function(s) {
+    seriesCollapseState[s] = nextCollapsed;
+  });
+  renderTextbookDropdownMenu();
+}
+
+function renderTextbookDropdownMenu() {
+  var container = document.getElementById('tb-dropdown-groups');
+  if (!container) return;
+
+  var books = window_textbooksCache || [];
+  var currentVal = document.getElementById('fb-textbook-code').value;
+
+  var seriesGroups = {};
+  books.forEach(function(b) {
+    var s = b.series || '其他教材';
+    if (!seriesGroups[s]) seriesGroups[s] = [];
+    seriesGroups[s].push(b);
+  });
+
+  var seriesNames = Object.keys(seriesGroups);
+  seriesNames.forEach(function(s) {
+    if (seriesCollapseState[s] === undefined) {
+      // 默认：包含当前选中书的系列展开，其它系列默认收起
+      var hasSelected = seriesGroups[s].some(function(b) { return b.code === currentVal; });
+      seriesCollapseState[s] = !hasSelected;
+    }
+  });
+
+  var allCollapsed = seriesNames.length > 0 && seriesNames.every(function(s) { return seriesCollapseState[s]; });
+  var toggleBtn = document.getElementById('tb-toggle-all-btn');
+  if (toggleBtn) {
+    toggleBtn.textContent = allCollapsed ? '全部展开' : '全部收起';
+  }
+
+  var html = '';
+  seriesNames.forEach(function(sName) {
+    var sBooks = seriesGroups[sName];
+    var isCollapsed = !!seriesCollapseState[sName];
+
+    html += '<div class="rounded-lg overflow-hidden border border-gray-200 bg-white shadow-2xs">';
+    // 系列 Header (点击收起/展开)
+    html += '<div onclick="toggleSeriesAccordion(\'' + escapeAttr(sName) + '\', event)" class="flex items-center justify-between px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none font-bold text-xs text-gray-700 transition-colors">';
+    html += '<span class="flex items-center gap-1.5 truncate">';
+    html += '<span>📚</span>';
+    html += '<span class="truncate">' + escapeHtml(sName) + '</span>';
+    html += '<span class="text-[10px] font-normal text-gray-400">(' + sBooks.length + '册)</span>';
+    html += '</span>';
+    html += '<span class="text-gray-400 text-[10px] transition-transform duration-150 ' + (isCollapsed ? '' : 'rotate-90') + '">▶</span>';
+    html += '</div>';
+
+    // 该系列下的教材列表
+    html += '<div class="' + (isCollapsed ? 'hidden' : '') + ' divide-y divide-gray-50 py-0.5 bg-white">';
+    sBooks.forEach(function(b) {
+      var isSel = (b.code === currentVal);
+      html += '<div onclick="selectTextbookCustom(\'' + escapeAttr(b.code) + '\', \'' + escapeAttr(b.name || b.code) + '\')" class="px-3.5 py-1.5 hover:bg-purple-50 hover:text-purple-700 text-xs cursor-pointer flex items-center justify-between transition-colors ' + (isSel ? 'bg-purple-50 text-purple-700 font-bold' : 'text-gray-700') + '">';
+      html += '<span class="truncate">' + escapeHtml(b.name || b.code) + '</span>';
+      if (b.level) {
+        html += '<span class="text-[10px] text-gray-400 uppercase ml-2 px-1.5 py-0.2 bg-gray-100 rounded font-normal shrink-0">' + escapeHtml(b.level) + '</span>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function selectTextbookCustom(code, name) {
+  var codeInput = document.getElementById('fb-textbook-code');
+  var labelEl = document.getElementById('tb-dropdown-label');
+  if (codeInput) codeInput.value = code;
+  if (labelEl) labelEl.textContent = name || 'None (无)';
+
+  closeTextbookDropdown();
+
+  var unitNumInput = document.getElementById('fb-unit-num');
+  if (unitNumInput) unitNumInput.value = '';
+
+  onTextbookChange();
+}
+
+function updateTextbookCustomDisplay(code) {
+  var codeInput = document.getElementById('fb-textbook-code');
+  var labelEl = document.getElementById('tb-dropdown-label');
+  if (codeInput) codeInput.value = code || '';
+
+  if (!code) {
+    if (labelEl) labelEl.textContent = 'None (无)';
+    return;
+  }
+
+  var found = (window_textbooksCache || []).find(function(b) { return b.code === code; });
+  if (labelEl) {
+    labelEl.textContent = found ? (found.name || found.code) : code;
+  }
+  if (found && found.series) {
+    seriesCollapseState[found.series] = false; // 展开当前选中的系列
   }
 }
 
@@ -1220,8 +1361,7 @@ function openFeedback(cls) {
   document.getElementById('fb-recording').value = cls.fb_recording || '';
 
   // 教材页码 (textbook + unit + page range)
-  var bookSel = document.getElementById('fb-textbook-code');
-  if (bookSel) bookSel.value = cls.textbook_code || '';
+  updateTextbookCustomDisplay(cls.textbook_code || '');
   var unitNumInput = document.getElementById('fb-unit-num');
   if (unitNumInput) unitNumInput.value = (cls.unit_number !== undefined && cls.unit_number !== null) ? cls.unit_number : '';
   document.getElementById('fb-page-from').value = cls.page_from || '';
@@ -1551,6 +1691,7 @@ if (cls) openFeedback(cls);
 }
 
 function closeModal() {
+  closeTextbookDropdown();
   document.getElementById('feedback-modal').classList.add('hidden');
   document.getElementById('feedback-modal').classList.remove('flex');
   selectedClass = null;
