@@ -604,7 +604,7 @@ export default function Schedule() {
             {/* 时间行 */}
             {TIME_SLOTS.map(time => (
               <div key={time} className="grid grid-cols-[70px_repeat(14,minmax(90px,1fr))] border-b border-gray-100 hover:bg-gray-50/40 transition-colors">
-                <div className="p-2 text-center text-xs text-gray-500 font-medium border-r border-gray-200 bg-gray-50 sticky left-0 z-10 flex items-center justify-center">
+                <div className="py-1 px-1.5 text-center text-xs text-gray-500 font-medium border-r border-gray-200 bg-gray-50 sticky left-0 z-10 flex items-center justify-center select-none">
                   {time}
                 </div>
                 {weeks.map((week, weekIdx) => (
@@ -616,7 +616,7 @@ export default function Schedule() {
                       <div
                         key={`${weekIdx}-${dayIdx}-${time}`}
                         onClick={() => handleSlotClick(date, time)}
-                        className={`min-h-[72px] p-1.5 border-r border-gray-100 last:border-r-0 cursor-pointer relative flex flex-col gap-1 transition-colors ${
+                        className={`min-h-[36px] p-1 border-r border-gray-100 last:border-r-0 cursor-pointer relative flex flex-col gap-0.5 transition-colors ${
                           today ? 'bg-primary-50/15 hover:bg-primary-50/30' : 'hover:bg-gray-50'
                         }`}
                       >
@@ -629,7 +629,7 @@ export default function Schedule() {
                                 e.stopPropagation();
                                 handleEditSchedule(schedule);
                               }}
-                              className={`${statusStyle.bg} border text-xs p-1.5 rounded-lg mb-0.5 shadow-xs hover:shadow-sm transition-all group relative ${
+                              className={`${statusStyle.bg} border text-xs p-1 rounded-md mb-0.5 shadow-xs hover:shadow-sm transition-all group relative ${
                                 schedule.is_trial ? 'ring-1.5 ring-amber-400' : ''
                               }`}
                             >
@@ -638,13 +638,13 @@ export default function Schedule() {
                                   试听
                                 </span>
                               )}
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 leading-tight">
                                 {statusStyle.icon}
-                                <div className={`font-semibold truncate ${statusStyle.text}`}>
+                                <div className={`font-semibold truncate text-[11px] ${statusStyle.text}`}>
                                   {getStudentName(schedule.student_id)}
                                 </div>
                               </div>
-                              <div className={`truncate ml-4.5 text-[11px] font-medium ${statusStyle.subtext}`}>
+                              <div className={`truncate ml-4 text-[10px] font-medium leading-tight ${statusStyle.subtext}`}>
                                 {schedule.teacher_name || getTeacherName(schedule.teacher_id)}
                               </div>
                               <button
