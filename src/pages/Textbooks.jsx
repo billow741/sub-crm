@@ -2174,7 +2174,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
         });
       }
 
-      setStatusMsg('🎉 切片生成完毕！请点击表格中的【👁️ 查看切图】核对，确认无误后点击【步骤二：开始 AI 提取】');
+      setStatusMsg('🎉 批量切片已完成！您可以直接点击【💾 保存切片大纲】存入系统，或继续点击【🤖 步骤二：批量 AI 知识点提取】');
     } catch (e) {
       alert('切片过程出错: ' + e.message);
     } finally {
@@ -2342,10 +2342,32 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
   };
 
   // 全部保存入库
+  // 全部保存入库 (支持纯切片大纲入库，也支持带AI知识点的全量入库)
   const handleCommitAll = async () => {
-    const readyUnits = outline.filter(u => u.status === 'success' && u.extractedData).map(u => u.extractedData);
+    const readyUnits = outline
+      .filter(u => u.selected && (u.status === 'success' || u.status === 'sliced' || (u.sliceThumbs && u.sliceThumbs.length > 0) || u.extractedData))
+      .map(u => {
+        if (u.extractedData) {
+          return {
+            ...u.extractedData,
+            unit_title: u.unit_title || u.extractedData.unit_title,
+            unit_number: u.unit_number
+          };
+        }
+        return {
+          unit_number: u.unit_number,
+          unit_title: u.unit_title || `Lesson ${u.unit_number}`,
+          page_from: u.page_from,
+          page_to: u.page_to,
+          vocab: [],
+          patterns: [],
+          grammar: [],
+          extra_content: { page_count: u.sliceThumbs?.length || (u.page_to - u.page_from + 1) }
+        };
+      });
+
     if (readyUnits.length === 0) {
-      alert('暂无已提取成功的单元数据');
+      alert('请先勾选并完成【📸 步骤一：极速批量切片】后再保存入库');
       return;
     }
 
@@ -2366,7 +2388,8 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
         return;
       }
       if (json.data) {
-        alert(`🎉 恭喜！已将 ${json.data.units_written} 个单元的所有切图与知识点全部存入系统与 R2！`);
+        const hasAi = readyUnits.some(u => (u.vocab && u.vocab.length > 0) || (u.patterns && u.patterns.length > 0));
+        alert(`🎉 恭喜！已将 ${json.data.units_written} 个课时的大纲与切片原图全部保存入库！${hasAi ? '（含已提取的 AI 知识点）' : '（后续可在课时列表中随时点击【⚡ 提取此课】生成知识点）'}`);
         onClose();
       } else {
         alert('保存失败: ' + (json.error?.message || '未知错误'));
@@ -2720,6 +2743,21 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                       {slicingUnits ? '切片处理中...' : '📸 步骤一：极速批量切片'}
                     </Button>
 
+                    {/* 切片后可直接保存大纲与切图 */}
+                    {outline.some(u => u.status === 'sliced' || u.status === 'success' || (u.sliceThumbs && u.sliceThumbs.length > 0)) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCommitAll}
+                        disabled={savingAll || slicingUnits || extractingAi || loadingPdf}
+                        className="bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 font-bold shadow-sm"
+                        title="切片完成后可直接将课时大纲与切片原图存入系统，无需等待 AI 提取"
+                      >
+                        {savingAll ? <Loader className="w-4 h-4 mr-1.5 animate-spin" /> : <Save className="w-4 h-4 mr-1.5 text-emerald-600" />}
+                        {savingAll ? '正在保存...' : '💾 保存切片大纲'}
+                      </Button>
+                    )}
+
                     <Button
                       variant="primary"
                       size="sm"
@@ -2977,15 +3015,15 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
             关闭窗口
           </Button>
 
-          {successCount > 0 && (
+          {outline.some(u => u.selected && (u.status === 'sliced' || u.status === 'success' || (u.sliceThumbs && u.sliceThumbs.length > 0) || u.extractedData)) && (
             <Button
               variant="success"
               onClick={handleCommitAll}
-              disabled={savingAll}
-              className="px-6 shadow-md"
+              disabled={savingAll || slicingUnits || extractingAi}
+              className="px-6 shadow-md font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2"
             >
               {savingAll ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <CheckCheck className="w-4 h-4 mr-2" />}
-              {savingAll ? '正在入库...' : `💾 全部保存入库 (${successCount} 单元)`}
+              {savingAll ? '正在保存入库...' : `💾 保存已选大纲与切片 (${outline.filter(u => u.selected && (u.status === 'sliced' || u.status === 'success' || (u.sliceThumbs && u.sliceThumbs.length > 0) || u.extractedData)).length} 课时)`}
             </Button>
           )}
         </div>

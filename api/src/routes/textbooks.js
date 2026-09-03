@@ -1881,15 +1881,21 @@ textbooks.post('/commit-units/:code', async (c) => {
       const grammar = JSON.stringify(item.grammar || []);
       const extraContent = item.extra_content ? JSON.stringify(item.extra_content) : null;
 
-      const existing = await DB.prepare('SELECT id FROM unit_content WHERE unit_id = ?').bind(unitId).first();
+      const existing = await DB.prepare('SELECT id, vocab, patterns, grammar FROM unit_content WHERE unit_id = ?').bind(unitId).first();
       if (existing) {
+        // 如果新传入的 vocab 为空但数据库已有提取数据，则保留数据库现有内容，避免纯切片保存覆盖已提取词汇
+        const keepExisting = (!item.vocab || item.vocab.length === 0) && existing.vocab && existing.vocab !== '[]';
+        const finalVocab = keepExisting ? existing.vocab : vocab;
+        const finalPatterns = keepExisting ? existing.patterns : patterns;
+        const finalGrammar = keepExisting ? existing.grammar : grammar;
+
         await DB.prepare(
-          `UPDATE unit_content SET vocab = ?, patterns = ?, grammar = ?, extra_content = COALESCE(?, extra_content), extracted_by = 'llm', extracted_at = datetime('now'), updated_at = datetime('now') WHERE unit_id = ?`
-        ).bind(vocab, patterns, grammar, extraContent, unitId).run();
+          `UPDATE unit_content SET vocab = ?, patterns = ?, grammar = ?, extra_content = COALESCE(?, extra_content), updated_at = datetime('now') WHERE unit_id = ?`
+        ).bind(finalVocab, finalPatterns, finalGrammar, extraContent, unitId).run();
       } else {
         await DB.prepare(
           `INSERT INTO unit_content (unit_id, textbook_code, unit_number, vocab, patterns, grammar, extra_content, extracted_by, extracted_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'llm', datetime('now'))`
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'outline', datetime('now'))`
         ).bind(unitId, code, item.unit_number, vocab, patterns, grammar, extraContent).run();
       }
 
@@ -2031,7 +2037,53 @@ Return strict JSON only matching:
     const rawContent = data.choices?.[0]?.message?.content || '';
     const parsed = cleanAndParseJson(rawContent);
 
+function parseTocFromTextOrMarkdown(text) {
+  if (!text || typeof text !== 'string') return [];
+  const units = [];
+
+  // Pattern 1: **Title** \n * Page From: X \n * Page To: Y
+  const regex1 = /\*\*\s*(.+?)\s*\*\*\s*[\r\n]+\s*\*+\s*Page From:\s*(\d+)(?:\s*[\r\n]+\s*\*+\s*Page To:\s*(\d+))?/gi;
+  let match;
+  let idx = 1;
+  while ((match = regex1.exec(text)) !== null) {
+    const rawTitle = match[1].trim();
+    const pFrom = parseInt(match[2], 10);
+    const pTo = match[3] ? parseInt(match[3], 10) : pFrom + 5;
+    const numMatch = rawTitle.match(/(?:Lesson|Unit)\s*(\d+)/i);
+    const unitNum = numMatch ? parseInt(numMatch[1], 10) : idx;
+    units.push({
+      unit_number: unitNum,
+      unit_title: rawTitle,
+      page_from: pFrom,
+      page_to: pTo
+    });
+    idx++;
+  }
+  if (units.length > 0) return units;
+
+  // Pattern 2: - Lesson X: Title ... page Y / (Y - Z)
+  const regex2 = /(?:^|\n)[*\-•]\s*(?:Lesson\s*(\d+)[:.\s]*)?([^\n\r]+?)(?:[：:\s\-]+(?:page|p\.?|第)?\s*(\d+))/gi;
+  while ((match = regex2.exec(text)) !== null) {
+    const num = match[1] ? parseInt(match[1], 10) : idx;
+    const title = match[2].trim();
+    const pFrom = parseInt(match[3], 10);
+    if (pFrom && title) {
+      units.push({
+        unit_number: num,
+        unit_title: title.startsWith('Lesson') ? title : `Lesson ${num}: ${title}`,
+        page_from: pFrom,
+        page_to: pFrom + 5
+      });
+      idx++;
+    }
+  }
+  return units;
+}
+
     let resultUnits = (parsed && Array.isArray(parsed.units)) ? parsed.units : (Array.isArray(parsed) ? parsed : []);
+    if (resultUnits.length === 0) {
+      resultUnits = parseTocFromTextOrMarkdown(rawContent);
+    }
     resultUnits = resultUnits.map((u, i) => {
       const pFrom = parseInt(u.page_from, 10) || 1;
       let pTo = parseInt(u.page_to, 10) || (pFrom + 7);
