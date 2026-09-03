@@ -1560,6 +1560,27 @@ const DEFAULT_OUTLINES = {
     { unit_number: 7, unit_title: 'Things to Do', page_from: 58, page_to: 65 },
     { unit_number: 8, unit_title: 'My Body', page_from: 66, page_to: 73 }
   ],
+  'WE-P': [
+    { unit_number: 0, unit_title: 'The Alphabet Song', page_from: 4, page_to: 7 },
+    { unit_number: 1, unit_title: 'Lesson 1: Aa · Bb · Cc', page_from: 8, page_to: 13 },
+    { unit_number: 2, unit_title: 'Lesson 2: Dd · Ee · Ff', page_from: 14, page_to: 19 },
+    { unit_number: 3, unit_title: 'Lesson 3: Review 1', page_from: 20, page_to: 23 },
+    { unit_number: 4, unit_title: 'Lesson 4: Gg · Hh · Ii', page_from: 24, page_to: 29 },
+    { unit_number: 5, unit_title: 'Lesson 5: Jj · Kk · Ll', page_from: 30, page_to: 35 },
+    { unit_number: 6, unit_title: 'Lesson 6: Review 2', page_from: 36, page_to: 39 },
+    { unit_number: 7, unit_title: 'Lesson 7: Review 3', page_from: 40, page_to: 43 },
+    { unit_number: 8, unit_title: 'Lesson 8: Progress Test 1', page_from: 44, page_to: 47 },
+    { unit_number: 9, unit_title: 'Lesson 9: Mm · Nn · Oo', page_from: 48, page_to: 53 },
+    { unit_number: 10, unit_title: 'Lesson 10: Pp · Qq · Rr', page_from: 54, page_to: 59 },
+    { unit_number: 11, unit_title: 'Lesson 11: Review 4', page_from: 60, page_to: 63 },
+    { unit_number: 12, unit_title: 'Lesson 12: Ss · Tt · Uu · Vv', page_from: 64, page_to: 69 },
+    { unit_number: 13, unit_title: 'Lesson 13: Ww · Xx · Yy · Zz', page_from: 70, page_to: 75 },
+    { unit_number: 14, unit_title: 'Lesson 14: Review 5', page_from: 76, page_to: 79 },
+    { unit_number: 15, unit_title: 'Lesson 15: Review 6', page_from: 80, page_to: 83 },
+    { unit_number: 16, unit_title: 'Lesson 16: Progress Test 2', page_from: 84, page_to: 87 },
+    { unit_number: 17, unit_title: 'The Phonics Song', page_from: 88, page_to: 89 },
+    { unit_number: 18, unit_title: 'Picture Bank', page_from: 90, page_to: 91 }
+  ],
   'DEFAULT': [
     { unit_number: 0, unit_title: 'Welcome / Starter', page_from: 2, page_to: 3 },
     { unit_number: 1, unit_title: 'Unit 1', page_from: 4, page_to: 11 },
@@ -1578,10 +1599,10 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
   const [totalPages, setTotalPages] = useState(0);
   
   // 页码偏移量 (PDF 真实页码 = 课本印刷页码 + pageOffset)
-  // 如课本第 2 页 (Welcome) 在 PDF 的第 4 页，则 offset = 2
-  const [pageOffset, setPageOffset] = useState(2);
+  // 若课本第 6 页在 PDF 中就是第 6 页，则 offset = 0
+  const [pageOffset, setPageOffset] = useState(bookCode === 'WE-P' ? 0 : 2);
   const [previewThumbnail, setPreviewThumbnail] = useState(null);
-  const [previewingPdfPage, setPreviewingPdfPage] = useState(4);
+  const [previewingPdfPage, setPreviewingPdfPage] = useState(bookCode === 'WE-P' ? 8 : 4);
 
   // 单元目录大纲列表
   const [outline, setOutline] = useState(() => {
@@ -1883,12 +1904,18 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
           };
         });
 
-        // 自动计算建议 offset (目录结束物理页之后对应第一课)
+        // 自动计算建议 offset
         if (detected.length > 0) {
           const firstFrom = detected[0].page_from;
-          const estOffset = Math.max(0, toP + 1 - firstFrom);
+          // 若目录在第 5-8 页且第一课印刷页小于等于目录结束页，说明 PDF 真实物理页码与印刷页码一致 (offset = 0)
+          let estOffset = 0;
+          if (firstFrom > toP) {
+            estOffset = Math.max(0, toP + 1 - firstFrom);
+          } else {
+            estOffset = 0;
+          }
           setPageOffset(estOffset);
-          renderOffsetSample(pdfDoc, firstFrom + estOffset);
+          renderOffsetSample(pdfDoc, (detected[1]?.page_from || firstFrom) + estOffset);
         }
 
         setOutline(detected);
@@ -2599,7 +2626,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                               />
                             </td>
                             <td className="px-4 py-3 font-bold text-gray-900">
-                              {(u.unit_title || '').toLowerCase().includes('lesson') ? `L${u.unit_number}` : `U${u.unit_number}`}
+                              {u.unit_number === 0 ? 'Intro' : (u.unit_title || '').toLowerCase().includes('lesson') ? `L${u.unit_number}` : `U${u.unit_number}`}
                             </td>
                             <td className="px-4 py-3">
                               <input

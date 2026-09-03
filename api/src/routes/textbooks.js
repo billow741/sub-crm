@@ -1924,22 +1924,32 @@ textbooks.post('/detect-toc/:code', async (c) => {
     return c.json({ error: { code: 'CONFIG_ERROR', message: 'LLM API key is not configured' } }, 400);
   }
 
-  const prompt = `You are an expert textbook curriculum and structure analyzer.
-Analyze the provided Table of Contents (TOC) image or text for textbook "${code}".
-Carefully identify ALL sections, which may be organized as "Lesson" (e.g. Lesson 1, Lesson 2...), "Unit" (e.g. Unit 1...), "Chapter", "Story", or "Phonics".
+  const prompt = `You are an expert OCR and textbook curriculum reader.
+Analyze the Table of Contents image provided for textbook "${code}".
 
-CRITICAL RULES:
-1. Many textbooks (such as Phonics books, Graded Readers, and Starter books) DO NOT HAVE "Unit" — they are organized strictly by "Lesson" or "Story" (e.g., Lesson 1, Lesson 2... or Story 1, Story 2...). In such cases, treat each Lesson or Story as an entry!
-2. Do NOT hallucinate or copy fictional names. Extract ONLY what is actually printed in the provided image or text!
-3. "unit_number": An integer index (1, 2, 3... Starter or Welcome is 0 if present).
-4. "unit_title": The actual title printed in the TOC (e.g., "Lesson 1: Aa, Bb, Cc", "Lesson 2: Dd, Ee, Ff", "Unit 1: Colors", "Story 1: The Dog").
-5. "page_from": The starting printed page number of this section (integer).
-6. "page_to": The ending printed page number of this section (integer, before next section starts).
+CRITICAL OCR READING INSTRUCTIONS:
+1. Each row in the Table of Contents represents a lesson or section:
+   - On the left: badge or name (e.g. "The Alphabet Song", "LESSON 01", "LESSON 02"... up to "LESSON 16", "The Phonics Song", "Picture Bank").
+   - In the middle: title text (e.g. "Aa · Bb · Cc", "Dd · Ee · Ff", "Review 1", "Progress Test 1").
+   - On the far right of the row: a printed two-digit page number (e.g. 04, 08, 14, 20, 24, 30, 36, 40, 44, 48, 54, 60, 64, 70, 76, 80, 84, 88, 90).
+2. The number on the right of each row is THAT SPECIFIC ROW'S starting printed page ("page_from").
+   For example:
+   - "The Alphabet Song" has 04 on its right -> page_from = 4
+   - "LESSON 01 Aa · Bb · Cc" has 08 on its right -> page_from = 8
+   - "LESSON 02 Dd · Ee · Ff" has 14 on its right -> page_from = 14
+   - "LESSON 03 Review 1" has 20 on its right -> page_from = 20
+   - "LESSON 04 Gg · Hh · Ii" has 24 on its right -> page_from = 24
+3. "page_to" is the page immediately before the next row starts (e.g. 7 for Alphabet Song, 13 for Lesson 1, 19 for Lesson 2, 23 for Lesson 3).
+4. "unit_number": Use the lesson badge number (0 for intro song, 1 for LESSON 01, 2 for LESSON 02... 16 for LESSON 16, etc.).
+5. "unit_title": The full title (e.g. "The Alphabet Song", "Lesson 1: Aa · Bb · Cc", "Lesson 2: Dd · Ee · Ff", "Lesson 3: Review 1").
+You MUST extract ALL rows and lessons across the entire Table of Contents into the "units" array (typically 10 to 25 items). Do NOT stop after the first item!
 
-STRICT JSON OUTPUT ONLY (no markdown code blocks, no other text):
+Return strict JSON only matching:
 {
   "units": [
-    { "unit_number": 1, "unit_title": "<Actual Title from TOC>", "page_from": 4, "page_to": 7 }
+    { "unit_number": 0, "unit_title": "The Alphabet Song", "page_from": 4, "page_to": 7 },
+    { "unit_number": 1, "unit_title": "Lesson 1: Aa · Bb · Cc", "page_from": 8, "page_to": 13 },
+    { "unit_number": 2, "unit_title": "Lesson 2: Dd · Ee · Ff", "page_from": 14, "page_to": 19 }
   ]
 }`;
 
@@ -1962,11 +1972,12 @@ STRICT JSON OUTPUT ONLY (no markdown code blocks, no other text):
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: 'You are a precise educational textbook TOC parser. Return strict JSON only.' },
+          { role: 'system', content: 'You are a precise educational textbook TOC parser. You must return valid JSON strictly conforming to the requested schema.' },
           { role: 'user', content: userContent }
         ],
+        response_format: { type: 'json_object' },
         temperature: 0.1,
-        max_tokens: 2048
+        max_tokens: 3000
       })
     });
 
