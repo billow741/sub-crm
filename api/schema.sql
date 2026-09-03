@@ -385,6 +385,7 @@ CREATE TABLE IF NOT EXISTS textbooks (
   level TEXT,
   total_units INTEGER DEFAULT 0,
   description TEXT,
+  content_schema TEXT,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -410,6 +411,7 @@ CREATE TABLE IF NOT EXISTS unit_content (
   vocab TEXT,
   patterns TEXT,
   grammar TEXT,
+  extra_content TEXT,
   extracted_by TEXT DEFAULT 'manual',
   extracted_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

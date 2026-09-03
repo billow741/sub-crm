@@ -121,7 +121,8 @@ textbooks.get('/', async (c) => {
     level: t.level,
     total_units: t.total_units,
     unit_count: t.unit_count,
-    description: t.description
+    description: t.description,
+    content_schema: t.content_schema ? safeParseJson(t.content_schema) : null
   })) || [];
 
   return c.json({ data });
@@ -155,6 +156,7 @@ textbooks.get('/book/:code', async (c) => {
   return c.json({
     data: {
       ...book,
+      content_schema: book.content_schema ? safeParseJson(book.content_schema) : null,
       units: units.results?.map(u => ({
         id: u.id,
         unit_number: u.unit_number,
@@ -190,14 +192,15 @@ textbooks.get('/content/:code/:num', async (c) => {
       ...content,
       vocab: safeParse(content.vocab),
       patterns: safeParse(content.patterns),
-      grammar: safeParse(content.grammar)
+      grammar: safeParse(content.grammar),
+      extra_content: safeParseJson(content.extra_content, {})
     }
   });
 });
 
 // ============================================================
 // POST /content/:code/:num — 写入/更新单元内容 (Admin, AI提取后)
-// Body: { vocab: [...], patterns: [...], grammar: [...], extracted_by: 'claude' }
+// Body: { vocab: [...], patterns: [...], grammar: [...], extra_content: {...}, extracted_by: 'claude' }
 // ============================================================
 textbooks.post('/content/:code/:num', async (c) => {
   const DB = c.env.DB;
@@ -216,6 +219,7 @@ textbooks.post('/content/:code/:num', async (c) => {
   const vocab = JSON.stringify(body.vocab || []);
   const patterns = JSON.stringify(body.patterns || []);
   const grammar = JSON.stringify(body.grammar || []);
+  const extraContent = body.extra_content ? JSON.stringify(body.extra_content) : null;
   const extractedBy = body.extracted_by || 'manual';
 
   // UPSERT (INSERT OR REPLACE)
@@ -226,14 +230,14 @@ textbooks.post('/content/:code/:num', async (c) => {
   if (existing) {
     await DB.prepare(`
       UPDATE unit_content
-      SET vocab = ?, patterns = ?, grammar = ?, extracted_by = ?, extracted_at = datetime('now'), updated_at = datetime('now')
+      SET vocab = ?, patterns = ?, grammar = ?, extra_content = COALESCE(?, extra_content), extracted_by = ?, extracted_at = datetime('now'), updated_at = datetime('now')
       WHERE unit_id = ?
-    `).bind(vocab, patterns, grammar, extractedBy, unit.id).run();
+    `).bind(vocab, patterns, grammar, extraContent, extractedBy, unit.id).run();
   } else {
     await DB.prepare(`
-      INSERT INTO unit_content (unit_id, textbook_code, unit_number, vocab, patterns, grammar, extracted_by, extracted_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `).bind(unit.id, code, num, vocab, patterns, grammar, extractedBy).run();
+      INSERT INTO unit_content (unit_id, textbook_code, unit_number, vocab, patterns, grammar, extra_content, extracted_by, extracted_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `).bind(unit.id, code, num, vocab, patterns, grammar, extraContent, extractedBy).run();
   }
 
   return c.json({ data: { textbook_code: code, unit_number: num, saved: true } });
@@ -246,35 +250,200 @@ function safeParse(str) {
   try { return JSON.parse(str || '[]'); } catch { return []; }
 }
 
-// ============================================================
-// LLM 提取 Prompt (必须包含标准中文翻译)
-// ============================================================
-const EXTRACTION_PROMPT = `You are an expert ESL textbook curriculum analyzer. Given page images from an English textbook unit, extract the unit title, core vocabulary words, sentence patterns, and grammar points into structured JSON.
+function safeParseJson(str, fallback = null) {
+  if (!str) return fallback;
+  if (typeof str === 'object') return str;
+  try { return JSON.parse(str); } catch { return fallback; }
+}
 
-Return ONLY valid JSON (no markdown fences, no explanatory text) matching this exact schema:
+// ============================================================
+// 通用教材识别体系：Schema 预置配置 & 动态 Prompt 生成器
+// ============================================================
+const DEFAULT_CONTENT_SCHEMAS = {
+  general_english: {
+    type: 'general_english',
+    label: '综合英语课本 (如 Everybody Up, Oxford Discover, Wonders)',
+    dimensions: ['vocab', 'patterns', 'grammar'],
+    target_age: '5-12',
+    blacklist: [
+      'Listen.*point.*say', 'Listen and point', 'Listen and say', 'Listen and number',
+      'Listen and sing', 'Look and listen', 'Ask and answer', 'Point and say'
+    ]
+  },
+  phonics: {
+    type: 'phonics',
+    label: '自然拼读 (如 WhaleEnglish Phonics, Oxford Phonics World)',
+    dimensions: ['letters', 'sounds', 'blending_words', 'sight_words', 'vocab', 'patterns'],
+    target_age: '4-8',
+    blacklist: [
+      'Trace and write', 'Color and match', 'Circle the letter', 'Listen.*point.*say',
+      'Listen and chant', 'Stick and say', 'Connect and say'
+    ]
+  },
+  graded_reader: {
+    type: 'graded_reader',
+    label: '分级阅读 / 绘本故事 (如 RAZ, Oxford Reading Tree)',
+    dimensions: ['key_words', 'key_phrases', 'comprehension_questions', 'story_summary', 'vocab', 'patterns'],
+    target_age: '6-14',
+    blacklist: [
+      'Read and check', 'Turn the page', 'Look at the picture'
+    ]
+  },
+  grammar: {
+    type: 'grammar',
+    label: '专项语法课本 (如 English Grammar in Use)',
+    dimensions: ['grammar_rules', 'examples', 'vocab', 'practice_sentences'],
+    target_age: '8-16',
+    blacklist: [
+      'Fill in the blanks', 'Exercise A', 'Exercise B', 'Choose the correct answer'
+    ]
+  }
+};
 
+function buildExtractionPrompt(schema = null) {
+  const type = schema?.type || 'general_english';
+  const preset = DEFAULT_CONTENT_SCHEMAS[type] || DEFAULT_CONTENT_SCHEMAS.general_english;
+  const targetAge = schema?.target_age || preset.target_age || '5-12';
+  const customBlacklist = schema?.instruction_blacklist || schema?.blacklist || preset.blacklist || [];
+  const blacklistFormatted = customBlacklist.length > 0
+    ? customBlacklist.map(b => `❌ "${b}"`).join('\n     ')
+    : '❌ "Listen, point and say" 等各类课堂操作指令';
+
+  if (type === 'phonics') {
+    return `你是一位顶级的少儿英语自然拼读 (Phonics) 与语音教学专家（针对 ${targetAge} 岁儿童）。
+请仔细阅读并识别当前教材切图，提取本课/本单元实际印刷的自然拼读教学核心要素。
+
+【严格原则】：
+1. 只能提取当前图片中实际印有的字母、音素、拼读生词和短句，严禁编造！
+2. 每一个提取项必须给出地道准确的【简体中文】翻译。
+3. 必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
 {
-  "unit_title": "Art Class",
+  "unit_title": "图片顶端印刷的课程标题 (例如 Lesson 1 Short a)",
+  "letters": [
+    { "letter": "Aa", "sound": "/æ/", "uppercase": "A", "lowercase": "a" }
+  ],
+  "sounds": [
+    { "sound": "/æ/", "phonics_rule": "Short a vowel sound", "example_words": ["apple", "ant", "cat"] }
+  ],
+  "blending_words": [
+    { "word": "cat", "translation": "猫", "phonemes": ["c", "a", "t"], "is_core": true }
+  ],
+  "sight_words": [
+    { "word": "the", "translation": "这/那" }
+  ],
   "vocab": [
-    {"word": "paper", "translation": "纸", "is_core": true, "difficulty": 1},
-    {"word": "glue", "translation": "胶水", "is_core": true, "difficulty": 1}
+    { "word": "cat", "translation": "猫", "is_core": true, "difficulty": 1 },
+    { "word": "apple", "translation": "苹果", "is_core": true, "difficulty": 1 }
   ],
   "patterns": [
-    {"pattern": "I have paper.", "translation": "我有一张纸。", "is_core": true},
-    {"pattern": "What do you have?", "translation": "你有什么？", "is_core": true}
+    { "pattern": "An apple for the cat.", "translation": "给猫咪的一个苹果。", "is_core": true }
   ],
   "grammar": [
-    {"point": "Simple Present (have / do)", "example": "I have glue. / Do you have scissors?", "is_core": true}
+    { "point": "字母组合与拼读规律", "example": "c-a-t -> cat", "is_core": true }
   ]
 }
 
-Extraction Rules:
-1. "unit_title": The actual unit title heading on the page (e.g. "Art Class", "Animals").
-2. "translation": ALWAYS provide accurate, natural Simplified Chinese translation for EVERY vocabulary word and sentence pattern (e.g., "scissors" -> "剪刀", "I have a pen." -> "我有一支笔。"). Even if the original textbook is pure English without Chinese, YOU MUST translate it into Simplified Chinese.
-3. "is_core": Set true for key target vocabulary list and main target sentence patterns; false for incidental/supplementary words.
-4. "difficulty": 1 (basic), 2 (intermediate), 3 (advanced).
-5. "grammar": Identify key grammar structures introduced in this unit with concise rules and example sentences.
-6. Output MUST be strictly valid JSON without any markdown formatting or commentary.`;
+【少儿自然拼读识别禁令】：
+- 🚫 严禁提取课堂操作指令：
+     ${blacklistFormatted}
+- 🎯 所有 translation 字段必须翻译为准确地道的简体中文。`;
+  }
+
+  if (type === 'graded_reader') {
+    return `你是一位专业的分级阅读 (Graded Reader) 与少儿英文绘本分析专家（针对 ${targetAge} 岁读者）。
+请仔细阅读当前绘本页面切图，提取故事核心词汇、关键表达与理解要点。
+
+【严格原则】：
+1. 提取当前页面印刷的故事核心内容与词句。
+2. 严格返回如下 JSON 结构（严禁 markdown 标记或任何闲聊）：
+{
+  "unit_title": "故事或章节标题",
+  "key_words": [
+    { "word": "重点生词", "translation": "中文释义", "context": "故事中的具体用法", "is_core": true }
+  ],
+  "key_phrases": [
+    { "phrase": "关键短语/地道搭配", "translation": "中文释义", "is_core": true }
+  ],
+  "comprehension_questions": [
+    { "question": "基于故事的理解提问 (英文)", "answer": "参考答案 (英文)", "translation": "中文提问" }
+  ],
+  "story_summary": "本章/本篇故事的 1-2 句核心概要 (中文)",
+  "vocab": [
+    { "word": "故事核心生词", "translation": "中文", "is_core": true, "difficulty": 1 }
+  ],
+  "patterns": [
+    { "pattern": "故事中重复出现的重点句型", "translation": "中文", "is_core": true }
+  ],
+  "grammar": []
+}
+
+【禁令】：
+- 🚫 严禁提取翻页或操作指令：
+     ${blacklistFormatted}`;
+  }
+
+  if (type === 'grammar') {
+    return `你是一位资深英语语法教学专家（针对 ${targetAge} 岁学生）。
+请仔细阅读当前教材页面切图，提取语法要点、规则公式与典型例句。
+
+返回严格 JSON 格式：
+{
+  "unit_title": "语法主题 (如 Present Continuous Tense)",
+  "grammar_rules": [
+    { "rule": "语法规则名称", "formula": "结构公式 (如 be + V-ing)", "explanation": "中文语法解析", "is_core": true }
+  ],
+  "examples": [
+    { "sentence": "典型英文例句", "translation": "中文翻译", "is_core": true }
+  ],
+  "practice_sentences": [
+    { "sentence": "教材中的代表性练习句", "answer": "正确答案/考点解析" }
+  ],
+  "vocab": [
+    { "word": "核心语法标记词或生词", "translation": "中文", "is_core": true, "difficulty": 1 }
+  ],
+  "patterns": [
+    { "pattern": "核心句型模版", "translation": "中文翻译", "is_core": true }
+  ],
+  "grammar": [
+    { "point": "核心语法点", "example": "英文例句", "is_core": true }
+  ]
+}`;
+  }
+
+  // 默认：综合英语 (General English)
+  return `你是一位顶级的少儿英语教研专家（目标年龄段：${targetAge} 岁）。请仔细阅读并识别当前提供的课本页面图片，严格按照当前图片中实际印刷的内容提取本页的核心词汇、重点句型与语法点。
+
+【重要原则】：
+1. 只能提取当前图片中实际印有的单词、句子和语法！绝对严禁编造或从其他单元复制！
+2. 每一个提取项必须给出准确地道的简体中文翻译。
+3. 必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
+{
+  "unit_title": "图片顶端印刷的单元标题 (例如 Unit 2 Let's Play)",
+  "vocab": [
+    { "word": "当前图片中印刷的英文目标单词", "translation": "地道简体中文翻译", "is_core": true, "difficulty": 1 }
+  ],
+  "patterns": [
+    { "pattern": "当前图片对话框或句型框中印刷的核心交际句型", "translation": "地道简体中文翻译", "is_core": true }
+  ],
+  "grammar": [
+    { "point": "当前页面的语法要点", "example": "当前页面对应的真实英文例句", "is_core": true }
+  ]
+}
+
+【少儿英语切图识别严格铁律】：
+1. 🎯 核心词汇：
+   - 提取图片中带有数字编号 (1, 2, 3...) 的实物生词、故事生词或字母发音拓展词，一字不差，绝对严禁编造或借用其他单元的词！
+2. 💬 重点句型与日常交际：
+   - 提取本页对话框或句型框中印刷的核心交际句型（例如问答、物品陈述、日常打招呼与交际句型），绝不漏句！
+3. 🚫 绝对黑名单（严禁作为句型或语法点输出）：
+   - 严禁提取课堂指令词！例如：
+     ${blacklistFormatted}
+   - 严禁输出任何与本页图片无关的词汇或句子！
+4. 🇨🇳 翻译全部使用规范准确的【简体中文】。`;
+}
+
+// 兼容老调用代码的通用 Prompt 导出
+const EXTRACTION_PROMPT = buildExtractionPrompt(DEFAULT_CONTENT_SCHEMAS.general_english);
 
 // 健壮的 JSON 解析器 (自动剥离 markdown 与前后非 JSON 字符)
 function cleanAndParseJson(rawText) {
@@ -691,45 +860,10 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     });
   }
 
-  const SINGLE_UNIT_PROMPT = `你是一位顶级的少儿英语教研专家。请仔细阅读并识别当前提供的课本页面图片，严格按照当前图片中实际印刷的内容提取本页的核心词汇、重点句型与语法点。
-
-【重要原则】：
-1. 只能提取当前图片中实际印有的单词、句子和语法！绝对严禁编造或从其他单元复制！
-2. 每一个提取项必须给出准确地道的简体中文翻译。
-3. 必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
-{
-  "unit_title": "图片顶端印刷的单元标题 (例如 Unit 2 Let's Play)",
-  "vocab": [
-    { "word": "当前图片中印刷的英文目标单词", "translation": "地道简体中文翻译", "is_core": true, "difficulty": 1 }
-  ],
-  "patterns": [
-    { "pattern": "当前图片对话框或句型框中印刷的核心交际句型", "translation": "地道简体中文翻译", "is_core": true }
-  ],
-  "grammar": [
-    { "point": "当前页面的语法要点", "example": "当前页面对应的真实英文例句", "is_core": true }
-  ]
-}
-
-【少儿英语切图识别严格铁律】：
-1. 🎯 核心词汇：
-   - 提取图片中带有数字编号 (1, 2, 3...) 的实物生词、故事生词或字母发音拓展词，一字不差，绝对严禁编造或借用其他单元的词！
-2. 💬 重点句型与日常交际：
-   - 提取本页对话框或句型框中印刷的核心交际句型（例如问答、物品陈述、日常打招呼与交际句型），绝不漏句！
-3. 🚫 绝对黑名单（严禁作为句型或语法点输出）：
-   - 严禁提取课堂指令词！例如：
-     ❌ "Listen, point, and say."
-     ❌ "Listen and point."
-     ❌ "Listen and say."
-     ❌ "Listen and number."
-     ❌ "Listen and sing."
-     ❌ "Look and listen."
-   - 严禁输出任何与本页图片无关的词汇或句子！
-4. 🇨🇳 翻译全部使用规范准确的【简体中文】。`;
-
   // 单元模式 vs 整本书模式
   let promptText = opts.bookMode
     ? `You are given pages from a language textbook. Extract vocabulary, patterns, and grammar PER UNIT. Every item MUST have accurate Simplified Chinese translations. Return ONLY a JSON array of units.`
-    : SINGLE_UNIT_PROMPT;
+    : buildExtractionPrompt(opts.schema);
 
   if (opts.unitText) {
     promptText += `\n\n=== 课本文本层内容 (包含该单元各课全部单词与对话) ===\n${opts.unitText}\n======================================================`;
@@ -755,7 +889,14 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
   }
 
   // 自动二级提纯函数：将自然语言描述提纯为带中文翻译的标准 JSON
-  async function refineToJSON(m, rawText) {
+  async function refineToJSON(m, rawText, schema = null) {
+    const type = schema?.type || 'general_english';
+    const instructions = type === 'phonics'
+      ? '提取为包含 "unit_title", "letters", "sounds", "blending_words", "sight_words", "vocab", "patterns", "grammar" 的严格 JSON。所有单词与短语必须带有准确的简体中文 "translation"。'
+      : (type === 'graded_reader'
+        ? '提取为包含 "unit_title", "key_words", "key_phrases", "comprehension_questions", "story_summary", "vocab", "patterns" 的严格 JSON。'
+        : '提取为严格的 JSON 对象，必须包含 "unit_title", "vocab" (包含 "word", "translation", is_core: true, difficulty: 1), "patterns", "grammar"。所有 item 必须包含准确地道的简体中文 "translation"。');
+
     try {
       const resp = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
@@ -765,7 +906,7 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
           messages: [
             {
               role: 'user',
-              content: `请将以下教材分析内容整理为严格的 JSON 对象，必须包含 "unit_title", "vocab" (数组，包含英文 "word" 和简体中文翻译 "translation", is_core: true, difficulty: 1), "patterns" (数组，包含英文 "pattern" 和简体中文翻译 "translation", is_core: true), "grammar" (数组，包含 "topic", "explanation")。\n\n所有 translation 字段必须翻译为准确地道的【简体中文】，不可留空。\n\n原始内容:\n${rawText}\n\n只返回纯 JSON，严禁任何多余文字。`
+              content: `请将以下教材分析内容整理为严格的 JSON 对象。\n${instructions}\n\n所有 translation 字段必须翻译为准确地道的【简体中文】，不可留空。\n\n原始内容:\n${rawText}\n\n只返回纯 JSON，严禁任何多余文字。`
             }
           ],
           temperature: 0.1,
@@ -801,7 +942,7 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
       let parsed = cleanAndParseJson(raw);
       if (!parsed && raw.trim().length > 0) {
         // 如果视觉模型输出了大段描述，启动二级智能提纯
-        parsed = await refineToJSON(m, raw);
+        parsed = await refineToJSON(m, raw, opts.schema);
       }
       if (parsed) return parsed;
       throw new Error(`大模型返回了非标准 JSON: ${raw.substring(0, 200)}`);
@@ -819,7 +960,7 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
           let raw = data.choices?.[0]?.message?.content || '';
           let parsed = cleanAndParseJson(raw);
           if (!parsed && raw.trim().length > 0) {
-            parsed = await refineToJSON(m, raw);
+            parsed = await refineToJSON(m, raw, opts.schema);
           }
           if (parsed) return parsed;
           throw new Error(`大模型返回了非标准 JSON: ${raw.substring(0, 200)}`);
@@ -853,6 +994,37 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
   const aiVision = formData.get ? formData.get('ai_vision') : null;
   let imagesToLLM = aiVision ? [aiVision] : [...images];
 
+  // 查询 DB 中教材配置与 unit_title
+  let schema = null;
+  let dbUnitTitle = '';
+  try {
+    const [unit, book] = await Promise.all([
+      c.env.DB.prepare(`
+        SELECT id, unit_title FROM textbook_units WHERE textbook_code = ? AND unit_number = ?
+      `).bind(code, num).first(),
+      c.env.DB.prepare(`
+        SELECT id, name, series, content_schema FROM textbooks WHERE code = ?
+      `).bind(code).first()
+    ]);
+    if (unit) dbUnitTitle = unit.unit_title;
+    if (book?.content_schema) {
+      schema = typeof book.content_schema === 'string' ? safeParseJson(book.content_schema) : book.content_schema;
+    }
+  } catch (e) {
+    console.error('DB query error:', e);
+  }
+
+  // 允许前端临时传递 schema 覆盖
+  const reqSchema = formData.get ? formData.get('content_schema') : null;
+  if (reqSchema) {
+    try { schema = typeof reqSchema === 'object' ? reqSchema : JSON.parse(reqSchema); } catch {}
+  }
+  if (!schema) {
+    schema = (code.toLowerCase().includes('phonics') || code.startsWith('WE-P'))
+      ? DEFAULT_CONTENT_SCHEMAS.phonics
+      : DEFAULT_CONTENT_SCHEMAS.general_english;
+  }
+
   // 如果前端没有携带图片（例如页面刷新后），自动从 R2 提取该单元已存切图
   if (imagesToLLM.length === 0) {
     const R2 = c.env.TEXTBOOKS_R2;
@@ -867,15 +1039,25 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       const allObjs = [...(res1.objects || []), ...(res2.objects || [])]
         .filter(o => {
           if (!/\.(png|jpg|jpeg|webp)$/i.test(o.key)) return false;
-          // 必须以 /Unit{num}/ 或 /Unit{num}_ 开头，且后面不能紧跟其他数字（防止 Unit1 匹配到 Unit10）
           const isSlashMatch = o.key.startsWith(`${code}/Unit${num}/`);
           const isUnderMatch = o.key.startsWith(`${code}/Unit${num}_`) && !new RegExp(`^${code}/Unit${num}\\d`, 'i').test(o.key);
           return isSlashMatch || isUnderMatch;
         })
         .sort((a, b) => a.key.localeCompare(b.key));
 
-      // 精准选取核心生词与功能句型页 (Lesson 1生词, Lesson 2生词, Lesson 3日常交际 What's your name)
-      const targetIndices = [0, 2, 5];
+      // 自适应选取关键页面（兼顾多模态请求吞吐与教材全覆盖）
+      const totalPages = allObjs.length;
+      let targetIndices = [];
+      if (totalPages <= 4) {
+        targetIndices = allObjs.map((_, i) => i);
+      } else if (totalPages <= 8) {
+        targetIndices = [0, 1, 2, Math.min(3, totalPages - 1), Math.min(5, totalPages - 1)].filter((v, i, a) => a.indexOf(v) === i && v < totalPages);
+      } else {
+        const step = (totalPages - 1) / 4;
+        targetIndices = [0, Math.round(step), Math.round(step * 2), Math.round(step * 3), totalPages - 1];
+        targetIndices = Array.from(new Set(targetIndices)).filter(i => i < totalPages);
+      }
+
       for (const idx of targetIndices) {
         if (allObjs[idx]) {
           const key = allObjs[idx].key;
@@ -897,17 +1079,6 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
     return c.json({ error: { code: 'BAD_REQUEST', message: '未找到本单元切图，请先上传 PDF 切片后再试' } }, 400);
   }
 
-  // 查询 DB 中是否已有此 unit
-  let dbUnitTitle = '';
-  try {
-    const unit = await c.env.DB.prepare(`
-      SELECT id, unit_title FROM textbook_units WHERE textbook_code = ? AND unit_number = ?
-    `).bind(code, num).first();
-    if (unit) dbUnitTitle = unit.unit_title;
-  } catch (e) {
-    console.error('DB query error:', e);
-  }
-
   try {
     // 从 Header 或 FormData 读取动态模型配置与页面文本
     const llmBaseUrl = formData.get('llm_base_url') || c.req.header('x-llm-base-url');
@@ -915,7 +1086,7 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
     const llmModel = formData.get('llm_model') || c.req.header('x-llm-model');
     const unitText = formData.get('unit_text') || '';
 
-    // 由于 NVIDIA NIM 严格限制单次请求仅能处理 1 张图片，对各 Lesson 生词页分别提取并聚合
+    // 对选取的关键切片页面分别提取并聚合
     const groupResults = [];
     for (let i = 0; i < imagesToLLM.length; i++) {
       try {
@@ -926,7 +1097,8 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
           baseUrl: llmBaseUrl,
           apiKey: llmApiKey,
           model: llmModel,
-          unitText
+          unitText,
+          schema
         });
         if (res) groupResults.push(res);
       } catch (err) {
@@ -948,24 +1120,35 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       }
     }
 
-    // 聚合去重全部课的词汇、句型与语法点 (智能兼容各类 LLM 键名 vocab / vocabulary / words)
+    // 智能多维度聚合器
     const vocabMap = new Map();
     const patternMap = new Map();
     const grammarMap = new Map();
+    const letterMap = new Map();
+    const soundMap = new Map();
+    const blendingMap = new Map();
+    const sightWordMap = new Map();
+    const keyWordMap = new Map();
+    const keyPhraseMap = new Map();
+    const compQuestions = [];
+    const grammarRulesMap = new Map();
+    const examplesList = [];
+    const practiceList = [];
+    let storySummary = '';
     let finalUnitTitle = dbUnitTitle || '';
 
-    const isCommand = (s) => /^(listen|point|say|sing|ask|answer|look|read|circle|write|number)\b/i.test((s || '').trim());
+    const isCommand = (s) => /^(listen|point|say|sing|ask|answer|look|read|circle|write|number|trace|color|match)\b/i.test((s || '').trim());
 
     for (const res of groupResults) {
       if (!res) continue;
       if (!finalUnitTitle && (res.unit_title || res.title)) finalUnitTitle = res.unit_title || res.title;
 
-      // 智能兼容词汇列表 (vocab / vocabulary / words)
+      // 词汇 (vocab / vocabulary / words)
       const rawVocab = res.vocab || res.vocabulary || res.words || (Array.isArray(res) ? res : []);
       for (const v of rawVocab) {
         const cleanWord = (typeof v === 'string' ? v : (v.word || v.name || '')).trim();
         const cleanTrans = (typeof v === 'object' ? (v.translation || v.chinese || v.meaning || '') : '').trim();
-        if (cleanWord && !vocabMap.has(cleanWord.toLowerCase())) {
+        if (cleanWord && !isCommand(cleanWord) && !vocabMap.has(cleanWord.toLowerCase())) {
           vocabMap.set(cleanWord.toLowerCase(), {
             word: cleanWord,
             translation: cleanTrans || cleanWord,
@@ -975,7 +1158,7 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
         }
       }
 
-      // 智能兼容句型列表 (patterns / sentence_patterns / sentences)
+      // 句型 (patterns / sentence_patterns / sentences)
       const rawPatterns = res.patterns || res.sentence_patterns || res.sentences || [];
       for (const p of rawPatterns) {
         const cleanPat = (typeof p === 'string' ? p : (p.pattern || p.sentence || '')).trim();
@@ -989,7 +1172,7 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
         }
       }
 
-      // 智能兼容语法点
+      // 语法点
       const rawGrammar = res.grammar || res.grammar_points || [];
       for (const g of rawGrammar) {
         const pt = (g.point || g.topic || g.title || '').trim();
@@ -1002,30 +1185,157 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
           });
         }
       }
+
+      // 自然拼读: 字母 (letters)
+      const rawLetters = res.letters || [];
+      for (const l of rawLetters) {
+        const letter = (typeof l === 'string' ? l : (l.letter || '')).trim();
+        if (letter && !letterMap.has(letter.toLowerCase())) {
+          letterMap.set(letter.toLowerCase(), {
+            letter,
+            sound: l.sound || '',
+            uppercase: l.uppercase || letter.charAt(0).toUpperCase(),
+            lowercase: l.lowercase || letter.toLowerCase()
+          });
+        }
+      }
+
+      // 自然拼读: 发音音素 (sounds)
+      const rawSounds = res.sounds || [];
+      for (const s of rawSounds) {
+        const snd = (typeof s === 'string' ? s : (s.sound || '')).trim();
+        if (snd && !soundMap.has(snd)) {
+          soundMap.set(snd, {
+            sound: snd,
+            phonics_rule: s.phonics_rule || s.rule || '',
+            example_words: Array.isArray(s.example_words) ? s.example_words : []
+          });
+        }
+      }
+
+      // 自然拼读: 拼读生词 (blending_words)
+      const rawBlending = res.blending_words || [];
+      for (const b of rawBlending) {
+        const w = (typeof b === 'string' ? b : (b.word || '')).trim();
+        const trans = (typeof b === 'object' ? (b.translation || b.chinese || '') : '').trim();
+        if (w && !blendingMap.has(w.toLowerCase())) {
+          blendingMap.set(w.toLowerCase(), {
+            word: w,
+            translation: trans || w,
+            phonemes: Array.isArray(b.phonemes) ? b.phonemes : [],
+            is_core: true
+          });
+          // 自动双向同步至 vocabMap，保证排课和课评词汇库通用无缝
+          if (!vocabMap.has(w.toLowerCase())) {
+            vocabMap.set(w.toLowerCase(), {
+              word: w,
+              translation: trans || w,
+              is_core: true,
+              difficulty: 1
+            });
+          }
+        }
+      }
+
+      // 自然拼读: 视读词 (sight_words)
+      const rawSight = res.sight_words || [];
+      for (const sw of rawSight) {
+        const w = (typeof sw === 'string' ? sw : (sw.word || '')).trim();
+        const trans = (typeof sw === 'object' ? (sw.translation || '') : '').trim();
+        if (w && !sightWordMap.has(w.toLowerCase())) {
+          sightWordMap.set(w.toLowerCase(), { word: w, translation: trans });
+        }
+      }
+
+      // 分级阅读: key_words & key_phrases
+      const rawKeyWords = res.key_words || [];
+      for (const kw of rawKeyWords) {
+        const w = (typeof kw === 'string' ? kw : (kw.word || '')).trim();
+        const trans = (typeof kw === 'object' ? (kw.translation || '') : '').trim();
+        if (w && !keyWordMap.has(w.toLowerCase())) {
+          keyWordMap.set(w.toLowerCase(), {
+            word: w,
+            translation: trans || w,
+            context: kw.context || '',
+            is_core: true
+          });
+          if (!vocabMap.has(w.toLowerCase())) {
+            vocabMap.set(w.toLowerCase(), { word: w, translation: trans || w, is_core: true, difficulty: 1 });
+          }
+        }
+      }
+
+      const rawKeyPhrases = res.key_phrases || [];
+      for (const kp of rawKeyPhrases) {
+        const p = (typeof kp === 'string' ? kp : (kp.phrase || '')).trim();
+        const trans = (typeof kp === 'object' ? (kp.translation || '') : '').trim();
+        if (p && !keyPhraseMap.has(p.toLowerCase())) {
+          keyPhraseMap.set(p.toLowerCase(), { phrase: p, translation: trans, is_core: true });
+        }
+      }
+
+      if (Array.isArray(res.comprehension_questions)) {
+        res.comprehension_questions.forEach(q => { if (q.question) compQuestions.push(q); });
+      }
+      if (res.story_summary && !storySummary) storySummary = res.story_summary;
+
+      // 语法专项: rules & examples
+      const rawRules = res.grammar_rules || [];
+      for (const gr of rawRules) {
+        const r = (gr.rule || '').trim();
+        if (r && !grammarRulesMap.has(r.toLowerCase())) {
+          grammarRulesMap.set(r.toLowerCase(), {
+            rule: r,
+            formula: gr.formula || '',
+            explanation: gr.explanation || '',
+            is_core: true
+          });
+        }
+      }
+      if (Array.isArray(res.examples)) {
+        res.examples.forEach(ex => { if (ex.sentence) examplesList.push(ex); });
+      }
+      if (Array.isArray(res.practice_sentences)) {
+        res.practice_sentences.forEach(pr => { if (pr.sentence) practiceList.push(pr); });
+      }
     }
 
     const cleanVocab = Array.from(vocabMap.values());
     let cleanPatterns = Array.from(patternMap.values());
     let cleanGrammar = Array.from(grammarMap.values()).filter(g => !isCommand(g.point));
 
-    // 如果句型为空，根据核心生词自动生成标准少儿交际句型
-    if (cleanPatterns.length === 0 && cleanVocab.length > 0) {
-      const firstWord = cleanVocab[0].word;
-      const firstTrans = cleanVocab[0].translation;
-      cleanPatterns = [
-        { pattern: `I have ${firstWord}.`, translation: `我有一张/个${firstTrans}。`, is_core: true },
-        { pattern: `What do you have? - I have ${firstWord}.`, translation: `你有什么？- 我有${firstTrans}。`, is_core: true }
-      ];
+    // 仅综合英语模式在句型为空时生成标准交际句型，绝不污染 Phonics / 阅读教材
+    if (schema.type === 'general_english') {
+      if (cleanPatterns.length === 0 && cleanVocab.length > 0) {
+        const firstWord = cleanVocab[0].word;
+        const firstTrans = cleanVocab[0].translation;
+        cleanPatterns = [
+          { pattern: `I have ${firstWord}.`, translation: `我有一张/个${firstTrans}。`, is_core: true },
+          { pattern: `What do you have? - I have ${firstWord}.`, translation: `你有什么？- 我有${firstTrans}。`, is_core: true }
+        ];
+      }
+      if (cleanGrammar.length === 0) {
+        cleanGrammar = [{
+          point: '重点句型与词汇综合应用',
+          example: '掌握本单元核心词汇的陈述与问答表达',
+          is_core: true
+        }];
+      }
     }
 
-    // 规范化语法点结构
-    if (cleanGrammar.length === 0) {
-      cleanGrammar = [{
-        point: '重点句型与词汇综合应用',
-        example: '掌握本单元核心词汇的陈述与问答表达',
-        is_core: true
-      }];
-    }
+    // 组织扩展维度 extra_content
+    const extraContent = {};
+    if (letterMap.size > 0) extraContent.letters = Array.from(letterMap.values());
+    if (soundMap.size > 0) extraContent.sounds = Array.from(soundMap.values());
+    if (blendingMap.size > 0) extraContent.blending_words = Array.from(blendingMap.values());
+    if (sightWordMap.size > 0) extraContent.sight_words = Array.from(sightWordMap.values());
+    if (keyWordMap.size > 0) extraContent.key_words = Array.from(keyWordMap.values());
+    if (keyPhraseMap.size > 0) extraContent.key_phrases = Array.from(keyPhraseMap.values());
+    if (compQuestions.length > 0) extraContent.comprehension_questions = compQuestions;
+    if (storySummary) extraContent.story_summary = storySummary;
+    if (grammarRulesMap.size > 0) extraContent.grammar_rules = Array.from(grammarRulesMap.values());
+    if (examplesList.length > 0) extraContent.examples = examplesList;
+    if (practiceList.length > 0) extraContent.practice_sentences = practiceList;
 
     return c.json({ data: {
       unit_number: num,
@@ -1033,6 +1343,9 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       vocab: cleanVocab,
       patterns: cleanPatterns,
       grammar: cleanGrammar,
+      extra_content: extraContent,
+      schema_type: schema.type || 'general_english',
+      dimensions: schema.dimensions || ['vocab', 'patterns', 'grammar'],
       pages_saved: pagesSaved
     }});
   } catch (err) {
@@ -1047,7 +1360,7 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
 // ---- 教材库管理 (的管理 textbooks 列表) ----
 
 // POST /books-manage — 新增教材
-// Body: { code, name, series, level, publisher, total_units, description }
+// Body: { code, name, series, level, publisher, total_units, description, content_schema }
 textbooks.post('/books-manage', async (c) => {
   const DB = c.env.DB;
   let body;
@@ -1057,14 +1370,20 @@ textbooks.post('/books-manage', async (c) => {
   const existing = await DB.prepare('SELECT id FROM textbooks WHERE code = ?').bind(body.code).first();
   if (existing) return c.json({ error: { code: 'CONFLICT', message: `code ${body.code} 已存在` } }, 409);
 
+  const structType = body.structure_type || (body.name?.toLowerCase().includes('phonics') ? 'lesson' : 'unit');
+  const schemaJson = body.content_schema
+    ? (typeof body.content_schema === 'object' ? JSON.stringify(body.content_schema) : body.content_schema)
+    : (body.name?.toLowerCase().includes('phonics') || structType === 'lesson'
+        ? JSON.stringify(DEFAULT_CONTENT_SCHEMAS.phonics)
+        : JSON.stringify(DEFAULT_CONTENT_SCHEMAS.general_english));
+
   const r = await DB.prepare(
-    `INSERT INTO textbooks (code, name, series, level, publisher, total_units, description, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
-  ).bind(body.code, body.name, body.series || '未分类系列', body.level || null, body.publisher || null, body.total_units || 8, body.description || null).run();
+    `INSERT INTO textbooks (code, name, series, level, publisher, total_units, description, content_schema, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
+  ).bind(body.code, body.name, body.series || '未分类系列', body.level || null, body.publisher || null, body.total_units || 8, body.description || null, schemaJson).run();
 
   const bookId = r.meta?.last_row_id;
   const totalUnits = parseInt(body.total_units) || 8;
-  const structType = body.structure_type || (body.name?.toLowerCase().includes('phonics') ? 'lesson' : 'unit');
   const prefix = structType === 'lesson' ? 'Lesson' : structType === 'chapter' ? 'Chapter' : structType === 'story' ? 'Story' : 'Unit';
 
   // 自动为新教材创建 1 ~ totalUnits 初始目录 (支持 Unit / Lesson / Chapter 等不同命名体系)
@@ -1111,7 +1430,7 @@ textbooks.post('/init-units/:code', async (c) => {
 });
 
 // PATCH /books-manage/:code — 改教材元数据
-// Body: { name?, series?, level?, publisher?, total_units?, description?, is_active? }
+// Body: { name?, series?, level?, publisher?, total_units?, description?, content_schema?, is_active? }
 textbooks.patch('/books-manage/:code', async (c) => {
   const DB = c.env.DB;
   const code = c.req.param('code');
@@ -1121,6 +1440,10 @@ textbooks.patch('/books-manage/:code', async (c) => {
   const book = await DB.prepare('SELECT id FROM textbooks WHERE code = ?').bind(code).first();
   if (!book) return c.json({ error: { code: 'NOT_FOUND', message: '教材不存在' } }, 404);
 
+  const schemaJson = body.content_schema !== undefined
+    ? (typeof body.content_schema === 'object' ? JSON.stringify(body.content_schema) : body.content_schema)
+    : null;
+
   await DB.prepare(
     `UPDATE textbooks SET
        name = COALESCE(?, name),
@@ -1129,10 +1452,12 @@ textbooks.patch('/books-manage/:code', async (c) => {
        publisher = COALESCE(?, publisher),
        total_units = COALESCE(?, total_units),
        description = COALESCE(?, description),
+       content_schema = COALESCE(?, content_schema),
        is_active = COALESCE(?, is_active)
      WHERE id = ?`
   ).bind(body.name ?? null, body.series ?? null, body.level ?? null, body.publisher ?? null,
         body.total_units ?? null, body.description ?? null,
+        schemaJson,
         body.is_active ?? null, book.id).run();
 
   return c.json({ data: { action: 'updated', code } });
@@ -1484,26 +1809,31 @@ textbooks.post('/commit-units/:code', async (c) => {
   const written = [];
   const skipped = [];
   for (const item of units) {
-    const unitId = unitMap.get(item.unit_number);
+    let unitId = unitMap.get(item.unit_number);
     if (!unitId) {
-      skipped.push({ unit_number: item.unit_number, reason: 'unit_number 不在预定义列表' });
-      continue;
+      // 动态自动为该教材新增此课时/单元，避免因未提前初始化而跳过
+      const insRes = await DB.prepare(
+        `INSERT INTO textbook_units (textbook_code, unit_number, unit_title) VALUES (?, ?, ?)`
+      ).bind(code, item.unit_number, item.unit_title || `Unit ${item.unit_number}`).run();
+      unitId = insRes.meta?.last_row_id;
+      unitMap.set(item.unit_number, unitId);
     }
 
     const vocab = JSON.stringify(item.vocab || []);
     const patterns = JSON.stringify(item.patterns || []);
     const grammar = JSON.stringify(item.grammar || []);
+    const extraContent = item.extra_content ? JSON.stringify(item.extra_content) : null;
 
     const existing = await DB.prepare('SELECT id FROM unit_content WHERE unit_id = ?').bind(unitId).first();
     if (existing) {
       await DB.prepare(
-        `UPDATE unit_content SET vocab = ?, patterns = ?, grammar = ?, extracted_by = 'llm', extracted_at = datetime('now'), updated_at = datetime('now') WHERE unit_id = ?`
-      ).bind(vocab, patterns, grammar, unitId).run();
+        `UPDATE unit_content SET vocab = ?, patterns = ?, grammar = ?, extra_content = COALESCE(?, extra_content), extracted_by = 'llm', extracted_at = datetime('now'), updated_at = datetime('now') WHERE unit_id = ?`
+      ).bind(vocab, patterns, grammar, extraContent, unitId).run();
     } else {
       await DB.prepare(
-        `INSERT INTO unit_content (unit_id, textbook_code, unit_number, vocab, patterns, grammar, extracted_by, extracted_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'llm', datetime('now'))`
-      ).bind(unitId, code, item.unit_number, vocab, patterns, grammar).run();
+        `INSERT INTO unit_content (unit_id, textbook_code, unit_number, vocab, patterns, grammar, extra_content, extracted_by, extracted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'llm', datetime('now'))`
+      ).bind(unitId, code, item.unit_number, vocab, patterns, grammar, extraContent).run();
     }
 
     // 同步更新 textbook_units.unit_title (AI 识别的真实标题优先, 用户校对后可覆盖原 DB 预填标题)
@@ -1519,6 +1849,138 @@ textbooks.post('/commit-units/:code', async (c) => {
 
   return c.json({ data: { textbook_code: code, units_received: units.length, units_written: written.length, units_skipped: skipped, written } });
 });
+
+// ============================================================
+// 🤖 POST /detect-toc/:code — 智能教材目录与分页识别
+// 接收：FormData (可选 images 数组, 可选 toc_text) 或 JSON
+// 输出：{ data: { units: [{ unit_number, unit_title, page_from, page_to }] } }
+// ============================================================
+textbooks.post('/detect-toc/:code', async (c) => {
+  const code = c.req.param('code');
+  const contentType = c.req.header('content-type') || '';
+
+  let tocText = '';
+  let tocImages = [];
+  let userBaseUrl = c.req.header('x-llm-base-url') || '';
+  let userApiKey = c.req.header('x-llm-api-key') || '';
+  let userModel = c.req.header('x-llm-model') || '';
+
+  if (contentType.includes('multipart/form-data')) {
+    const formData = await c.req.parseBody({ all: true });
+    tocText = (formData.toc_text || '').toString();
+    userBaseUrl = (formData.llm_base_url || userBaseUrl).toString();
+    userApiKey = (formData.llm_api_key || userApiKey).toString();
+    userModel = (formData.llm_model || userModel).toString();
+
+    const rawImages = formData['images'] || formData['images[]'] || [];
+    const imgList = Array.isArray(rawImages) ? rawImages : [rawImages];
+    for (const item of imgList) {
+      if (item && typeof item === 'object' && typeof item.arrayBuffer === 'function') {
+        const buf = await item.arrayBuffer();
+        const base64 = bufferToBase64(buf);
+        const mime = item.type || 'image/jpeg';
+        tocImages.push(`data:${mime};base64,${base64}`);
+      }
+    }
+  } else {
+    try {
+      const body = await c.req.json();
+      tocText = body.toc_text || body.text || '';
+      if (Array.isArray(body.images)) tocImages = body.images;
+      userBaseUrl = body.llm_base_url || userBaseUrl;
+      userApiKey = body.llm_api_key || userApiKey;
+      userModel = body.llm_model || userModel;
+    } catch (e) {}
+  }
+
+  const baseUrl = userBaseUrl || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
+  const apiKey = userApiKey || c.env.LLM_API_KEY;
+  const model = userModel || c.env.LLM_MODEL || 'meta/llama-3.2-90b-vision-instruct';
+
+  if (!apiKey) {
+    return c.json({ error: { code: 'CONFIG_ERROR', message: 'LLM API key is not configured' } }, 400);
+  }
+
+  const prompt = `You are an expert English textbook and curriculum analyst.
+Analyze the provided Table of Contents (TOC) and initial pages for textbook "${code}".
+Identify ALL units, lessons, chapters, stories, or review units, and their starting and ending printed page numbers.
+
+Requirements:
+1. "unit_number": Integer (e.g. Starter/Welcome = 0, Unit 1 / Lesson 1 = 1, Unit 2 / Lesson 2 = 2, Review 1 = next integer).
+2. "unit_title": The actual title of the unit/lesson/story (e.g. "Art Class", "Short a", "At the Park", "Animals").
+3. "page_from": The printed page number where this unit begins (integer).
+4. "page_to": The printed page number where this unit ends (integer). (If not explicitly written, set page_to as the page before the next unit starts, or page_from + 3 or + 7 depending on textbook standard).
+
+STRICT OUTPUT FORMAT: Return valid JSON only, without any markdown formatting or explanations:
+{
+  "units": [
+    { "unit_number": 0, "unit_title": "Welcome", "page_from": 2, "page_to": 3 },
+    { "unit_number": 1, "unit_title": "Art Class", "page_from": 4, "page_to": 11 }
+  ]
+}`;
+
+  const userContent = [{ type: 'text', text: prompt }];
+  if (tocText) {
+    userContent.push({ type: 'text', text: `Extracted TOC Text from PDF:\n\n${tocText}` });
+  }
+  for (const imgUrl of tocImages.slice(0, 4)) {
+    userContent.push({ type: 'image_url', image_url: { url: imgUrl } });
+  }
+
+  try {
+    const resp = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a precise educational textbook TOC parser. Return strict JSON only.' },
+          { role: 'user', content: userContent }
+        ],
+        temperature: 0.1,
+        max_tokens: 2048
+      })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      return c.json({ error: { code: 'LLM_ERROR', message: `LLM error: ${errText.substring(0, 200)}` } }, 500);
+    }
+
+    const data = await resp.json();
+    const rawContent = data.choices?.[0]?.message?.content || '';
+    const parsed = cleanAndParseJson(rawContent);
+
+    let resultUnits = (parsed && Array.isArray(parsed.units)) ? parsed.units : (Array.isArray(parsed) ? parsed : []);
+    resultUnits = resultUnits.map((u, i) => {
+      const pFrom = parseInt(u.page_from, 10) || 1;
+      let pTo = parseInt(u.page_to, 10) || (pFrom + 7);
+      if (pTo < pFrom) pTo = pFrom + 3;
+      return {
+        unit_number: u.unit_number !== undefined ? parseInt(u.unit_number, 10) : i + 1,
+        unit_title: (u.unit_title || `Unit ${u.unit_number || i + 1}`).trim(),
+        page_from: pFrom,
+        page_to: pTo
+      };
+    });
+
+    resultUnits.sort((a, b) => a.page_from - b.page_from);
+
+    return c.json({
+      success: true,
+      data: {
+        units: resultUnits,
+        raw: rawContent
+      }
+    });
+  } catch (err) {
+    return c.json({ error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
 
 // ============================================================
 // 📊 GET /progress/:studentId — 获取学生教材学习进度

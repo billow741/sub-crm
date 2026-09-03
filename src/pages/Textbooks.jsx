@@ -30,7 +30,7 @@ export default function Textbooks() {
   // AI 提取与保存状态
   const [extracting, setExtracting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('vocab'); // 'vocab' | 'patterns' | 'grammar'
+  const [activeTab, setActiveTab] = useState('vocab'); // 'vocab' | 'patterns' | 'phonics' | 'reading' | 'grammar'
 
   // 弹窗状态
   const [showBooksManage, setShowBooksManage] = useState(false);
@@ -180,7 +180,8 @@ export default function Textbooks() {
       unit_title: u?.unit_title || `Unit ${unitNum}`,
       vocab: [],
       patterns: [],
-      grammar: []
+      grammar: [],
+      extra_content: {}
     });
 
     // 1. 获取单元内容
@@ -192,7 +193,8 @@ export default function Textbooks() {
           unit_title: resp.data.unit_title || u?.unit_title || `Unit ${unitNum}`,
           vocab: resp.data.vocab || [],
           patterns: resp.data.patterns || [],
-          grammar: resp.data.grammar || []
+          grammar: resp.data.grammar || [],
+          extra_content: resp.data.extra_content || {}
         });
       }
     } catch (e) {
@@ -254,6 +256,40 @@ export default function Textbooks() {
     setRenderProgress('');
   };
 
+  // 扩展维度编辑辅助函数
+  const updateExtraField = (dim, idx, field, val) => {
+    setUnitDetail(prev => {
+      if (!prev) return prev;
+      const extra = { ...(prev.extra_content || {}) };
+      const arr = [...(extra[dim] || [])];
+      arr[idx] = { ...arr[idx], [field]: val };
+      extra[dim] = arr;
+      return { ...prev, extra_content: extra };
+    });
+  };
+
+  const removeExtraItem = (dim, idx) => {
+    setUnitDetail(prev => {
+      if (!prev) return prev;
+      const extra = { ...(prev.extra_content || {}) };
+      const arr = [...(extra[dim] || [])];
+      arr.splice(idx, 1);
+      extra[dim] = arr;
+      return { ...prev, extra_content: extra };
+    });
+  };
+
+  const addExtraItem = (dim, defaultItem) => {
+    setUnitDetail(prev => {
+      if (!prev) return prev;
+      const extra = { ...(prev.extra_content || {}) };
+      const arr = [...(extra[dim] || [])];
+      arr.push(defaultItem);
+      extra[dim] = arr;
+      return { ...prev, extra_content: extra };
+    });
+  };
+
   // 触发 AI 视觉识别当前单元
   const handleAiExtract = async () => {
     if (!selectedBookCode || selectedUnitNum === null) return;
@@ -268,7 +304,8 @@ export default function Textbooks() {
       ...prev,
       vocab: [],
       patterns: [],
-      grammar: []
+      grammar: [],
+      extra_content: {}
     }));
 
     try {
@@ -310,6 +347,12 @@ export default function Textbooks() {
         fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
       }
 
+      // 携带当前教材的 schema 配置
+      const curBook = books.find(b => b.code === selectedBookCode);
+      if (curBook?.content_schema) {
+        fd.append('content_schema', JSON.stringify(curBook.content_schema));
+      }
+
       if (llmConfig.baseUrl) fd.append('llm_base_url', llmConfig.baseUrl);
       if (llmConfig.apiKey) fd.append('llm_api_key', llmConfig.apiKey);
       if (llmConfig.model) fd.append('llm_model', llmConfig.model);
@@ -335,10 +378,13 @@ export default function Textbooks() {
           unit_title: d.unit_title || u?.unit_title || `Unit ${selectedUnitNum}`,
           vocab: d.vocab || [],
           patterns: d.patterns || [],
-          grammar: d.grammar || []
+          grammar: d.grammar || [],
+          extra_content: d.extra_content || {}
         });
         loadUnitPages(selectedBookCode, selectedUnitNum);
-        alert(`🎉 AI 识别成功！已识别 ${(d.vocab || []).length} 个核心词汇与 ${(d.patterns || []).length} 个句型，请在右侧校对后点击【保存入库】！`);
+
+        const extraCount = Object.values(d.extra_content || {}).reduce((acc, v) => acc + (Array.isArray(v) ? v.length : 0), 0);
+        alert(`🎉 AI 识别成功！已识别 ${(d.vocab || []).length} 个核心词汇、${(d.patterns || []).length} 个句型` + (extraCount > 0 ? `及 ${extraCount} 项拼读/专项教学要素` : '') + `，请在右侧校对后点击【保存入库】！`);
       } else {
         alert('AI 识别失败: ' + (json.error?.message || '未知错误'));
       }
@@ -359,6 +405,7 @@ export default function Textbooks() {
           vocab: unitDetail.vocab || [],
           patterns: unitDetail.patterns || [],
           grammar: unitDetail.grammar || [],
+          extra_content: unitDetail.extra_content || {},
           extracted_by: 'ai_workbench'
         })
       });
@@ -487,6 +534,7 @@ export default function Textbooks() {
   };
 
   const selectedBook = books.find(b => b.code === selectedBookCode);
+  const schemaType = selectedBook?.content_schema?.type || (selectedBookCode?.toLowerCase().includes('phonics') ? 'phonics' : 'general_english');
 
   if (loading) {
     return (
@@ -981,6 +1029,43 @@ export default function Textbooks() {
                           {(unitDetail.patterns || []).length}
                         </Badge>
                       </button>
+
+                      {/* 自然拼读特有 Tab */}
+                      {schemaType === 'phonics' && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('phonics')}
+                          className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+                            activeTab === 'phonics'
+                              ? 'border-primary-600 text-primary-700'
+                              : 'border-transparent text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          🔠 拼读与音素
+                          <Badge variant={activeTab === 'phonics' ? 'primary' : 'secondary'} className="px-1.5 py-0 text-[10px]">
+                            {((unitDetail.extra_content?.letters || []).length) + ((unitDetail.extra_content?.sounds || []).length) + ((unitDetail.extra_content?.blending_words || []).length)}
+                          </Badge>
+                        </button>
+                      )}
+
+                      {/* 分级阅读特有 Tab */}
+                      {schemaType === 'graded_reader' && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('reading')}
+                          className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+                            activeTab === 'reading'
+                              ? 'border-primary-600 text-primary-700'
+                              : 'border-transparent text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          📖 故事理解与问答
+                          <Badge variant={activeTab === 'reading' ? 'primary' : 'secondary'} className="px-1.5 py-0 text-[10px]">
+                            {(unitDetail.extra_content?.comprehension_questions || []).length}
+                          </Badge>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => setActiveTab('grammar')}
@@ -1006,6 +1091,16 @@ export default function Textbooks() {
                       {activeTab === 'patterns' && (
                         <Button variant="ghost" size="sm" onClick={addPatternItem} className="h-8 text-primary-600 hover:bg-primary-50">
                           <Plus className="w-4 h-4 mr-1" /> 添加句型
+                        </Button>
+                      )}
+                      {activeTab === 'phonics' && (
+                        <Button variant="ghost" size="sm" onClick={() => addExtraItem('blending_words', { word: '', translation: '', phonemes: [], is_core: true })} className="h-8 text-primary-600 hover:bg-primary-50">
+                          <Plus className="w-4 h-4 mr-1" /> 添加拼读词
+                        </Button>
+                      )}
+                      {activeTab === 'reading' && (
+                        <Button variant="ghost" size="sm" onClick={() => addExtraItem('comprehension_questions', { question: '', answer: '', translation: '' })} className="h-8 text-primary-600 hover:bg-primary-50">
+                          <Plus className="w-4 h-4 mr-1" /> 添加提问
                         </Button>
                       )}
                       {activeTab === 'grammar' && (
@@ -1104,6 +1199,244 @@ export default function Textbooks() {
                       </div>
                     )}
 
+                    {/* 自然拼读内容区 */}
+                    {activeTab === 'phonics' && (
+                      <div className="space-y-5">
+                        {/* 1. 目标字母 (Letters) */}
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                              🔤 目标字母 (Letters)
+                              <Badge variant="secondary" className="text-[10px]">{(unitDetail.extra_content?.letters || []).length}</Badge>
+                            </span>
+                            <Button variant="ghost" size="sm" onClick={() => addExtraItem('letters', { letter: '', sound: '', uppercase: '', lowercase: '' })} className="h-7 text-xs text-primary-600">
+                              <Plus className="w-3.5 h-3.5 mr-1" /> 加字母
+                            </Button>
+                          </div>
+                          {(unitDetail.extra_content?.letters || []).length === 0 ? (
+                            <div className="text-xs text-gray-400 py-2">暂无目标字母，点击右上角添加或重新 AI 提取</div>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {(unitDetail.extra_content?.letters || []).map((l, i) => (
+                                <div key={i} className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg">
+                                  <input
+                                    type="text"
+                                    value={l.letter || ''}
+                                    onChange={e => updateExtraField('letters', i, 'letter', e.target.value)}
+                                    placeholder="字母 Aa"
+                                    className="w-16 px-2 py-1 text-xs border border-gray-200 rounded bg-white font-bold"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={l.sound || ''}
+                                    onChange={e => updateExtraField('letters', i, 'sound', e.target.value)}
+                                    placeholder="发音 /æ/"
+                                    className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded bg-white text-gray-600"
+                                  />
+                                  <button onClick={() => removeExtraItem('letters', i)} className="text-gray-300 hover:text-danger-600 p-1">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 2. 发音规律 (Sounds) */}
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                              🔊 音素与发音规律 (Sounds & Rules)
+                              <Badge variant="secondary" className="text-[10px]">{(unitDetail.extra_content?.sounds || []).length}</Badge>
+                            </span>
+                            <Button variant="ghost" size="sm" onClick={() => addExtraItem('sounds', { sound: '', phonics_rule: '', example_words: [] })} className="h-7 text-xs text-primary-600">
+                              <Plus className="w-3.5 h-3.5 mr-1" /> 加音素
+                            </Button>
+                          </div>
+                          {(unitDetail.extra_content?.sounds || []).length === 0 ? (
+                            <div className="text-xs text-gray-400 py-2">暂无音素规律</div>
+                          ) : (
+                            <div className="space-y-2">
+                              {(unitDetail.extra_content?.sounds || []).map((s, i) => (
+                                <div key={i} className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg">
+                                  <input
+                                    type="text"
+                                    value={s.sound || ''}
+                                    onChange={e => updateExtraField('sounds', i, 'sound', e.target.value)}
+                                    placeholder="音标 /æ/"
+                                    className="w-20 px-2 py-1 text-xs border border-gray-200 rounded bg-white font-bold"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={s.phonics_rule || ''}
+                                    onChange={e => updateExtraField('sounds', i, 'phonics_rule', e.target.value)}
+                                    placeholder="拼读发音规律描述"
+                                    className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded bg-white text-gray-700"
+                                  />
+                                  <button onClick={() => removeExtraItem('sounds', i)} className="text-gray-300 hover:text-danger-600 p-1">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 3. 拼读拆分生词 (Blending Words) */}
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                              🧩 拼读目标生词 (Blending Words)
+                              <Badge variant="secondary" className="text-[10px]">{(unitDetail.extra_content?.blending_words || []).length}</Badge>
+                            </span>
+                            <Button variant="ghost" size="sm" onClick={() => addExtraItem('blending_words', { word: '', translation: '', phonemes: [], is_core: true })} className="h-7 text-xs text-primary-600">
+                              <Plus className="w-3.5 h-3.5 mr-1" /> 加拼读词
+                            </Button>
+                          </div>
+                          {(unitDetail.extra_content?.blending_words || []).length === 0 ? (
+                            <div className="text-xs text-gray-400 py-2">暂无拼读词汇</div>
+                          ) : (
+                            <div className="space-y-2">
+                              {(unitDetail.extra_content?.blending_words || []).map((b, i) => (
+                                <div key={i} className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg">
+                                  <input
+                                    type="text"
+                                    value={b.word || ''}
+                                    onChange={e => updateExtraField('blending_words', i, 'word', e.target.value)}
+                                    placeholder="单词 cat"
+                                    className="w-28 px-2 py-1 text-xs border border-gray-200 rounded bg-white font-bold"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={b.translation || ''}
+                                    onChange={e => updateExtraField('blending_words', i, 'translation', e.target.value)}
+                                    placeholder="中文翻译 猫"
+                                    className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded bg-white text-gray-700"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={Array.isArray(b.phonemes) ? b.phonemes.join('-') : (b.phonemes || '')}
+                                    onChange={e => updateExtraField('blending_words', i, 'phonemes', e.target.value.split('-').map(x => x.trim()).filter(Boolean))}
+                                    placeholder="音素拆分 c-a-t"
+                                    className="w-28 px-2 py-1 text-xs border border-gray-200 rounded bg-white font-mono text-gray-500"
+                                  />
+                                  <button onClick={() => removeExtraItem('blending_words', i)} className="text-gray-300 hover:text-danger-600 p-1">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 4. 视读词 (Sight Words) */}
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                              👀 常见视读词 (Sight Words)
+                              <Badge variant="secondary" className="text-[10px]">{(unitDetail.extra_content?.sight_words || []).length}</Badge>
+                            </span>
+                            <Button variant="ghost" size="sm" onClick={() => addExtraItem('sight_words', { word: '', translation: '' })} className="h-7 text-xs text-primary-600">
+                              <Plus className="w-3.5 h-3.5 mr-1" /> 加视读词
+                            </Button>
+                          </div>
+                          {(unitDetail.extra_content?.sight_words || []).length === 0 ? (
+                            <div className="text-xs text-gray-400 py-2">暂无视读词</div>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {(unitDetail.extra_content?.sight_words || []).map((sw, i) => (
+                                <div key={i} className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg">
+                                  <input
+                                    type="text"
+                                    value={sw.word || ''}
+                                    onChange={e => updateExtraField('sight_words', i, 'word', e.target.value)}
+                                    placeholder="the"
+                                    className="w-20 px-2 py-1 text-xs border border-gray-200 rounded bg-white font-bold"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={sw.translation || ''}
+                                    onChange={e => updateExtraField('sight_words', i, 'translation', e.target.value)}
+                                    placeholder="释义"
+                                    className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded bg-white text-gray-600"
+                                  />
+                                  <button onClick={() => removeExtraItem('sight_words', i)} className="text-gray-300 hover:text-danger-600 p-1">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 分级阅读内容区 */}
+                    {activeTab === 'reading' && (
+                      <div className="space-y-4">
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2">
+                          <label className="block text-xs font-bold text-gray-700">📖 故事核心概要 (Story Summary)</label>
+                          <textarea
+                            value={unitDetail.extra_content?.story_summary || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setUnitDetail(prev => ({
+                                ...prev,
+                                extra_content: { ...(prev.extra_content || {}), story_summary: val }
+                              }));
+                            }}
+                            rows={3}
+                            placeholder="填写或由 AI 提取的故事梗概与核心大意..."
+                            className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-800">❓ 故事理解与互动问答</span>
+                            <Button variant="ghost" size="sm" onClick={() => addExtraItem('comprehension_questions', { question: '', answer: '', translation: '' })} className="h-7 text-xs text-primary-600">
+                              <Plus className="w-3.5 h-3.5 mr-1" /> 加提问
+                            </Button>
+                          </div>
+                          {(unitDetail.extra_content?.comprehension_questions || []).length === 0 ? (
+                            <div className="text-xs text-gray-400 py-4 text-center">暂无绘本问答要点</div>
+                          ) : (
+                            (unitDetail.extra_content?.comprehension_questions || []).map((q, i) => (
+                              <div key={i} className="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Badge variant="secondary" className="text-[10px]">问答 {i + 1}</Badge>
+                                  <button onClick={() => removeExtraItem('comprehension_questions', i)} className="text-gray-300 hover:text-danger-600 p-1">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                <input
+                                  type="text"
+                                  value={q.question || ''}
+                                  onChange={e => updateExtraField('comprehension_questions', i, 'question', e.target.value)}
+                                  placeholder="英文提问 (What did the rabbit do?)"
+                                  className="w-full px-2.5 py-1 text-xs border border-gray-200 rounded bg-white font-bold"
+                                />
+                                <input
+                                  type="text"
+                                  value={q.answer || ''}
+                                  onChange={e => updateExtraField('comprehension_questions', i, 'answer', e.target.value)}
+                                  placeholder="参考答案 (It hopped away.)"
+                                  className="w-full px-2.5 py-1 text-xs border border-gray-200 rounded bg-white text-gray-700"
+                                />
+                                <input
+                                  type="text"
+                                  value={q.translation || ''}
+                                  onChange={e => updateExtraField('comprehension_questions', i, 'translation', e.target.value)}
+                                  placeholder="中文翻译 (兔子做了什么？)"
+                                  className="w-full px-2.5 py-1 text-xs border border-gray-200 rounded bg-white text-gray-500"
+                                />
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* 语法列表 */}
                     {activeTab === 'grammar' && (
                       <div className="space-y-3">
@@ -1174,6 +1507,7 @@ export default function Textbooks() {
         <BatchBookImportModal
           bookCode={selectedBookCode}
           bookName={selectedBook?.name || selectedBookCode}
+          bookSchema={selectedBook?.content_schema}
           llmConfig={llmConfig}
           onClose={() => {
             setShowBatchBookModal(false);
@@ -1233,7 +1567,7 @@ const DEFAULT_OUTLINES = {
   ]
 };
 
-function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
+function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClose }) {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   
@@ -1246,15 +1580,197 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
   // 单元目录大纲列表
   const [outline, setOutline] = useState(() => {
     const preset = DEFAULT_OUTLINES[bookCode] || DEFAULT_OUTLINES['DEFAULT'];
-    return preset.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extractedData: null }));
+    return preset.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extraCount: 0, extractedData: null }));
   });
 
   const [processing, setProcessing] = useState(false);
+  const [detectingToc, setDetectingToc] = useState(false);
   const [currentProcessingUnit, setCurrentProcessingUnit] = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
   const [savingAll, setSavingAll] = useState(false);
 
-  // 加载 PDF 文件并渲染第 4 页进行对齐校验
+  // 1. 本地文本层极速关键词扫描与智能分页 (Unit / Lesson / Chapter / Story)
+  const scanKeywordsAndPaginate = async (doc) => {
+    if (!doc) return;
+    setDetectingToc(true);
+    setStatusMsg('🔍 正在智能扫描全书文本关键词 (Unit / Lesson / Chapter / Story / Review)...');
+
+    try {
+      const candidates = [];
+      const numPages = doc.numPages;
+
+      const unitRegex = /\b(?:Unit|Lesson|Chapter|Story|Part)\s*([0-9A-Za-z]+)\b/i;
+      const specialRegex = /\b(Welcome|Starter|Review|Phonics|Phonics\s*Time)\s*(\d*)\b/i;
+
+      for (let p = 1; p <= numPages; p++) {
+        const page = await doc.getPage(p);
+        const textContent = await page.getTextContent();
+        const fullPageText = textContent.items.map(it => it.str).join(' ');
+
+        const unitMatch = fullPageText.match(unitRegex);
+        const specialMatch = fullPageText.match(specialRegex);
+
+        if (unitMatch || specialMatch) {
+          let identifier = '';
+          let unitNumber = 0;
+          let title = '';
+
+          if (unitMatch) {
+            const rawNum = unitMatch[1];
+            unitNumber = parseInt(rawNum, 10);
+            if (isNaN(unitNumber)) unitNumber = candidates.length + 1;
+            identifier = unitMatch[0];
+          } else if (specialMatch) {
+            const tag = specialMatch[1];
+            const num = specialMatch[2] ? parseInt(specialMatch[2], 10) : 0;
+            if (tag.toLowerCase().includes('welcome') || tag.toLowerCase().includes('starter')) {
+              unitNumber = 0;
+            } else {
+              unitNumber = num || (candidates.length + 1);
+            }
+            identifier = specialMatch[0];
+          }
+
+          // 抓取标题文本
+          const idx = fullPageText.indexOf(identifier);
+          if (idx !== -1) {
+            const snippet = fullPageText.substring(idx + identifier.length, idx + identifier.length + 45).trim();
+            const cleanTitle = snippet.split(/[\r\n\.\?]/)[0]?.trim();
+            if (cleanTitle && cleanTitle.length > 2 && cleanTitle.length < 35) {
+              title = `${identifier}: ${cleanTitle}`;
+            } else {
+              title = identifier;
+            }
+          } else {
+            title = identifier;
+          }
+
+          // 防抖防重：避免同课内重复出现关键词导致频繁切分
+          const lastCandidate = candidates[candidates.length - 1];
+          if (!lastCandidate || (p - lastCandidate.pdfPage >= 2 && lastCandidate.unit_number !== unitNumber)) {
+            candidates.push({
+              unit_number: unitNumber,
+              unit_title: title,
+              pdfPage: p
+            });
+          }
+        }
+      }
+
+      if (candidates.length > 0) {
+        // 自动计算或建议 offset (基于第 1 课的物理页)
+        const firstPdfPage = candidates[0].pdfPage;
+        const suggestedOffset = Math.max(0, firstPdfPage - (candidates[0].unit_number === 0 ? 2 : 4));
+        setPageOffset(suggestedOffset);
+
+        const newOutline = candidates.map((c, i) => {
+          const nextCandidate = candidates[i + 1];
+          const pdfEnd = nextCandidate ? nextCandidate.pdfPage - 1 : Math.min(c.pdfPage + 7, numPages);
+          
+          return {
+            unit_number: c.unit_number,
+            unit_title: c.unit_title,
+            page_from: Math.max(1, c.pdfPage - suggestedOffset),
+            page_to: Math.max(1, pdfEnd - suggestedOffset),
+            selected: true,
+            status: 'idle',
+            vocabCount: 0,
+            patternCount: 0,
+            extraCount: 0,
+            extractedData: null
+          };
+        });
+
+        setOutline(newOutline);
+        setStatusMsg(`✨ 智能关键词扫描成功！已自动按章节切分 ${newOutline.length} 个单元/课时，请核对下方大纲`);
+        renderOffsetSample(doc, 2 + suggestedOffset);
+      } else {
+        setStatusMsg('💡 本地文本层未检测到清晰章节标识（可能是扫描版 PDF），建议点击【🤖 AI 视觉扫描目录】');
+      }
+    } catch (err) {
+      console.warn('Scan keywords err:', err);
+      setStatusMsg('本地关键词扫描异常，已保留默认大纲');
+    }
+    setDetectingToc(false);
+  };
+
+  // 2. 截取前几页目录页，调用后端 AI 视觉模型深度识别目录与页码
+  const handleAiTocDetection = async () => {
+    if (!pdfDoc) return;
+    setDetectingToc(true);
+    setStatusMsg('🤖 正在截取 PDF 目录页并调用 AI 视觉大模型深度解析目录大纲...');
+
+    try {
+      const tocImages = [];
+      const scanPages = Math.min(6, pdfDoc.numPages);
+      let tocText = '';
+
+      for (let p = 2; p <= scanPages; p++) {
+        const page = await pdfDoc.getPage(p);
+        const textContent = await page.getTextContent();
+        tocText += `\n--- Page ${p} ---\n` + textContent.items.map(it => it.str).join(' ');
+
+        const viewport = page.getViewport({ scale: 1.0 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.8));
+        const base64 = await new Promise(res => {
+          const reader = new FileReader();
+          reader.onloadend = () => res(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        tocImages.push(base64);
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY
+      };
+      if (llmConfig?.baseUrl) headers['X-LLM-Base-Url'] = llmConfig.baseUrl;
+      if (llmConfig?.apiKey) headers['X-LLM-Api-Key'] = llmConfig.apiKey;
+      if (llmConfig?.model) headers['X-LLM-Model'] = llmConfig.model;
+
+      const resp = await fetch(`${API_BASE_URL}/textbooks/detect-toc/${bookCode}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          text: tocText,
+          images: tocImages,
+          llm_base_url: llmConfig?.baseUrl,
+          llm_api_key: llmConfig?.apiKey,
+          llm_model: llmConfig?.model
+        })
+      });
+      const json = await resp.json();
+
+      if (json.data?.units && json.data.units.length > 0) {
+        const detected = json.data.units.map(u => ({
+          unit_number: u.unit_number !== undefined ? u.unit_number : 1,
+          unit_title: u.unit_title || `Unit ${u.unit_number}`,
+          page_from: parseInt(u.page_from) || 4,
+          page_to: parseInt(u.page_to) || (parseInt(u.page_from) + 7 || 11),
+          selected: true,
+          status: 'idle',
+          vocabCount: 0,
+          patternCount: 0,
+          extraCount: 0,
+          extractedData: null
+        }));
+        setOutline(detected);
+        setStatusMsg(`🎉 AI 视觉目录解析成功！已提取 ${detected.length} 个单元，请核对右侧页码偏移量`);
+      } else {
+        alert('AI 目录解析未提取到清晰单元，请手动配置或检查目录图片');
+      }
+    } catch (err) {
+      alert('AI 目录扫描失败: ' + err.message);
+    }
+    setDetectingToc(false);
+  };
+
+  // 加载 PDF 文件并触发极速关键词扫描
   const handleSelectBookPdf = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1270,14 +1786,17 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
       const doc = await pdfjsLib.getDocument({ data: buf }).promise;
       setPdfDoc(doc);
       setTotalPages(doc.numPages);
-      setStatusMsg(`PDF 加载成功！共 ${doc.numPages} 页`);
+      setStatusMsg(`PDF 加载成功！共 ${doc.numPages} 页，正在进行智能目录初筛...`);
       
       // 渲染校准对照图 (默认取 PDF 第 4 页)
       renderOffsetSample(doc, 2 + pageOffset);
+
+      // 立即触发文本关键词初筛分页
+      scanKeywordsAndPaginate(doc);
     } catch (err) {
       alert('加载整本 PDF 失败: ' + err.message);
+      setProcessing(false);
     }
-    setProcessing(false);
   };
 
   // 渲染指定 PDF 页面的缩略图供肉眼核对
@@ -1333,6 +1852,7 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
         status: 'idle',
         vocabCount: 0,
         patternCount: 0,
+        extraCount: 0,
         extractedData: null
       }];
     });
@@ -1366,19 +1886,18 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
       }
 
       const realPdfEnd = Math.min(pdfEnd, totalPages);
-      setStatusMsg(`正在处理 Unit ${item.unit_number} (${item.unit_title}): 切片课本第 ${item.page_from}-${item.page_to} 页 (对应 PDF 第 ${pdfStart}-${realPdfEnd} 页)...`);
+      setStatusMsg(`正在处理 U${item.unit_number} (${item.unit_title}): 切片课本第 ${item.page_from}-${item.page_to} 页 (对应 PDF 第 ${pdfStart}-${realPdfEnd} 页)...`);
 
       try {
         const fd = new FormData();
         const pageBlobs = [];
         let unitTextContent = '';
 
-        // 1. 逐页高清切片与文字层提取 (用于 R2 存储与双核 AI 提取)
+        // 1. 逐页高清切片与文字层提取
         for (let p = pdfStart; p <= realPdfEnd; p++) {
-          const bookPageNum = p - pageOffset; // 对应的真实课本页码
+          const bookPageNum = p - pageOffset;
           const page = await pdfDoc.getPage(p);
 
-          // 提取该页文本层
           try {
             const textObj = await page.getTextContent();
             const pageStr = textObj.items.map(it => it.str).filter(Boolean).join(' ');
@@ -1389,7 +1908,6 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
             console.warn('Text extract error:', te);
           }
 
-          // 渲染高清切图
           const viewport = page.getViewport({ scale: 1.5 });
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
@@ -1401,7 +1919,7 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
           fd.append('images', blob, `page-${String(bookPageNum).padStart(2, '0')}.jpg`);
         }
 
-        // 2. 核心：为 AI 视觉模型合成全景全课时拼图 (包含该单元全部切片页面)
+        // 2. 为 AI 视觉模型合成全景拼图
         if (pageBlobs.length > 0) {
           const loadedImgs = await Promise.all(pageBlobs.map(b => new Promise(res => {
             const img = new Image();
@@ -1436,12 +1954,17 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
           fd.append('unit_text', unitTextContent.trim());
         }
 
+        // 4. 携带教材体系 Schema 配置
+        if (bookSchema) {
+          fd.append('content_schema', JSON.stringify(bookSchema));
+        }
+
         // 同时在 FormData 和 Header 中携带配置
         if (llmConfig?.baseUrl) fd.append('llm_base_url', llmConfig.baseUrl);
         if (llmConfig?.apiKey) fd.append('llm_api_key', llmConfig.apiKey);
         if (llmConfig?.model) fd.append('llm_model', llmConfig.model);
 
-        setStatusMsg(`正在调用 AI 视觉模型提取 Unit ${item.unit_number} 词汇与句型...`);
+        setStatusMsg(`正在调用 AI 视觉模型提取 Unit ${item.unit_number} 知识点...`);
         const reqHeaders = { 'X-API-Key': API_KEY };
         if (llmConfig?.baseUrl) reqHeaders['X-LLM-Base-Url'] = llmConfig.baseUrl;
         if (llmConfig?.apiKey) reqHeaders['X-LLM-Api-Key'] = llmConfig.apiKey;
@@ -1456,6 +1979,8 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
 
         if (json.data) {
           const d = json.data;
+          const extraTotal = Object.values(d.extra_content || {}).reduce((acc, v) => acc + (Array.isArray(v) ? v.length : 0), 0);
+
           setOutline(prev => {
             const list = [...prev];
             list[idx] = {
@@ -1463,6 +1988,7 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
               status: 'success',
               vocabCount: (d.vocab || []).length,
               patternCount: (d.patterns || []).length,
+              extraCount: extraTotal,
               extractedData: {
                 unit_number: item.unit_number,
                 unit_title: d.unit_title || item.unit_title,
@@ -1470,7 +1996,8 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
                 page_to: item.page_to,
                 vocab: d.vocab || [],
                 patterns: d.patterns || [],
-                grammar: d.grammar || []
+                grammar: d.grammar || [],
+                extra_content: d.extra_content || {}
               }
             };
             return list;
@@ -1497,7 +2024,7 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
 
     setProcessing(false);
     setCurrentProcessingUnit(null);
-    setStatusMsg('🎉 批次处理完毕！请查看各单元状态');
+    setStatusMsg('🎉 批次处理完毕！请查看各单元状态并点击下方保存入库');
   };
 
   // 全部保存入库
@@ -1541,9 +2068,9 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
             </div>
             <div>
               <h2 className="text-base font-bold text-gray-900 leading-tight">
-                批量导入大纲 — {bookName} ({bookCode})
+                整本 PDF 批量导入 — {bookName} ({bookCode})
               </h2>
-              <p className="text-xs text-gray-500 mt-1 font-medium">按真实课本目录切片 · 零错位对齐</p>
+              <p className="text-xs text-gray-500 mt-1 font-medium">AI 关键词识别 · 智能自动分页 · 批量知识点提取</p>
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} className="w-8 h-8 p-0 rounded-full bg-gray-50 hover:bg-gray-100">
@@ -1557,11 +2084,11 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
           {!pdfDoc ? (
             <div className="border-2 border-dashed border-primary-200 rounded-2xl p-12 text-center bg-white hover:border-primary-400 hover:bg-primary-50/50 transition-all cursor-pointer">
               <Upload className="w-12 h-12 text-primary-300 mx-auto mb-4" />
-              <div className="text-lg font-bold text-gray-900 mb-2">选择《{bookName}》原版 PDF 文件</div>
-              <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">系统将结合目录大纲自动按各 Unit 精准切片，并确保切图页码与课本印刷页码完全对应。</p>
+              <div className="text-lg font-bold text-gray-900 mb-2">选择《{bookName}》原版整本 PDF 文件</div>
+              <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">系统将自动扫描 Unit/Lesson 关键词推导课本起止页码，免去手动算页码的繁琐步骤！</p>
               <label className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white text-sm font-bold rounded-xl hover:bg-primary-700 cursor-pointer shadow-md hover:shadow-lg transition-all">
                 <FileText className="w-4 h-4" />
-                <span>浏览本地文件</span>
+                <span>浏览本地整本 PDF</span>
                 <input type="file" accept="application/pdf" onChange={handleSelectBookPdf} className="hidden" />
               </label>
             </div>
@@ -1576,7 +2103,7 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
                   </div>
                   <p className="text-xs text-gray-500 leading-relaxed bg-gray-50 p-3 rounded-xl border border-gray-100">
                     计算公式：<b>PDF 真实页码 = 课本印刷页码 + {pageOffset}</b><br/>
-                    示例：Welcome 印刷第 2 页，在 PDF 中位于第 {2 + pageOffset} 页
+                    示例：课本印刷第 2 页，在 PDF 中位于第 {2 + pageOffset} 页
                   </p>
                 </div>
 
@@ -1606,26 +2133,64 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
                       <img src={previewThumbnail} alt="Preview" className="h-16 w-auto object-contain rounded border border-gray-200 shadow-sm bg-white" />
                       <div className="text-xs text-gray-600 text-left">
                         <div className="font-medium mb-1">PDF 第 <b>{previewingPdfPage}</b> 页</div>
-                        <div className="text-success-600 font-bold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> 请核对内容</div>
+                        <div className="text-success-600 font-bold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> 采样核对</div>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* 3. 单元目录大纲表格 */}
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-sm font-bold text-gray-900 flex items-center gap-3">
-                    <span>📖 单元精准切片大纲</span>
-                    <Badge variant="secondary" className="bg-gray-100">{outline.length} 单元</Badge>
+              {/* 3. 单元目录大纲表格与智能探测工具栏 */}
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 space-y-4">
+                {/* 智能扫描与识别栏 */}
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-gradient-to-r from-primary-50/60 to-blue-50/40 border border-primary-100 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-primary-600" />
+                      智能目录探测与分页
+                    </span>
+                    <Badge variant="outline" className="text-[10px] bg-white text-primary-700 border-primary-200">
+                      已划分 {outline.length} 单元/课时
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => scanKeywordsAndPaginate(pdfDoc)}
+                      disabled={detectingToc || processing}
+                      className="h-8 text-xs bg-white border-primary-200 text-primary-700 hover:bg-primary-50"
+                      title="扫描 PDF 文本层中的 Unit/Lesson/Story/Review 关键词并智能划分起止页"
+                    >
+                      {detectingToc ? <Loader className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                      ⚡ 重新扫描关键词分页
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAiTocDetection}
+                      disabled={detectingToc || processing}
+                      className="h-8 text-xs bg-white border-blue-200 text-blue-700 hover:bg-blue-50"
+                      title="截取前 2-6 页目录给 AI 视觉大模型深度解析 (针对图片扫描版 PDF)"
+                    >
+                      {detectingToc ? <Loader className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5 text-blue-500" />}
+                      🤖 AI 视觉扫描目录
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-gray-900">📖 单元精准切片大纲</span>
                     <Button
                       variant="ghost" size="sm"
                       onClick={() => {
                         const allSelected = outline.every(u => u.selected);
                         setOutline(prev => prev.map(u => ({ ...u, selected: !allSelected })));
                       }}
-                      className="h-6 text-xs text-primary-600 hover:bg-primary-50 ml-2"
+                      className="h-6 text-xs text-primary-600 hover:bg-primary-50"
                     >
                       {outline.every(u => u.selected) ? '取消全选' : '全选'}
                     </Button>
@@ -1639,40 +2204,41 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
                     <Button
                       variant="primary" size="sm"
                       onClick={handleStartOutlineExtraction}
-                      disabled={processing}
+                      disabled={processing || detectingToc}
                       className="shadow-sm"
                     >
                       {processing ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
-                      {processing ? '提取中...' : '🚀 开始按大纲切片'}
+                      {processing ? '提取中...' : '🚀 确认分页并开始切片提取'}
                     </Button>
                   </div>
                 </div>
 
                 {statusMsg && (
-                  <div className="text-sm text-primary-800 bg-primary-50 border border-primary-100 p-3 rounded-xl mb-4 font-medium flex items-center gap-2">
-                    <Loader className="w-4 h-4 animate-spin shrink-0" />
+                  <div className="text-sm text-primary-800 bg-primary-50 border border-primary-100 p-3 rounded-xl font-medium flex items-center gap-2">
+                    {(processing || detectingToc) && <Loader className="w-4 h-4 animate-spin shrink-0" />}
                     {statusMsg}
                   </div>
                 )}
 
-                {/* 表格 */}
+                {/* 大纲表格 */}
                 <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold">
                       <tr>
                         <th className="px-4 py-3 w-12 text-center">选</th>
-                        <th className="px-4 py-3 w-20">Unit</th>
-                        <th className="px-4 py-3">单元标题</th>
+                        <th className="px-4 py-3 w-20">课时</th>
+                        <th className="px-4 py-3">单元/课时标题</th>
                         <th className="px-4 py-3 w-40">印刷页码</th>
                         <th className="px-4 py-3 w-40 text-center">对应 PDF</th>
                         <th className="px-4 py-3 w-32 text-center">状态</th>
-                        <th className="px-4 py-3 w-40">提取结果</th>
+                        <th className="px-4 py-3 w-44">提取结果</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {outline.map((u, idx) => {
                         const pdfFrom = u.page_from + pageOffset;
                         const pdfTo = u.page_to + pageOffset;
+                        const pageCount = Math.max(1, u.page_to - u.page_from + 1);
                         const isProcessingThis = currentProcessingUnit === u.unit_number;
 
                         return (
@@ -1709,6 +2275,7 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
                                   onChange={e => updateOutlineItem(idx, 'page_to', parseInt(e.target.value) || 0)}
                                   className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-primary-500 focus:outline-none"
                                 />
+                                <span className="text-[11px] text-gray-400 font-mono">({pageCount}P)</span>
                               </div>
                             </td>
                             <td className="px-4 py-3 text-gray-500 font-bold text-center bg-gray-50/50">
@@ -1730,11 +2297,13 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
                             <td className="px-4 py-3 text-xs">
                               {u.status === 'success' ? (
                                 <div className="flex flex-col gap-1 text-gray-600 font-medium bg-gray-50 p-1.5 rounded-lg border border-gray-100">
-                                  <span>{u.vocabCount} 词汇</span>
-                                  <span>{u.patternCount} 句型</span>
+                                  <span>{u.vocabCount} 词汇 · {u.patternCount} 句型</span>
+                                  {u.extraCount > 0 && (
+                                    <span className="text-primary-700 font-bold text-[11px]">✨ {u.extraCount} 拓展/拼读点</span>
+                                  )}
                                 </div>
                               ) : u.errorMsg ? (
-                                <span className="text-danger-600 block max-w-[120px] truncate" title={u.errorMsg}>
+                                <span className="text-danger-600 block max-w-[140px] truncate" title={u.errorMsg}>
                                   {u.errorMsg}
                                 </span>
                               ) : <span className="text-gray-300">-</span>}
@@ -1773,12 +2342,22 @@ function BatchBookImportModal({ bookCode, bookName, llmConfig, onClose }) {
   );
 }
 
-
 // 教材库管理子组件
 function BooksManageModal({ books, onClose }) {
   const [list, setList] = useState(books || []);
   const [editingCode, setEditingCode] = useState(null);
-  const [form, setForm] = useState({ code: '', name: '', series: '', structure_type: 'unit', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+  const [form, setForm] = useState({
+    code: '',
+    name: '',
+    series: '',
+    structure_type: 'unit',
+    level: 'A1',
+    publisher: 'Oxford',
+    total_units: 8,
+    description: '',
+    schema_type: 'general_english',
+    target_age: ''
+  });
 
   // 提取现有系列列表
   const existingSeries = Array.from(new Set(list.map(b => b.series).filter(Boolean)));
@@ -1788,15 +2367,24 @@ function BooksManageModal({ books, onClose }) {
     if (!form.code || !form.name) return alert('Code 和名称必填');
 
     try {
+      const schemaObj = {
+        type: form.schema_type || 'general_english',
+        target_age: form.target_age || (form.schema_type === 'phonics' ? '4-8' : '5-12')
+      };
+      const payload = {
+        ...form,
+        content_schema: schemaObj
+      };
+
       if (editingCode) {
-        await request(`/textbooks/books-manage/${editingCode}`, { method: 'PATCH', body: form });
+        await request(`/textbooks/books-manage/${editingCode}`, { method: 'PATCH', body: payload });
       } else {
-        await request('/textbooks/books-manage', { method: 'POST', body: form });
+        await request('/textbooks/books-manage', { method: 'POST', body: payload });
       }
       const resp = await request('/textbooks');
       setList(resp.data || []);
       setEditingCode(null);
-      setForm({ code: '', name: '', series: '', structure_type: 'unit', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+      setForm({ code: '', name: '', series: '', structure_type: 'unit', level: 'A1', publisher: 'Oxford', total_units: 8, description: '', schema_type: 'general_english', target_age: '' });
     } catch (err) {
       alert('保存失败: ' + err.message);
     }
@@ -1893,6 +2481,37 @@ function BooksManageModal({ books, onClose }) {
               </div>
             </div>
 
+            {/* AI 提取方案与体系配置 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">AI 提取方案 / 教材体系</label>
+                <select
+                  value={form.schema_type || 'general_english'}
+                  onChange={e => {
+                    const t = e.target.value;
+                    const struct = t === 'phonics' ? 'lesson' : (t === 'graded_reader' ? 'story' : form.structure_type);
+                    setForm({ ...form, schema_type: t, structure_type: struct });
+                  }}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-medium text-gray-800"
+                >
+                  <option value="general_english">📖 综合英语 (词汇、日常交际句型、语法焦点)</option>
+                  <option value="phonics">🔤 自然拼读 (字母音素、拼读生词、视读词)</option>
+                  <option value="graded_reader">📚 分级阅读 / 绘本 (核心词句、故事理解、问答)</option>
+                  <option value="grammar">📝 专项语法 (语法规则公式、典型例句、练习)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">目标年龄 / 年级描述</label>
+                <input
+                  type="text"
+                  value={form.target_age || ''}
+                  onChange={e => setForm({ ...form, target_age: e.target.value })}
+                  placeholder={form.schema_type === 'phonics' ? '4-8 岁' : '5-12 岁'}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">CEFR 等级</label>
@@ -1925,7 +2544,7 @@ function BooksManageModal({ books, onClose }) {
                   variant="outline" size="sm"
                   onClick={() => {
                     setEditingCode(null);
-                    setForm({ code: '', name: '', series: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '' });
+                    setForm({ code: '', name: '', series: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '', schema_type: 'general_english', target_age: '' });
                   }}
                 >
                   取消
@@ -1951,6 +2570,9 @@ function BooksManageModal({ books, onClose }) {
                         <span className="font-bold text-gray-900 text-sm">{b.name}</span>
                         <Badge variant="secondary" className="px-1.5 py-0 text-[10px] bg-gray-100 uppercase">{b.level}</Badge>
                         {b.series && <Badge variant="outline" className="px-1.5 py-0 text-[10px] border-primary-200 text-primary-700 bg-primary-50/50">{b.series}</Badge>}
+                        <Badge variant="outline" className="px-1.5 py-0 text-[10px] border-blue-200 text-blue-700 bg-blue-50/60">
+                          {b.content_schema?.type === 'phonics' ? '🔤 自然拼读' : (b.content_schema?.type === 'graded_reader' ? '📚 分级阅读' : (b.content_schema?.type === 'grammar' ? '📝 语法课本' : '📖 综合英语'))}
+                        </Badge>
                       </div>
                       <div className="text-xs text-gray-500 font-mono">{b.code} · 共 {b.total_units || 8} 单元</div>
                     </div>
@@ -1959,7 +2581,18 @@ function BooksManageModal({ books, onClose }) {
                     <button
                       onClick={() => {
                         setEditingCode(b.code);
-                        setForm({ code: b.code, name: b.name, series: b.series || '', level: b.level || 'A1', publisher: b.publisher || 'Oxford', total_units: b.total_units || 8, description: b.description || '' });
+                        setForm({
+                          code: b.code,
+                          name: b.name,
+                          series: b.series || '',
+                          structure_type: b.structure_type || 'unit',
+                          level: b.level || 'A1',
+                          publisher: b.publisher || 'Oxford',
+                          total_units: b.total_units || 8,
+                          description: b.description || '',
+                          schema_type: b.content_schema?.type || (b.name?.toLowerCase().includes('phonics') ? 'phonics' : 'general_english'),
+                          target_age: b.content_schema?.target_age || ''
+                        });
                       }}
                       className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                     >
