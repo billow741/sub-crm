@@ -1590,6 +1590,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
   });
 
   const [processing, setProcessing] = useState(false);
+  const [loadingPdf, setLoadingPdf] = useState(false);
   const [detectingToc, setDetectingToc] = useState(false);
   const [currentProcessingUnit, setCurrentProcessingUnit] = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
@@ -1781,7 +1782,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setProcessing(true);
+    setLoadingPdf(true);
     setStatusMsg('正在解析 PDF 文件...');
     try {
       const pdfjsLib = await import('pdfjs-dist');
@@ -1798,7 +1799,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
       renderOffsetSample(doc, 2 + pageOffset);
 
       // 立即触发文本关键词初筛分页
-      scanKeywordsAndPaginate(doc);
+      await scanKeywordsAndPaginate(doc);
     } catch (err) {
       if (err.message && (err.message.includes('dynamically imported module') || err.message.includes('MIME type'))) {
         if (confirm('系统刚刚部署了新版本，需要刷新浏览器以载入最新解析模块。是否立即刷新？')) {
@@ -1807,6 +1808,8 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
         }
       }
       alert('加载整本 PDF 失败: ' + err.message);
+    } finally {
+      setLoadingPdf(false);
       setProcessing(false);
     }
   };
@@ -1881,162 +1884,165 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
 
     setProcessing(true);
 
-    for (let idx = 0; idx < outline.length; idx++) {
-      const item = outline[idx];
-      if (!item.selected) continue;
+    try {
+      for (let idx = 0; idx < outline.length; idx++) {
+        const item = outline[idx];
+        if (!item.selected) continue;
 
-      setCurrentProcessingUnit(item.unit_number);
-      updateOutlineItem(idx, 'status', 'processing');
+        setCurrentProcessingUnit(item.unit_number);
+        updateOutlineItem(idx, 'status', 'processing');
 
-      // 计算本 Unit 对应的真实 PDF 页码范围
-      const pdfStart = item.page_from + pageOffset;
-      const pdfEnd = item.page_to + pageOffset;
+        // 计算本 Unit 对应的真实 PDF 页码范围
+        const pdfStart = item.page_from + pageOffset;
+        const pdfEnd = item.page_to + pageOffset;
 
-      if (pdfStart > totalPages) {
-        updateOutlineItem(idx, 'status', 'error');
-        continue;
-      }
+        if (pdfStart > totalPages) {
+          updateOutlineItem(idx, 'status', 'error');
+          continue;
+        }
 
-      const realPdfEnd = Math.min(pdfEnd, totalPages);
-      setStatusMsg(`正在处理 U${item.unit_number} (${item.unit_title}): 切片课本第 ${item.page_from}-${item.page_to} 页 (对应 PDF 第 ${pdfStart}-${realPdfEnd} 页)...`);
+        const realPdfEnd = Math.min(pdfEnd, totalPages);
+        setStatusMsg(`正在处理 U${item.unit_number} (${item.unit_title}): 切片课本第 ${item.page_from}-${item.page_to} 页 (对应 PDF 第 ${pdfStart}-${realPdfEnd} 页)...`);
 
-      try {
-        const fd = new FormData();
-        const pageBlobs = [];
-        let unitTextContent = '';
+        try {
+          const fd = new FormData();
+          const pageBlobs = [];
+          let unitTextContent = '';
 
-        // 1. 逐页高清切片与文字层提取
-        for (let p = pdfStart; p <= realPdfEnd; p++) {
-          const bookPageNum = p - pageOffset;
-          const page = await pdfDoc.getPage(p);
+          // 1. 逐页高清切片与文字层提取
+          for (let p = pdfStart; p <= realPdfEnd; p++) {
+            const bookPageNum = p - pageOffset;
+            const page = await pdfDoc.getPage(p);
 
-          try {
-            const textObj = await page.getTextContent();
-            const pageStr = textObj.items.map(it => it.str).filter(Boolean).join(' ');
-            if (pageStr.trim()) {
-              unitTextContent += `\n[Page ${bookPageNum}]: ${pageStr}`;
+            try {
+              const textObj = await page.getTextContent();
+              const pageStr = textObj.items.map(it => it.str).filter(Boolean).join(' ');
+              if (pageStr.trim()) {
+                unitTextContent += `\n[Page ${bookPageNum}]: ${pageStr}`;
+              }
+            } catch (te) {
+              console.warn('Text extract error:', te);
             }
-          } catch (te) {
-            console.warn('Text extract error:', te);
+
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext('2d');
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
+            pageBlobs.push({ blob, pageNum: bookPageNum });
+            fd.append('images', blob, `page-${String(bookPageNum).padStart(2, '0')}.jpg`);
           }
 
-          const viewport = page.getViewport({ scale: 1.5 });
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext('2d');
-          await page.render({ canvasContext: ctx, viewport }).promise;
-          const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
-          pageBlobs.push({ blob, pageNum: bookPageNum });
-          fd.append('images', blob, `page-${String(bookPageNum).padStart(2, '0')}.jpg`);
-        }
+          // 2. 为 AI 视觉模型合成全景拼图
+          if (pageBlobs.length > 0) {
+            const loadedImgs = await Promise.all(pageBlobs.map(b => new Promise(res => {
+              const img = new Image();
+              img.onload = () => res(img);
+              img.src = URL.createObjectURL(b.blob);
+            })));
 
-        // 2. 为 AI 视觉模型合成全景拼图
-        if (pageBlobs.length > 0) {
-          const loadedImgs = await Promise.all(pageBlobs.map(b => new Promise(res => {
-            const img = new Image();
-            img.onload = () => res(img);
-            img.src = URL.createObjectURL(b.blob);
-          })));
+            const cols = loadedImgs.length <= 2 ? loadedImgs.length : (loadedImgs.length <= 4 ? 2 : 4);
+            const rows = Math.ceil(loadedImgs.length / cols);
+            const singleW = 800;
+            const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
 
-          const cols = loadedImgs.length <= 2 ? loadedImgs.length : (loadedImgs.length <= 4 ? 2 : 4);
-          const rows = Math.ceil(loadedImgs.length / cols);
-          const singleW = 800;
-          const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
+            const collageCanvas = document.createElement('canvas');
+            collageCanvas.width = singleW * cols;
+            collageCanvas.height = singleH * rows;
+            const cCtx = collageCanvas.getContext('2d');
+            cCtx.fillStyle = '#ffffff';
+            cCtx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
 
-          const collageCanvas = document.createElement('canvas');
-          collageCanvas.width = singleW * cols;
-          collageCanvas.height = singleH * rows;
-          const cCtx = collageCanvas.getContext('2d');
-          cCtx.fillStyle = '#ffffff';
-          cCtx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
+            loadedImgs.forEach((img, i) => {
+              const col = i % cols;
+              const row = Math.floor(i / cols);
+              cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
+            });
 
-          loadedImgs.forEach((img, i) => {
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
+            const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
+            fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
+          }
+
+          // 3. 注入课本文本层内容
+          if (unitTextContent.trim()) {
+            fd.append('unit_text', unitTextContent.trim());
+          }
+
+          // 4. 携带教材体系 Schema 配置
+          if (bookSchema) {
+            fd.append('content_schema', JSON.stringify(bookSchema));
+          }
+
+          // 同时在 FormData 和 Header 中携带配置
+          if (llmConfig?.baseUrl) fd.append('llm_base_url', llmConfig.baseUrl);
+          if (llmConfig?.apiKey) fd.append('llm_api_key', llmConfig.apiKey);
+          if (llmConfig?.model) fd.append('llm_model', llmConfig.model);
+
+          setStatusMsg(`正在调用 AI 视觉模型提取 Unit ${item.unit_number} 知识点...`);
+          const reqHeaders = { 'X-API-Key': API_KEY };
+          if (llmConfig?.baseUrl) reqHeaders['X-LLM-Base-Url'] = llmConfig.baseUrl;
+          if (llmConfig?.apiKey) reqHeaders['X-LLM-Api-Key'] = llmConfig.apiKey;
+          if (llmConfig?.model) reqHeaders['X-LLM-Model'] = llmConfig.model;
+
+          const res = await fetch(`${API_BASE_URL}/textbooks/preview-unit/${bookCode}/${item.unit_number}`, {
+            method: 'POST',
+            headers: reqHeaders,
+            body: fd
           });
+          const json = await res.json();
 
-          const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
-          fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
-        }
+          if (json.data) {
+            const d = json.data;
+            const extraTotal = Object.values(d.extra_content || {}).reduce((acc, v) => acc + (Array.isArray(v) ? v.length : 0), 0);
 
-        // 3. 注入课本文本层内容
-        if (unitTextContent.trim()) {
-          fd.append('unit_text', unitTextContent.trim());
-        }
-
-        // 4. 携带教材体系 Schema 配置
-        if (bookSchema) {
-          fd.append('content_schema', JSON.stringify(bookSchema));
-        }
-
-        // 同时在 FormData 和 Header 中携带配置
-        if (llmConfig?.baseUrl) fd.append('llm_base_url', llmConfig.baseUrl);
-        if (llmConfig?.apiKey) fd.append('llm_api_key', llmConfig.apiKey);
-        if (llmConfig?.model) fd.append('llm_model', llmConfig.model);
-
-        setStatusMsg(`正在调用 AI 视觉模型提取 Unit ${item.unit_number} 知识点...`);
-        const reqHeaders = { 'X-API-Key': API_KEY };
-        if (llmConfig?.baseUrl) reqHeaders['X-LLM-Base-Url'] = llmConfig.baseUrl;
-        if (llmConfig?.apiKey) reqHeaders['X-LLM-Api-Key'] = llmConfig.apiKey;
-        if (llmConfig?.model) reqHeaders['X-LLM-Model'] = llmConfig.model;
-
-        const res = await fetch(`${API_BASE_URL}/textbooks/preview-unit/${bookCode}/${item.unit_number}`, {
-          method: 'POST',
-          headers: reqHeaders,
-          body: fd
-        });
-        const json = await res.json();
-
-        if (json.data) {
-          const d = json.data;
-          const extraTotal = Object.values(d.extra_content || {}).reduce((acc, v) => acc + (Array.isArray(v) ? v.length : 0), 0);
-
+            setOutline(prev => {
+              const list = [...prev];
+              list[idx] = {
+                ...list[idx],
+                status: 'success',
+                vocabCount: (d.vocab || []).length,
+                patternCount: (d.patterns || []).length,
+                extraCount: extraTotal,
+                extractedData: {
+                  unit_number: item.unit_number,
+                  unit_title: d.unit_title || item.unit_title,
+                  page_from: item.page_from,
+                  page_to: item.page_to,
+                  vocab: d.vocab || [],
+                  patterns: d.patterns || [],
+                  grammar: d.grammar || [],
+                  extra_content: d.extra_content || {}
+                }
+              };
+              return list;
+            });
+          } else {
+            const errMsg = json.error?.message || '提取失败';
+            setOutline(prev => {
+              const list = [...prev];
+              list[idx] = { ...list[idx], status: 'error', errorMsg: errMsg };
+              return list;
+            });
+            setStatusMsg(`⚠️ Unit ${item.unit_number} 提取失败: ${errMsg}`);
+          }
+        } catch (err) {
+          console.error(err);
           setOutline(prev => {
             const list = [...prev];
-            list[idx] = {
-              ...list[idx],
-              status: 'success',
-              vocabCount: (d.vocab || []).length,
-              patternCount: (d.patterns || []).length,
-              extraCount: extraTotal,
-              extractedData: {
-                unit_number: item.unit_number,
-                unit_title: d.unit_title || item.unit_title,
-                page_from: item.page_from,
-                page_to: item.page_to,
-                vocab: d.vocab || [],
-                patterns: d.patterns || [],
-                grammar: d.grammar || [],
-                extra_content: d.extra_content || {}
-              }
-            };
+            list[idx] = { ...list[idx], status: 'error', errorMsg: err.message };
             return list;
           });
-        } else {
-          const errMsg = json.error?.message || '提取失败';
-          setOutline(prev => {
-            const list = [...prev];
-            list[idx] = { ...list[idx], status: 'error', errorMsg: errMsg };
-            return list;
-          });
-          setStatusMsg(`⚠️ Unit ${item.unit_number} 提取失败: ${errMsg}`);
+          setStatusMsg(`⚠️ Unit ${item.unit_number} 请求异常: ${err.message}`);
         }
-      } catch (err) {
-        console.error(err);
-        setOutline(prev => {
-          const list = [...prev];
-          list[idx] = { ...list[idx], status: 'error', errorMsg: err.message };
-          return list;
-        });
-        setStatusMsg(`⚠️ Unit ${item.unit_number} 请求异常: ${err.message}`);
       }
-    }
 
-    setProcessing(false);
-    setCurrentProcessingUnit(null);
-    setStatusMsg('🎉 批次处理完毕！请查看各单元状态并点击下方保存入库');
+      setStatusMsg('🎉 批次处理完毕！请查看各单元状态并点击下方保存入库');
+    } finally {
+      setProcessing(false);
+      setCurrentProcessingUnit(null);
+    }
   };
 
   // 全部保存入库
@@ -2171,7 +2177,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                       variant="outline"
                       size="sm"
                       onClick={() => scanKeywordsAndPaginate(pdfDoc)}
-                      disabled={detectingToc || processing}
+                      disabled={detectingToc || processing || loadingPdf}
                       className="h-8 text-xs bg-white border-primary-200 text-primary-700 hover:bg-primary-50"
                       title="扫描 PDF 文本层中的 Unit/Lesson/Story/Review 关键词并智能划分起止页"
                     >
@@ -2183,7 +2189,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                       variant="outline"
                       size="sm"
                       onClick={handleAiTocDetection}
-                      disabled={detectingToc || processing}
+                      disabled={detectingToc || processing || loadingPdf}
                       className="h-8 text-xs bg-white border-blue-200 text-blue-700 hover:bg-blue-50"
                       title="截取前 2-6 页目录给 AI 视觉大模型深度解析 (针对图片扫描版 PDF)"
                     >
@@ -2209,18 +2215,18 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <Button variant="outline" size="sm" onClick={addOutlineUnit}>
+                    <Button variant="outline" size="sm" onClick={addOutlineUnit} disabled={processing || loadingPdf}>
                       <Plus className="w-4 h-4 mr-1" /> 添加单元
                     </Button>
 
                     <Button
                       variant="primary" size="sm"
                       onClick={handleStartOutlineExtraction}
-                      disabled={processing || detectingToc}
+                      disabled={processing || detectingToc || loadingPdf}
                       className="shadow-sm"
                     >
-                      {processing ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
-                      {processing ? '提取中...' : '🚀 确认分页并开始切片提取'}
+                      {processing ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : loadingPdf ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+                      {processing ? '提取中...' : loadingPdf ? '解析中...' : '🚀 确认分页并开始切片提取'}
                     </Button>
                   </div>
                 </div>
