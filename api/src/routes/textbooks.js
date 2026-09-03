@@ -1939,8 +1939,8 @@ textbooks.post('/commit-units/:code', async (c) => {
     let body;
     try { body = await c.req.json(); } catch { return c.json({ error: { code: 'BAD_REQUEST', message: 'Invalid JSON body' } }, 400); }
 
-    const units = Array.isArray(body.units) ? body.units : (Array.isArray(body) ? body : null);
-    if (!units) return c.json({ error: { code: 'BAD_REQUEST', message: 'Expected { units: [...] } body' } }, 400);
+    const rawUnits = Array.isArray(body.units) ? body.units : (Array.isArray(body) ? body : null);
+    if (!rawUnits) return c.json({ error: { code: 'BAD_REQUEST', message: 'Expected { units: [...] } body' } }, 400);
 
     // 查这本书基本信息（获取 textbook.id 避免 NOT NULL 约束失败）
     const book = await DB.prepare('SELECT id FROM textbooks WHERE code = ?').bind(code).first();
@@ -1953,28 +1953,77 @@ textbooks.post('/commit-units/:code', async (c) => {
       SELECT id, unit_number FROM textbook_units WHERE textbook_code = ? ORDER BY unit_number ASC
     `).bind(code).all();
     const unitMap = new Map();
-    (dbUnits.results || []).forEach(u => unitMap.set(u.unit_number, u.id));
+    (dbUnits.results || []).forEach(u => unitMap.set(Number(u.unit_number), u.id));
 
     const written = [];
     const skipped = [];
-    for (const item of units) {
-      let unitId = unitMap.get(item.unit_number);
+    for (const item of rawUnits) {
+      const uNum = parseInt(item.unit_number, 10);
+      if (isNaN(uNum)) {
+        skipped.push({ item, reason: 'Invalid unit_number' });
+        continue;
+      }
+
+      let unitId = unitMap.get(uNum);
       if (!unitId) {
-        // 动态自动为该教材新增此课时/单元，必须提供 textbook_id
-        const insRes = await DB.prepare(
-          `INSERT INTO textbook_units (textbook_id, textbook_code, unit_number, unit_title) VALUES (?, ?, ?, ?)`
-        ).bind(book.id, code, item.unit_number, item.unit_title || `Unit ${item.unit_number}`).run();
-        unitId = insRes.meta?.last_row_id;
-        unitMap.set(item.unit_number, unitId);
+        // 先查一次该 unit 是否其实已经存在于数据库 (防御并发或脏数据)
+        const existingUnit = await DB.prepare(
+          `SELECT id FROM textbook_units WHERE textbook_code = ? AND unit_number = ?`
+        ).bind(code, uNum).first();
+
+        if (existingUnit) {
+          unitId = existingUnit.id;
+        } else {
+          // 动态自动为该教材新增此课时/单元，必须提供 textbook_id
+          await DB.prepare(
+            `INSERT OR IGNORE INTO textbook_units (textbook_id, textbook_code, unit_number, unit_title) VALUES (?, ?, ?, ?)`
+          ).bind(book.id, code, uNum, item.unit_title || `Unit ${uNum}`).run();
+
+          const freshUnit = await DB.prepare(
+            `SELECT id FROM textbook_units WHERE textbook_code = ? AND unit_number = ?`
+          ).bind(code, uNum).first();
+          unitId = freshUnit?.id;
+        }
+
+        if (unitId) {
+          unitMap.set(uNum, unitId);
+        }
+      }
+
+      if (!unitId) {
+        console.error(`Failed to resolve unitId for book ${code} unit ${uNum}`);
+        skipped.push({ unit_number: uNum, reason: 'Could not resolve unit ID' });
+        continue;
       }
 
       const vocab = JSON.stringify(item.vocab || []);
       const patterns = JSON.stringify(item.patterns || []);
       const grammar = JSON.stringify(item.grammar || []);
-      const extraContent = item.extra_content ? JSON.stringify(item.extra_content) : null;
 
-      const existing = await DB.prepare('SELECT id, vocab, patterns, grammar FROM unit_content WHERE unit_id = ?').bind(unitId).first();
+      // 提取并持久化起止页码、偏移量等元数据至 extra_content
+      let extraObj = {};
+      try {
+        extraObj = (typeof item.extra_content === 'object' && item.extra_content !== null)
+          ? { ...item.extra_content }
+          : JSON.parse(item.extra_content || '{}');
+      } catch {}
+
+      if (item.page_from !== undefined && item.page_from !== null) extraObj.page_from = parseInt(item.page_from, 10);
+      if (item.page_to !== undefined && item.page_to !== null) extraObj.page_to = parseInt(item.page_to, 10);
+      if (item.page_offset !== undefined && item.page_offset !== null) extraObj.page_offset = parseInt(item.page_offset, 10);
+      const extraContent = JSON.stringify(extraObj);
+
+      const existing = await DB.prepare('SELECT id, vocab, patterns, grammar, extra_content FROM unit_content WHERE unit_id = ?').bind(unitId).first();
       if (existing) {
+        let mergedExtra = extraObj;
+        if (existing.extra_content) {
+          try {
+            const oldExtra = JSON.parse(existing.extra_content);
+            mergedExtra = { ...oldExtra, ...extraObj };
+          } catch {}
+        }
+        const finalExtra = JSON.stringify(mergedExtra);
+
         // 如果新传入的 vocab 为空但数据库已有提取数据，则保留数据库现有内容，避免纯切片保存覆盖已提取词汇
         const keepExisting = (!item.vocab || item.vocab.length === 0) && existing.vocab && existing.vocab !== '[]';
         const finalVocab = keepExisting ? existing.vocab : vocab;
@@ -1982,13 +2031,13 @@ textbooks.post('/commit-units/:code', async (c) => {
         const finalGrammar = keepExisting ? existing.grammar : grammar;
 
         await DB.prepare(
-          `UPDATE unit_content SET vocab = ?, patterns = ?, grammar = ?, extra_content = COALESCE(?, extra_content), updated_at = datetime('now') WHERE unit_id = ?`
-        ).bind(finalVocab, finalPatterns, finalGrammar, extraContent, unitId).run();
+          `UPDATE unit_content SET vocab = ?, patterns = ?, grammar = ?, extra_content = ?, updated_at = datetime('now') WHERE unit_id = ?`
+        ).bind(finalVocab, finalPatterns, finalGrammar, finalExtra, unitId).run();
       } else {
         await DB.prepare(
           `INSERT INTO unit_content (unit_id, textbook_code, unit_number, vocab, patterns, grammar, extra_content, extracted_by, extracted_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, 'outline', datetime('now'))`
-        ).bind(unitId, code, item.unit_number, vocab, patterns, grammar, extraContent).run();
+        ).bind(unitId, code, uNum, vocab, patterns, grammar, extraContent).run();
       }
 
       // 同步更新 textbook_units.unit_title (AI 识别的真实标题优先, 用户校对后可覆盖原 DB 预填标题)
@@ -1999,17 +2048,18 @@ textbooks.post('/commit-units/:code', async (c) => {
         ).bind(item.unit_title, unitId).run();
       }
 
-      written.push({ unit_number: item.unit_number, unit_title: item.unit_title, vocab_count: (item.vocab || []).length, patterns_count: (item.patterns || []).length });
+      written.push({ unit_number: uNum, unit_title: item.unit_title, vocab_count: (item.vocab || []).length, patterns_count: (item.patterns || []).length });
     }
 
     // 更新 textbooks.total_units
-    const maxUnit = Math.max(...written.map(w => w.unit_number), 0);
+    const validUnitNums = written.map(w => w.unit_number).filter(n => typeof n === 'number' && !isNaN(n));
+    const maxUnit = validUnitNums.length > 0 ? Math.max(...validUnitNums, 0) : 0;
     if (maxUnit > 0) {
       await DB.prepare('UPDATE textbooks SET total_units = MAX(total_units, ?), updated_at = datetime("now") WHERE id = ?')
         .bind(maxUnit, book.id).run();
     }
 
-    return c.json({ data: { textbook_code: code, units_received: units.length, units_written: written.length, units_skipped: skipped, written } });
+    return c.json({ data: { textbook_code: code, units_received: rawUnits.length, units_written: written.length, units_skipped: skipped, written } });
   } catch (err) {
     console.error('commit-units error:', err);
     return c.json({ error: { code: 'SERVER_ERROR', message: err.message } }, 500);

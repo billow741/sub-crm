@@ -2343,29 +2343,58 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
     await handleStartAiExtraction();
   };
 
-  // 全部保存入库
   // 全部保存入库 (支持纯切片大纲入库，也支持带AI知识点的全量入库)
   const handleCommitAll = async () => {
-    const readyUnits = outline
+    // 过滤出有效勾选单元，并确保 unit_number 为合法整数
+    const seenUnitNums = new Set();
+    const readyUnits = [];
+
+    outline
       .filter(u => u.selected && (u.status === 'success' || u.status === 'sliced' || (u.sliceThumbs && u.sliceThumbs.length > 0) || u.extractedData))
-      .map(u => {
+      .forEach(u => {
+        const uNum = parseInt(u.unit_number, 10);
+        const finalNum = isNaN(uNum) ? 0 : uNum;
+        if (seenUnitNums.has(finalNum)) return; // 防重：同一课时编号只提交一次
+        seenUnitNums.add(finalNum);
+
+        const pFrom = parseInt(u.page_from, 10) || 1;
+        const pTo = parseInt(u.page_to, 10) || pFrom;
+        const pOffset = parseInt(pageOffset, 10) || 0;
+
         if (u.extractedData) {
-          return {
+          readyUnits.push({
             ...u.extractedData,
-            unit_title: u.unit_title || u.extractedData.unit_title,
-            unit_number: u.unit_number
-          };
+            unit_title: u.unit_title || u.extractedData.unit_title || `Lesson ${finalNum}`,
+            unit_number: finalNum,
+            page_from: pFrom,
+            page_to: pTo,
+            page_offset: pOffset,
+            extra_content: {
+              ...(u.extractedData.extra_content || {}),
+              page_from: pFrom,
+              page_to: pTo,
+              page_offset: pOffset,
+              page_count: u.sliceThumbs?.length || (pTo - pFrom + 1)
+            }
+          });
+        } else {
+          readyUnits.push({
+            unit_number: finalNum,
+            unit_title: u.unit_title || `Lesson ${finalNum}`,
+            page_from: pFrom,
+            page_to: pTo,
+            page_offset: pOffset,
+            vocab: [],
+            patterns: [],
+            grammar: [],
+            extra_content: {
+              page_from: pFrom,
+              page_to: pTo,
+              page_offset: pOffset,
+              page_count: u.sliceThumbs?.length || (pTo - pFrom + 1)
+            }
+          });
         }
-        return {
-          unit_number: u.unit_number,
-          unit_title: u.unit_title || `Lesson ${u.unit_number}`,
-          page_from: u.page_from,
-          page_to: u.page_to,
-          vocab: [],
-          patterns: [],
-          grammar: [],
-          extra_content: { page_count: u.sliceThumbs?.length || (u.page_to - u.page_from + 1) }
-        };
       });
 
     if (readyUnits.length === 0) {
@@ -2375,7 +2404,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
 
     setSavingAll(true);
     try {
-      const resp = await fetch(`${API_BASE_URL}/textbooks/commit-units/${bookCode}`, {
+      const resp = await fetch(`${API_BASE_URL}/textbooks/commit-units/${encodeURIComponent(bookCode)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
         body: JSON.stringify({ units: readyUnits })
