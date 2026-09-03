@@ -1611,6 +1611,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
   });
 
   const [processing, setProcessing] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [detectingToc, setDetectingToc] = useState(false);
   const [currentProcessingUnit, setCurrentProcessingUnit] = useState(null);
