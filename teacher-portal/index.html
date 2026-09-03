@@ -167,18 +167,20 @@
       <div class="text-xs text-gray-500 mb-2">📖 Textbook Pages (可选, 家长端会显示这些 PDF 页面图)</div>
       <div class="grid grid-cols-4 gap-2">
         <div>
-          <label class="block text-xs text-gray-500 mb-1">Textbook</label>
-          <select id="fb-textbook-code" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500">
-            <option value="">None</option>
-            <option value="EU-S">EU Starter</option>
-            <option value="EU-L1">EU Level 1</option>
-            <option value="EU-L2">EU Level 2</option>
-            <option value="EU-L3">EU Level 3</option>
+          <label class="block text-xs text-gray-500 mb-1 font-medium">Textbook (教材)</label>
+          <select id="fb-textbook-code" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white">
+            <option value="">None (无)</option>
           </select>
         </div>
-        <div><label class="block text-xs text-gray-500 mb-1">Unit #</label><input id="fb-unit-num" type="number" min="0" max="20" placeholder="e.g. 1" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></div>
-        <div><label class="block text-xs text-gray-500 mb-1">Page from</label><input id="fb-page-from" type="number" min="1" max="99" placeholder="e.g. 2" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></div>
-        <div><label class="block text-xs text-gray-500 mb-1">Page to</label><input id="fb-page-to" type="number" min="1" max="99" placeholder="e.g. 4" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1 font-medium" id="fb-unit-label">Unit / Lesson (课时)</label>
+          <select id="fb-unit-select" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white disabled:bg-gray-100 disabled:text-gray-400" disabled>
+            <option value="">Select Unit</option>
+          </select>
+          <input id="fb-unit-num" type="hidden" value="">
+        </div>
+        <div><label class="block text-xs text-gray-500 mb-1 font-medium">Page from (起始页)</label><input id="fb-page-from" type="number" min="1" max="999" placeholder="自动填充" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></div>
+        <div><label class="block text-xs text-gray-500 mb-1 font-medium">Page to (结束页)</label><input id="fb-page-to" type="number" min="1" max="999" placeholder="自动填充" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></div>
       </div>
       <div id="fb-pages-preview" class="mt-2"></div>
     </div>
@@ -720,25 +722,153 @@ async function loadTeacherData() {
 }
 }
 
-// ===== 动态拉取教材库列表 =====
+// ===== 动态拉取教材库列表 (按系列分组) =====
+var window_textbooksCache = [];
+var window_textbookUnitsMap = {}; // code -> [units]
+
 async function loadTextbookOptions() {
   var sel = document.getElementById('fb-textbook-code');
   if (!sel) return;
   try {
     var res = await apiGet('/textbooks');
     var books = res.data || [];
+    window_textbooksCache = books;
     if (Array.isArray(books) && books.length > 0) {
       var currentVal = sel.value;
-      var html = '<option value="">None</option>';
+      var html = '<option value="">None (不选教材)</option>';
+      
+      // 按系列 Series 分组
+      var seriesGroups = {};
       books.forEach(function(b) {
-        html += '<option value="' + escapeAttr(b.code) + '">' + escapeHtml(b.name || b.code) + '</option>';
+        var s = b.series || '其他教材';
+        if (!seriesGroups[s]) seriesGroups[s] = [];
+        seriesGroups[s].push(b);
       });
+
+      Object.keys(seriesGroups).forEach(function(sName) {
+        html += '<optgroup label="📚 ' + escapeAttr(sName) + '">';
+        seriesGroups[sName].forEach(function(b) {
+          html += '<option value="' + escapeAttr(b.code) + '">' + escapeHtml(b.name || b.code) + '</option>';
+        });
+        html += '</optgroup>';
+      });
+
       sel.innerHTML = html;
       if (currentVal) sel.value = currentVal;
     }
   } catch(e) {
     console.warn('Failed to load textbooks list:', e);
   }
+}
+
+// 当选择教材变更时，动态拉取并填充该教材的真实单元/课时列表
+async function onTextbookChange() {
+  var sel = document.getElementById('fb-textbook-code');
+  var code = sel ? sel.value : '';
+  var unitSelect = document.getElementById('fb-unit-select');
+  var unitNumInput = document.getElementById('fb-unit-num');
+  var labelEl = document.getElementById('fb-unit-label');
+
+  if (!code) {
+    if (unitSelect) {
+      unitSelect.innerHTML = '<option value="">Select Unit / Lesson</option>';
+      unitSelect.disabled = true;
+    }
+    if (unitNumInput) unitNumInput.value = '';
+    if (labelEl) labelEl.textContent = 'Unit / Lesson (课时)';
+    refreshTextbookSuggestions();
+    renderPagesPreview();
+    return;
+  }
+
+  // 判断是 Lesson 还是 Unit
+  var isLesson = code.includes('WE') || code.includes('Phonics') || (sel.selectedOptions[0] && sel.selectedOptions[0].text.toLowerCase().includes('phonics'));
+  var unitPrefix = isLesson ? 'Lesson' : 'Unit';
+  if (labelEl) labelEl.textContent = isLesson ? 'Lesson (课时)' : 'Unit (单元)';
+
+  if (unitSelect) {
+    unitSelect.disabled = true;
+    unitSelect.innerHTML = '<option value="">Loading ' + unitPrefix + 's...</option>';
+  }
+
+  try {
+    var res = await apiGet('/textbooks/book/' + encodeURIComponent(code));
+    var bookData = res.data;
+    var units = (bookData && bookData.units) ? bookData.units : [];
+    window_textbookUnitsMap[code] = units;
+
+    if (unitSelect) {
+      unitSelect.disabled = false;
+      var html = '<option value="">Select ' + unitPrefix + '...</option>';
+      units.forEach(function(u) {
+        var num = u.unit_number;
+        var title = u.unit_title || '';
+        var displayTitle = title;
+        if (num === 0 && !title) displayTitle = 'Welcome';
+        else if (title && !title.toLowerCase().startsWith('unit') && !title.toLowerCase().startsWith('lesson')) {
+          displayTitle = unitPrefix + ' ' + num + ': ' + title;
+        } else if (!title) {
+          displayTitle = unitPrefix + ' ' + num;
+        }
+        html += '<option value="' + num + '">' + escapeHtml(displayTitle) + '</option>';
+      });
+      unitSelect.innerHTML = html;
+
+      // 如果当前已有匹配的 unit_num，自动选中
+      if (unitNumInput && unitNumInput.value !== '') {
+        unitSelect.value = unitNumInput.value;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load units for book ' + code, e);
+    if (unitSelect) {
+      unitSelect.disabled = false;
+      unitSelect.innerHTML = '<option value="">Select ' + unitPrefix + '...</option>';
+    }
+  }
+}
+
+// 当选择单元变更时，自动填充页码、联动上方 Lesson Info 与建议
+async function onUnitSelectChange() {
+  var code = document.getElementById('fb-textbook-code').value;
+  var unitSelect = document.getElementById('fb-unit-select');
+  var unitVal = unitSelect ? unitSelect.value : '';
+  var unitNumInput = document.getElementById('fb-unit-num');
+  var pageFromInput = document.getElementById('fb-page-from');
+  var pageToInput = document.getElementById('fb-page-to');
+
+  if (unitNumInput) unitNumInput.value = unitVal;
+
+  // 联动上方 Lesson Info 的 Unit/Lesson
+  var isLesson = code.includes('WE') || code.includes('Phonics');
+  var fbUnitInput = document.getElementById('fb-unit');
+  var fbLessonInput = document.getElementById('fb-lesson');
+  if (unitVal !== '') {
+    if (isLesson) {
+      if (fbLessonInput && !fbLessonInput.value) fbLessonInput.value = unitVal;
+    } else {
+      if (fbUnitInput && !fbUnitInput.value) fbUnitInput.value = unitVal;
+    }
+  }
+
+  // 自动从 R2 获取真实起止页码并填入 Page from 和 Page to
+  if (code && unitVal !== '') {
+    try {
+      var res = await apiGet('/textbooks/unit-pages/' + encodeURIComponent(code) + '/' + encodeURIComponent(unitVal));
+      var pages = (res.data && res.data.pages) ? res.data.pages : [];
+      if (pages.length > 0) {
+        var pFrom = pages[0].page_num;
+        var pTo = pages[pages.length - 1].page_num;
+        if (pFrom && pageFromInput) pageFromInput.value = pFrom;
+        if (pTo && pageToInput) pageToInput.value = pTo;
+      }
+    } catch(e) {
+      console.warn('Auto fetch unit pages failed:', e);
+    }
+  }
+
+  refreshTextbookSuggestions();
+  renderPagesPreview();
 }
 
 // ===== Render Today's Classes =====
@@ -1090,11 +1220,30 @@ function openFeedback(cls) {
   document.getElementById('fb-recording').value = cls.fb_recording || '';
 
   // 教材页码 (textbook + unit + page range)
-  document.getElementById('fb-textbook-code').value = cls.textbook_code || '';
-  document.getElementById('fb-unit-num').value = cls.unit_number || '';
+  var bookSel = document.getElementById('fb-textbook-code');
+  if (bookSel) bookSel.value = cls.textbook_code || '';
+  var unitNumInput = document.getElementById('fb-unit-num');
+  if (unitNumInput) unitNumInput.value = (cls.unit_number !== undefined && cls.unit_number !== null) ? cls.unit_number : '';
   document.getElementById('fb-page-from').value = cls.page_from || '';
   document.getElementById('fb-page-to').value = cls.page_to || '';
-  renderPagesPreview();   // show preview if all 4 filled
+
+  if (cls.textbook_code) {
+    onTextbookChange().then(function() {
+      var unitSelect = document.getElementById('fb-unit-select');
+      if (unitSelect && cls.unit_number !== undefined && cls.unit_number !== null && cls.unit_number !== '') {
+        unitSelect.value = cls.unit_number;
+      }
+      renderPagesPreview();
+      refreshTextbookSuggestions();
+    });
+  } else {
+    var unitSelect = document.getElementById('fb-unit-select');
+    if (unitSelect) {
+      unitSelect.innerHTML = '<option value="">Select Unit</option>';
+      unitSelect.disabled = true;
+    }
+    renderPagesPreview();
+  }
 
   // Render pronunciation error rows
   renderErrorRows('pron', cls.fb_pronunciation_errors);
@@ -1207,7 +1356,9 @@ async function refreshTextbookSuggestions() {
 
     var titleEl = document.getElementById('fb-suggest-unit-title');
     if (titleEl) {
-      titleEl.textContent = code + ' · Unit ' + unit + (data.unit_title ? ' (' + data.unit_title + ')' : '');
+      var isLesson = code.includes('WE') || code.includes('Phonics');
+      var prefix = isLesson ? 'Lesson ' : 'Unit ';
+      titleEl.textContent = code + ' · ' + prefix + unit + (data.unit_title ? ' (' + data.unit_title + ')' : '');
     }
 
     // 根据当前 textarea 的值，同步已选的词
@@ -1371,19 +1522,19 @@ function renderPagesPreview() {
 }
 
 // 监听输入变化,刷新预览与建议
-['fb-textbook-code', 'fb-unit-num'].forEach(function(id) {
-  var el = document.getElementById(id);
-  if (el) {
-    el.addEventListener('change', function() {
-      refreshTextbookSuggestions();
-      renderPagesPreview();
-    });
-    el.addEventListener('input', function() {
-      refreshTextbookSuggestions();
-      renderPagesPreview();
-    });
-  }
-});
+var tbCodeEl = document.getElementById('fb-textbook-code');
+if (tbCodeEl) {
+  tbCodeEl.addEventListener('change', function() {
+    var unitNumInput = document.getElementById('fb-unit-num');
+    if (unitNumInput) unitNumInput.value = '';
+    onTextbookChange();
+  });
+}
+
+var unitSelEl = document.getElementById('fb-unit-select');
+if (unitSelEl) {
+  unitSelEl.addEventListener('change', onUnitSelectChange);
+}
 
 ['fb-page-from', 'fb-page-to'].forEach(function(id) {
   var el = document.getElementById(id);
