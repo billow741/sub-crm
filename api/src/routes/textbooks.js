@@ -20,82 +20,113 @@ import { Hono } from 'hono';
 
 const textbooks = new Hono();
 
-// ============================================================
-// ⭐ GET /suggest — 课后反馈词汇推荐 (CRM 最高频调用)
-// Query: textbook_code=EU-L1&unit_number=3
+/// ============================================================
+// ⭐ GET /suggest — 课后反馈词汇推荐 (CRM 最高频调用, 支持跨课时如 12-13 或 12,13)
+// Query: textbook_code=EU-L1&unit_number=3 或 unit_number=12-13
 // 返回: { vocab: [...], patterns: [...], grammar: [...] }
 // ============================================================
 textbooks.get('/suggest', async (c) => {
   const DB = c.env.DB;
   const code = c.req.query('textbook_code');
-  const unitNum = parseInt(c.req.query('unit_number'));
+  const unitNumParam = c.req.query('unit_number');
 
-  if (!code || !unitNum) {
+  if (!code || !unitNumParam) {
     return c.json({ error: { code: 'BAD_REQUEST', message: '需要 textbook_code 和 unit_number 参数' } }, 400);
   }
 
-  // � приват
-  const content = await DB.prepare(`
-    SELECT uc.vocab, uc.patterns, uc.grammar
-    FROM unit_content uc
-    WHERE uc.textbook_code = ? AND uc.unit_number = ?
-  `).bind(code, unitNum).first();
-
-  if (!content) {
-    // 无内容,返回单元基本信息供前端展示
-    const unit = await DB.prepare(`
-      SELECT unit_title, lesson_count
-      FROM textbook_units
-      WHERE textbook_code = ? AND unit_number = ?
-    `).bind(code, unitNum).first();
-
-    return c.json({
-      data: {
-        textbook_code: code,
-        unit_number: unitNum,
-        unit_title: unit?.unit_title || null,
-        lesson_count: unit?.lesson_count || null,
-        vocab: [],
-        patterns: [],
-        grammar: [],
-        has_content: false
-      }
+  // 支持单个数字 (13) 或范围/列表 (12-13, 12,13)
+  const unitNumbers = [];
+  const rangeMatch = String(unitNumParam).match(/^(\d+)\s*[-~至到]\s*(\d+)$/);
+  if (rangeMatch) {
+    const start = parseInt(rangeMatch[1]);
+    const end = parseInt(rangeMatch[2]);
+    for (let u = Math.min(start, end); u <= Math.max(start, end); u++) {
+      unitNumbers.push(u);
+    }
+  } else if (String(unitNumParam).includes(',')) {
+    String(unitNumParam).split(',').forEach(s => {
+      const n = parseInt(s.trim());
+      if (!isNaN(n)) unitNumbers.push(n);
     });
+  } else {
+    const single = parseInt(unitNumParam);
+    if (!isNaN(single)) unitNumbers.push(single);
   }
 
-  // 解析 JSON 字段
-  let vocab = [], patterns = [], grammar = [];
-  try { vocab = JSON.parse(content.vocab || '[]'); } catch {}
-  try { patterns = JSON.parse(content.patterns || '[]'); } catch {}
-  try { grammar = JSON.parse(content.grammar || '[]'); } catch {}
+  if (unitNumbers.length === 0) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '无效的 unit_number' } }, 400);
+  }
 
-  // 查单元标题
-  const unit = await DB.prepare(`
-    SELECT unit_title, lesson_count
-    FROM textbook_units
-    WHERE textbook_code = ? AND unit_number = ?
-  `).bind(code, unitNum).first();
+  // 查询所有涉及 unit 的 content
+  const placeholders = unitNumbers.map(() => '?').join(',');
+  const contents = await DB.prepare(`
+    SELECT uc.unit_number, uc.vocab, uc.patterns, uc.grammar, u.unit_title
+    FROM unit_content uc
+    LEFT JOIN textbook_units u ON u.textbook_code = uc.textbook_code AND u.unit_number = uc.unit_number
+    WHERE uc.textbook_code = ? AND uc.unit_number IN (${placeholders})
+    ORDER BY uc.unit_number ASC
+  `).bind(code, ...unitNumbers).all();
 
-  // 按 is_core 优先 + difficulty 排序
+  const isLessonBased = code.includes('WE') || code.includes('Phonics');
+  const prefix = isLessonBased ? 'Lesson ' : 'Unit ';
+
+  let allVocab = [];
+  let allPatterns = [];
+  let allGrammar = [];
+  const titleParts = [];
+
+  (contents.results || []).forEach(row => {
+    if (row.unit_title) {
+      titleParts.push(prefix + row.unit_number + ' (' + row.unit_title + ')');
+    }
+    try {
+      const vList = JSON.parse(row.vocab || '[]');
+      vList.forEach(v => {
+        if (!allVocab.some(x => x.word.toLowerCase() === v.word.toLowerCase())) {
+          allVocab.push({
+            ...v,
+            from_unit: row.unit_number
+          });
+        }
+      });
+    } catch {}
+
+    try {
+      const pList = JSON.parse(row.patterns || '[]');
+      pList.forEach(p => {
+        const pStr = typeof p === 'string' ? p : p.pattern;
+        if (!allPatterns.some(x => (typeof x === 'string' ? x : x.pattern).toLowerCase() === pStr.toLowerCase())) {
+          allPatterns.push(p);
+        }
+      });
+    } catch {}
+
+    try {
+      const gList = JSON.parse(row.grammar || '[]');
+      gList.forEach(g => {
+        if (!allGrammar.some(x => x.point?.toLowerCase() === g.point?.toLowerCase())) {
+          allGrammar.push(g);
+        }
+      });
+    } catch {}
+  });
+
   const sortByCore = (a, b) => {
     if (a.is_core && !b.is_core) return -1;
     if (!a.is_core && b.is_core) return 1;
     return (a.difficulty || 99) - (b.difficulty || 99);
   };
-  vocab.sort(sortByCore);
-  patterns.sort(sortByCore);
-  grammar.sort(sortByCore);
+  allVocab.sort(sortByCore);
 
   return c.json({
     data: {
       textbook_code: code,
-      unit_number: unitNum,
-      unit_title: unit?.unit_title || null,
-      lesson_count: unit?.lesson_count || null,
-      vocab,
-      patterns,
-      grammar,
-      has_content: true
+      unit_number: unitNumbers.length === 1 ? unitNumbers[0] : unitNumbers.join('-'),
+      unit_title: titleParts.join(' & ') || null,
+      vocab: allVocab,
+      patterns: allPatterns,
+      grammar: allGrammar,
+      has_content: allVocab.length > 0 || allPatterns.length > 0
     }
   });
 });
@@ -1546,6 +1577,7 @@ textbooks.get('/unit-pages/:code/:num', async (c) => {
 });
 
 // GET /page-img/:code/:num/:page — 获取 R2 里某 unit 的指定页面图 (公开访问, 多重 Fallback 兼容)
+// GET /page-img/:code/:num/:page — 获取 R2 里某 unit 的指定页面图 (公开访问, 跨课时多重 Fallback 兼容)
 textbooks.get('/page-img/:code/:num/:page', async (c) => {
   const R2 = c.env.TEXTBOOKS_R2;
   const code = c.req.param('code');
@@ -1560,8 +1592,8 @@ textbooks.get('/page-img/:code/:num/:page', async (c) => {
     obj = await R2.get(queryKey);
   }
 
+  // 1. 优先检索当前 Unit 目录
   if (!obj) {
-    // 优先级检索路径 (支持 .jpg, .jpeg, .png, .webp 与多种命名习惯)
     const exts = ['.jpg', '.jpeg', '.png', '.webp'];
     for (const ext of exts) {
       candidateKeys.push(`${code}/Unit${num}/page-${String(page).padStart(2, '0')}${ext}`);
@@ -1578,11 +1610,71 @@ textbooks.get('/page-img/:code/:num/:page', async (c) => {
     }
   }
 
+  // 2. 跨 Lesson 智能回退: 教师上课常跨相连课时 (如选了 Lesson 13, 但上课页码 68-69 属于 Lesson 12)
+  if (!obj && !isNaN(num)) {
+    const exts = ['.jpg', '.jpeg', '.png', '.webp'];
+    const neighborUnits = [num - 1, num + 1, num - 2, num + 2].filter(n => n >= 0);
+    for (const n of neighborUnits) {
+      for (const ext of exts) {
+        const k1 = `${code}/Unit${n}/page-${String(page).padStart(2, '0')}${ext}`;
+        const k2 = `${code}/Unit${n}/page-${page}${ext}`;
+        const k3 = `${code}/Unit${n}_page-${String(page).padStart(2, '0')}${ext}`;
+        const k4 = `${code}/Unit${n}_page-${page}${ext}`;
+        obj = (await R2.get(k1)) || (await R2.get(k2)) || (await R2.get(k3)) || (await R2.get(k4));
+        if (obj) break;
+      }
+      if (obj) break;
+    }
+  }
+
+  // 3. 全书前缀模糊扫描回退 (确保全书任意页码在任何 Unit 参数下都能准确命中)
+  if (!obj) {
+    try {
+      const listRes = await R2.list({ prefix: `${code}/`, limit: 500 });
+      const pageRegex = new RegExp(`page[_-]0*${page}\\.(png|jpg|jpeg|webp)$`, 'i');
+      const matched = (listRes.objects || []).find(o => pageRegex.test(o.key));
+      if (matched) {
+        obj = await R2.get(matched.key);
+      }
+    } catch {}
+  }
+
   if (!obj) {
     return c.json({ error: { code: 'NOT_FOUND', message: `图片不存在 (已检索 ${candidateKeys.join(', ')})` } }, 404);
   }
 
-  const ct = obj.httpMetadata?.contentType || 'image/png';
+  const ct = obj.httpMetadata?.contentType || (obj.key?.endsWith('.png') ? 'image/png' : 'image/jpeg');
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': ct,
+      'Cache-Control': 'public, max-age=31536000',
+      'Access-Control-Allow-Origin': '*'
+    }
+  });
+});
+
+// GET /page-img/:code/:page — 直接按教材与页码获取切图 (不需要知道在哪个 Unit)
+textbooks.get('/page-img/:code/:page', async (c) => {
+  const R2 = c.env.TEXTBOOKS_R2;
+  const code = c.req.param('code');
+  const page = parseInt(c.req.param('page'));
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 未配置' } }, 500);
+
+  let obj = null;
+  try {
+    const listRes = await R2.list({ prefix: `${code}/`, limit: 500 });
+    const pageRegex = new RegExp(`page[_-]0*${page}\\.(png|jpg|jpeg|webp)$`, 'i');
+    const matched = (listRes.objects || []).find(o => pageRegex.test(o.key));
+    if (matched) {
+      obj = await R2.get(matched.key);
+    }
+  } catch {}
+
+  if (!obj) {
+    return c.json({ error: { code: 'NOT_FOUND', message: `教材 ${code} 第 ${page} 页切图未找到` } }, 404);
+  }
+
+  const ct = obj.httpMetadata?.contentType || (obj.key?.endsWith('.png') ? 'image/png' : 'image/jpeg');
   return new Response(obj.body, {
     headers: {
       'Content-Type': ct,

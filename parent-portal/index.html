@@ -2096,29 +2096,37 @@ function showViewFeedback(idx) {
   var lNum = cls.fb_lesson;
   
   var progInner = '';
+  var isLessonBased = cls.textbook_code && (cls.textbook_code.includes('WE') || cls.textbook_code.includes('Phonics'));
+  var unitPrefix = isLessonBased ? 'Lesson ' : 'Unit ';
+  var rawUnit = cls.fb_lesson || cls.fb_unit || cls.unit_number;
+  var displayUnit = rawUnit ? String(rawUnit) : '';
+  if (displayUnit && !displayUnit.startsWith('Lesson') && !displayUnit.startsWith('Unit')) {
+    displayUnit = unitPrefix + displayUnit;
+  }
+
   if (bName || cls.textbook_code) {
-    progInner += '<div style="margin-bottom:4px;"><span style="color:#4B9FE0;font-weight:700;">📖 所用教材：</span><b>' + esc(bName || cls.textbook_code) + '</b>' + (uNum ? ' · Unit ' + esc(uNum) : '') + (lNum && lNum !== '-' ? ' (Lesson ' + esc(lNum) + ')' : '') + '</div>';
+    progInner += '<div style="margin-bottom:4px;"><span style="color:#4B9FE0;font-weight:700;">📖 所用教材：</span><b>' + esc(bName || cls.textbook_code) + '</b>' + (displayUnit ? ' · ' + esc(displayUnit) : '') + '</div>';
   }
   if (cls.fb_lesson_level) {
     progInner += '<div style="color:#64748B;font-size:12px;">课程等级：' + esc(cls.fb_lesson_level) + '</div>';
   }
   if (!bName && !cls.textbook_code && (cls.fb_unit || cls.fb_lesson)) {
-    progInner += '<div>教材进度：Unit ' + esc(cls.fb_unit || '-') + ' / Lesson ' + esc(cls.fb_lesson || '-') + '</div>';
+    progInner += '<div>教材进度：' + esc(displayUnit || '-') + '</div>';
   }
   if (progInner) {
     html += '<div class="modal-feedback__group"><label>📅 课程与教材进度</label><div class="modal-feedback__box">' + progInner + '</div></div>';
   }
 
   // 📖 教材页码 (嵌入 PDF 真实页面图, 方便家长指导复习)
-  if (cls.textbook_code && cls.unit_number) {
+  if (cls.textbook_code && (cls.unit_number || cls.fb_unit || cls.fb_lesson)) {
     var pageLabel = (cls.page_from && cls.page_to) ? '第 ' + cls.page_from + '-' + cls.page_to + ' 页 (点击放大)' : '教材课本切图';
-    html += '<div class="modal-feedback__group"><label>📖 ' + esc(bName || cls.textbook_code) + ' · ' + pageLabel + '</label>';
+    html += '<div class="modal-feedback__group"><label>📖 ' + esc(bName || cls.textbook_code) + (displayUnit ? ' · ' + esc(displayUnit) : '') + ' · ' + pageLabel + '</label>';
     if (cls.page_from && cls.page_to) {
-      var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
+      var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.sunnybridge.qzz.io/api/v1';
       html += '<div class="tb-thumb-grid">';
       for (var p = parseInt(cls.page_from); p <= parseInt(cls.page_to); p++) {
-        var url = API_TXT + '/textbooks/page-img/' + encodeURIComponent(cls.textbook_code) + '/' + encodeURIComponent(cls.unit_number) + '/' + p;
-        var pTitle = esc(bName || cls.textbook_code) + ' · Unit ' + cls.unit_number + ' (第 ' + p + ' 页)';
+        var url = API_TXT + '/textbooks/page-img/' + encodeURIComponent(cls.textbook_code) + '/' + encodeURIComponent(cls.unit_number || '0') + '/' + p;
+        var pTitle = esc(bName || cls.textbook_code) + (displayUnit ? ' · ' + esc(displayUnit) : '') + ' (第 ' + p + ' 页)';
         html += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\')" title="点击放大查看第 ' + p + ' 页">';
         html += '<div class="tb-thumb-img-wrap">';
         html += '<img src="' + url + '" alt="P' + p + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
@@ -2681,16 +2689,23 @@ function renderStudyProfile(student, allClasses) {
         histHtml += '<div id="' + collapseId + '" class="sp-collapse-body ' + (isFirstClass ? '' : 'collapsed') + '" style="margin-top:12px;padding-top:12px;border-top:1px dashed #E2E8F0;">';
         
         // 📖 教材与切图展示
-        if (c.textbook_code && c.unit_number) {
+        if (c.textbook_code && (c.unit_number || c.fb_unit || c.fb_lesson)) {
           var bFullName = getBookName(c.textbook_code);
+          var isLessonBased = (c.textbook_code.includes('WE') || c.textbook_code.includes('Phonics'));
+          var unitPrefix = isLessonBased ? 'Lesson ' : 'Unit ';
+          var rawUnit = c.fb_lesson || c.fb_unit || c.unit_number;
+          var displayUnit = rawUnit ? String(rawUnit) : '';
+          if (displayUnit && !displayUnit.startsWith('Lesson') && !displayUnit.startsWith('Unit')) {
+            displayUnit = unitPrefix + displayUnit;
+          }
           var pLabel = (c.page_from && c.page_to) ? ' (第 ' + c.page_from + '-' + c.page_to + ' 页)' : '';
-          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📖 教材：' + escapeHtml(bFullName) + ' · Unit ' + c.unit_number + pLabel + '</div>';
+          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📖 教材：' + escapeHtml(bFullName) + (displayUnit ? ' · ' + escapeHtml(displayUnit) : '') + pLabel + '</div>';
           if (c.page_from && c.page_to) {
-            var API_TXT2 = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.changtian.dpdns.org/api/v1';
+            var API_TXT2 = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.sunnybridge.qzz.io/api/v1';
             histHtml += '<div class="sp-feedback-text"><div class="tb-thumb-grid">';
             for (var pidx = parseInt(c.page_from); pidx <= parseInt(c.page_to); pidx++) {
-              var purl = API_TXT2 + '/textbooks/page-img/' + encodeURIComponent(c.textbook_code) + '/' + encodeURIComponent(c.unit_number) + '/' + pidx;
-              var pTitle = escapeHtml(bFullName || c.textbook_code) + ' · Unit ' + c.unit_number + ' (第 ' + pidx + ' 页)';
+              var purl = API_TXT2 + '/textbooks/page-img/' + encodeURIComponent(c.textbook_code) + '/' + encodeURIComponent(c.unit_number || '0') + '/' + pidx;
+              var pTitle = escapeHtml(bFullName || c.textbook_code) + (displayUnit ? ' · ' + escapeHtml(displayUnit) : '') + ' (第 ' + pidx + ' 页)';
               histHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + purl + '\', \'' + pTitle + '\')" title="点击放大查看第 ' + pidx + ' 页">';
               histHtml += '<div class="tb-thumb-img-wrap">';
               histHtml += '<img src="' + purl + '" alt="P' + pidx + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
