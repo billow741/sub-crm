@@ -889,6 +889,92 @@
       .compact-badge { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 100px; background: rgba(28,36,75,0.06); color: var(--sb-muted); }
       .compact-badge--accent { background: rgba(245,166,35,0.12); color: var(--sb-accent-dark); }
       .compact-badge--blue { background: #EFF6FF; color: #2563EB; }
+
+      /* ===== 醒目今日上课提醒样式 (Eye-catching Today's Class Alert) ===== */
+      @keyframes sbBellShake {
+        0%, 100% { transform: rotate(0deg); }
+        10%, 30% { transform: rotate(-14deg); }
+        20%, 40% { transform: rotate(14deg); }
+        50% { transform: rotate(0deg); }
+      }
+      @keyframes sbPulseDot {
+        0% { transform: scale(0.9); opacity: 0.8; }
+        50% { transform: scale(1.3); opacity: 1; }
+        100% { transform: scale(0.9); opacity: 0.8; }
+      }
+      .today-alert-card {
+        background: linear-gradient(135deg, #FFFDF7 0%, #FEF3C7 100%);
+        border: 1.5px solid #F59E0B;
+        border-left: 5px solid #E26B31;
+        border-radius: 12px;
+        padding: 12px 14px;
+        box-shadow: 0 4px 16px rgba(245, 158, 11, 0.16);
+        margin-bottom: 8px;
+        position: relative;
+      }
+      .today-alert-card.is-live {
+        background: linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%);
+        border-color: #EF4444;
+        border-left-color: #DC2626;
+        box-shadow: 0 4px 16px rgba(239, 68, 68, 0.2);
+      }
+      .today-time-hero {
+        font-size: 21px;
+        font-weight: 800;
+        color: #78350F;
+        letter-spacing: 0.5px;
+        line-height: 1.2;
+      }
+      .today-alert-card.is-live .today-time-hero { color: #991B1B; }
+      .today-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: linear-gradient(135deg, #E26B31, #F5A623);
+        color: #FFFFFF;
+        font-size: 11px;
+        font-weight: 800;
+        padding: 3px 9px;
+        border-radius: 100px;
+        box-shadow: 0 2px 6px rgba(226, 107, 49, 0.3);
+      }
+      .today-status-badge.live {
+        background: linear-gradient(135deg, #DC2626, #EF4444);
+        box-shadow: 0 2px 6px rgba(220, 38, 38, 0.35);
+      }
+      .today-enter-room-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        background: linear-gradient(135deg, #E26B31 0%, #F5A623 100%);
+        color: #FFFFFF !important;
+        font-size: 13.5px;
+        font-weight: 800;
+        padding: 8px 16px;
+        border-radius: 9px;
+        text-decoration: none;
+        box-shadow: 0 3px 12px rgba(226, 107, 49, 0.38);
+        transition: all 0.2s ease;
+        width: 100%;
+        box-sizing: border-box;
+        text-align: center;
+      }
+      .today-enter-room-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 5px 16px rgba(226, 107, 49, 0.48);
+      }
+      .today-meeting-id-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: #78350F;
+        background: rgba(245, 158, 11, 0.15);
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+      }
       .sp-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
       .sp-overview-card { background: rgba(255,255,255,0.72); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 16px; padding: 20px 14px; text-align: center; box-shadow: 0 2px 12px rgba(28,36,75,0.05); cursor: pointer; transition: transform 0.15s; }
       .sp-overview-card:active { transform: scale(0.97); }
@@ -1249,8 +1335,8 @@
     <!-- 左栏：📅 近期课表 (今日课程 + 待上课程) -->
     <div class="portal-col" id="col-schedule">
       <div class="compact-card">
-        <div class="compact-card__head">
-          <div style="display:flex;align-items:center;gap:6px;">
+        <div class="compact-card__head" id="today-card-head">
+          <div style="display:flex;align-items:center;gap:6px;" id="today-head-title">
             <span style="font-size:13px;font-weight:700;color:#1E293B;">📅 近期课表</span>
             <span class="compact-badge compact-badge--accent" id="today-count">0</span>
           </div>
@@ -1813,10 +1899,53 @@ function buildMeetingHTML(c) {
   return html;
 }
 
-// ===== 渲染 Today's Classes =====
+function getTodayClassTimeHint(startTimeStr, endTimeStr) {
+  if (!startTimeStr) return '';
+  var now = new Date();
+  var parts = startTimeStr.split(':');
+  if (parts.length < 2) return '';
+  var classStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(parts[0], 10), parseInt(parts[1], 10), 0);
+  
+  var endParts = (endTimeStr || '').split(':');
+  var classEnd = endParts.length >= 2 ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(endParts[0], 10), parseInt(endParts[1], 10), 0) : null;
+  
+  var diffMs = classStart.getTime() - now.getTime();
+  var diffMins = Math.round(diffMs / 60000);
+  
+  if (diffMins > 0) {
+    if (diffMins <= 60) {
+      return '🔥 距开课仅剩 ' + diffMins + ' 分钟';
+    } else {
+      var hours = Math.floor(diffMins / 60);
+      var mins = diffMins % 60;
+      return '⏰ 距开课还有 ' + hours + ' 小时' + (mins > 0 ? mins + ' 分' : '');
+    }
+  } else if (classEnd && now.getTime() <= classEnd.getTime()) {
+    return '🟢 正在上课中';
+  } else if (diffMins > -180) {
+    return '已下课';
+  }
+  return '';
+}
+
+// ===== 渲染 Today's Classes (高亮醒目提醒) =====
 function renderTodayClasses(classes) {
   var countEl = document.getElementById('today-count');
   if (countEl) countEl.textContent = classes.length;
+  
+  var headTitleEl = document.getElementById('today-head-title');
+  if (headTitleEl) {
+    if (classes.length > 0) {
+      headTitleEl.innerHTML = '<span style="font-size:13.5px;font-weight:800;color:#B45309;display:flex;align-items:center;gap:5px;">' +
+        '<span style="display:inline-block;animation:sbBellShake 1.8s infinite ease-in-out;">🔔</span> 今日上课提醒' +
+        '</span>' +
+        '<span style="font-size:10.5px;font-weight:800;background:#FEF3C7;color:#D97706;border:1px solid #FCD34D;padding:1px 7px;border-radius:100px;">今日 ' + classes.length + ' 节</span>';
+    } else {
+      headTitleEl.innerHTML = '<span style="font-size:13px;font-weight:700;color:#64748B;">📅 近期课表</span>' +
+        '<span class="compact-badge">0</span>';
+    }
+  }
+
   var container = document.getElementById('today-classes');
   if (!container) return;
   if (classes.length === 0) {
@@ -1826,22 +1955,57 @@ function renderTodayClasses(classes) {
   var html = '';
   for (var i = 0; i < classes.length; i++) {
     var c = classes[i];
-    var statusCss = STATUS_CSS[c.status] || '';
-    var statusLabel = STATUS_LABELS[c.status] || c.status;
-    html += '<div style="background:#F8FAFC;border:1px solid rgba(75,159,224,0.2);border-radius:10px;padding:9px 12px;margin-bottom:6px;">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
-    html += '<div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:13.5px;color:#0F172A;">';
-    html += '<svg style="width:13px;height:13px;color:#64748B;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
-    html += formatTime(c.start_time) + ' - ' + formatTime(c.end_time) + '</div>';
-    html += '<span class="status-badge ' + statusCss + '" style="font-size:10px;padding:1px 6px;">' + statusLabel + '</span>';
+    var countdown = getTodayClassTimeHint(c.start_time, c.end_time);
+    var isLive = countdown.indexOf('正在上课') >= 0;
+    var cardClass = 'today-alert-card' + (isLive ? ' is-live' : '');
+    var badgeClass = 'today-status-badge' + (isLive ? ' live' : '');
+
+    html += '<div class="' + cardClass + '">';
+
+    // 顶部第一行：超大醒目时间 + 状态胶囊 (Hero Time + Live Badge)
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+    html += '  <div style="display:flex;align-items:center;gap:6px;">';
+    html += '    <span style="font-size:11px;font-weight:800;color:#B45309;background:rgba(245,158,11,0.2);padding:2px 7px;border-radius:4px;">今日</span>';
+    html += '    <span class="today-time-hero">' + formatTime(c.start_time) + ' - ' + formatTime(c.end_time) + '</span>';
+    html += '  </div>';
+    html += '  <span class="' + badgeClass + '">';
+    html += '    <span style="width:6px;height:6px;border-radius:50%;background:#fff;display:inline-block;animation:sbPulseDot 1.2s infinite;"></span>';
+    html += (isLive ? '正在上课中' : '今晚上课');
+    html += '  </span>';
     html += '</div>';
-    html += '<div style="display:flex;align-items:center;gap:12px;font-size:11.5px;color:#475569;">';
-    html += '<span>👨‍🏫 <b>' + spEsc(c.teacher_name || '未知老师') + '</b></span>';
-    html += '<span>📚 ' + spEsc(c.subject || '英语') + '</span>';
-    html += '</div>';
-    if (c.class_link) {
-      html += buildMeetingHTML(c);
+
+    // 中间第二行：老师与科目 + 距离开课倒计时提醒
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px dashed rgba(245,158,11,0.3);font-size:12px;color:#78350F;">';
+    html += '  <div style="display:flex;align-items:center;gap:10px;">';
+    html += '    <span>👩‍🏫 授课：<b style="color:#1E293B;font-size:13px;">' + spEsc(c.teacher_name || '未知老师') + '</b></span>';
+    html += '    <span>📚 科目：<b style="color:#1E293B;">' + spEsc(c.subject || '英语') + '</b></span>';
+    html += '  </div>';
+    if (countdown) {
+      html += '  <span style="font-size:11px;font-weight:800;color:' + (isLive ? '#DC2626' : '#D97706') + ';background:#fff;padding:2px 7px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">' + countdown + '</span>';
     }
+    html += '</div>';
+
+    // 底部第三行：会议链接与一键进入教室
+    var meetingInfo = parseMeetingInfo(c.class_link);
+    if (meetingInfo && meetingInfo.url) {
+      html += '<div style="margin-top:8px;">';
+      html += '  <a href="' + escapeHtml(meetingInfo.url) + '" target="_blank" rel="noopener" class="today-enter-room-btn">';
+      html += '    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>';
+      html += '    👉 立即进入上课教室 (' + escapeHtml(meetingInfo.platform || '会议') + ')';
+      html += '  </a>';
+      if (meetingInfo.meetingId) {
+        html += '  <div style="margin-top:4px;text-align:center;"><span class="today-meeting-id-tag">会议号：<b>' + escapeHtml(meetingInfo.meetingId) + '</b></span></div>';
+      }
+      html += '</div>';
+    } else if (c.class_link) {
+      html += '<div style="margin-top:6px;padding:6px;background:rgba(245,158,11,0.1);border-radius:6px;font-size:11.5px;color:#78350F;">📱 上课链接：' + escapeHtml(c.class_link) + '</div>';
+    } else {
+      html += '<div style="margin-top:6px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#92400E;background:rgba(245,158,11,0.1);padding:4px 8px;border-radius:6px;">';
+      html += '  <span>💡 教室链接将在开课前就绪，老师会提前通知</span>';
+      html += '  <span style="font-weight:700;color:#E26B31;">别忘先看右侧预习哦 ↗</span>';
+      html += '</div>';
+    }
+
     html += '</div>';
   }
   container.innerHTML = html;
