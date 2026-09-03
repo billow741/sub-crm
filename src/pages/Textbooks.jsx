@@ -1594,20 +1594,77 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
   const [detectingToc, setDetectingToc] = useState(false);
   const [currentProcessingUnit, setCurrentProcessingUnit] = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
-  const [savingAll, setSavingAll] = useState(false);
+  const [showRuleGenerator, setShowRuleGenerator] = useState(false);
+  const [ruleConfig, setRuleConfig] = useState({
+    prefix: 'Lesson',
+    totalCount: 16,
+    startPage: 4,
+    pagesPerLesson: 4,
+    includeWelcome: false
+  });
+
+  // 按规则一键排课生成大纲
+  const handleGenerateOutlineByRule = () => {
+    const list = [];
+    let curPage = parseInt(ruleConfig.startPage) || 1;
+    const pCount = parseInt(ruleConfig.pagesPerLesson) || 4;
+    const total = parseInt(ruleConfig.totalCount) || 12;
+
+    if (ruleConfig.includeWelcome) {
+      list.push({
+        unit_number: 0,
+        unit_title: 'Welcome / Starter',
+        page_from: Math.max(1, curPage - 2),
+        page_to: Math.max(1, curPage - 1),
+        selected: true,
+        status: 'idle',
+        vocabCount: 0,
+        patternCount: 0,
+        extraCount: 0,
+        extractedData: null
+      });
+    }
+
+    for (let i = 1; i <= total; i++) {
+      const pFrom = curPage;
+      const pTo = curPage + pCount - 1;
+      list.push({
+        unit_number: i,
+        unit_title: `${ruleConfig.prefix} ${i}`,
+        page_from: pFrom,
+        page_to: pTo,
+        selected: true,
+        status: 'idle',
+        vocabCount: 0,
+        patternCount: 0,
+        extraCount: 0,
+        extractedData: null
+      });
+      curPage = pTo + 1;
+    }
+
+    setOutline(list);
+    setShowRuleGenerator(false);
+    setStatusMsg(`✅ 已按规律生成 ${list.length} 个 ${ruleConfig.prefix} 大纲，每课 ${pCount} 页，可核对或微调`);
+  };
 
   // 1. 本地文本层极速关键词扫描与智能分页 (Unit / Lesson / Chapter / Story)
   const scanKeywordsAndPaginate = async (doc) => {
     if (!doc) return;
     setDetectingToc(true);
-    setStatusMsg('🔍 正在智能扫描全书文本关键词 (Unit / Lesson / Chapter / Story / Review)...');
+    setStatusMsg('🔍 正在智能扫描全书文本关键词 (Lesson / Unit / Chapter / Story / Review)...');
 
     try {
       const candidates = [];
       const numPages = doc.numPages;
 
-      const unitRegex = /\b(?:Unit|Lesson|Chapter|Story|Part)\s*([0-9A-Za-z]+)\b/i;
-      const specialRegex = /\b(Welcome|Starter|Review|Phonics|Phonics\s*Time)\s*(\d*)\b/i;
+      const WORD_NUMS = {
+        one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+        eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20
+      };
+
+      const unitRegex = /\b(?:Lesson|Unit|Chapter|Story|Part)\s*[:\-]?\s*([0-9A-Za-z]+)\b/i;
+      const specialRegex = /\b(Welcome|Starter|Review|Phonics|Phonics\s*Time)\s*([0-9A-Za-z]*)\b/i;
 
       for (let p = 1; p <= numPages; p++) {
         const page = await doc.getPage(p);
@@ -1623,13 +1680,14 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
           let title = '';
 
           if (unitMatch) {
-            const rawNum = unitMatch[1];
-            unitNumber = parseInt(rawNum, 10);
+            const raw = (unitMatch[1] || '').toLowerCase();
+            unitNumber = WORD_NUMS[raw] !== undefined ? WORD_NUMS[raw] : parseInt(raw, 10);
             if (isNaN(unitNumber)) unitNumber = candidates.length + 1;
             identifier = unitMatch[0];
           } else if (specialMatch) {
             const tag = specialMatch[1];
-            const num = specialMatch[2] ? parseInt(specialMatch[2], 10) : 0;
+            const raw = (specialMatch[2] || '').toLowerCase();
+            const num = WORD_NUMS[raw] !== undefined ? WORD_NUMS[raw] : (parseInt(raw, 10) || 0);
             if (tag.toLowerCase().includes('welcome') || tag.toLowerCase().includes('starter')) {
               unitNumber = 0;
             } else {
@@ -1672,7 +1730,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
 
         const newOutline = candidates.map((c, i) => {
           const nextCandidate = candidates[i + 1];
-          const pdfEnd = nextCandidate ? nextCandidate.pdfPage - 1 : Math.min(c.pdfPage + 7, numPages);
+          const pdfEnd = nextCandidate ? nextCandidate.pdfPage - 1 : Math.min(c.pdfPage + 5, numPages);
           
           return {
             unit_number: c.unit_number,
@@ -1689,33 +1747,38 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
         });
 
         setOutline(newOutline);
-        setStatusMsg(`✨ 智能关键词扫描成功！已自动按章节切分 ${newOutline.length} 个单元/课时，请核对下方大纲`);
+        setStatusMsg(`✨ 智能关键词扫描成功！已自动识别 ${newOutline.length} 个课时/单元，请核对下方大纲`);
         renderOffsetSample(doc, 2 + suggestedOffset);
       } else {
-        setStatusMsg('💡 本地文本层未检测到清晰章节标识（可能是扫描版 PDF），建议点击【🤖 AI 视觉扫描目录】');
+        setStatusMsg('💡 本地文本层未检测到章节标识，建议点击【🤖 AI 视觉扫描目录】或【📐 规律排课生成】');
       }
     } catch (err) {
       console.warn('Scan keywords err:', err);
-      setStatusMsg('本地关键词扫描异常，已保留默认大纲');
+      setStatusMsg('本地关键词扫描完成，已保留默认大纲');
     }
     setDetectingToc(false);
   };
 
-  // 2. 截取前几页目录页，调用后端 AI 视觉模型深度识别目录与页码
+  // 2. 截取前几页目录页，拼接成单张大图并调用后端 AI 视觉模型深度识别 (适配 NVIDIA NIM 单图限制)
   const handleAiTocDetection = async () => {
     if (!pdfDoc) return;
     setDetectingToc(true);
-    setStatusMsg('🤖 正在截取 PDF 目录页并调用 AI 视觉大模型深度解析目录大纲...');
+    setStatusMsg('🤖 正在截取 PDF 目录并合成全景图调用 AI 视觉深度解析...');
 
     try {
-      const tocImages = [];
-      const scanPages = Math.min(6, pdfDoc.numPages);
+      const pageCanvases = [];
+      const scanPages = Math.min(4, pdfDoc.numPages);
       let tocText = '';
 
-      for (let p = 2; p <= scanPages; p++) {
+      for (let p = 1; p <= scanPages; p++) {
         const page = await pdfDoc.getPage(p);
-        const textContent = await page.getTextContent();
-        tocText += `\n--- Page ${p} ---\n` + textContent.items.map(it => it.str).join(' ');
+        try {
+          const textContent = await page.getTextContent();
+          const pText = textContent.items.map(it => it.str).join(' ');
+          if (pText.trim()) {
+            tocText += `\n--- Page ${p} ---\n` + pText;
+          }
+        } catch (e) {}
 
         const viewport = page.getViewport({ scale: 1.0 });
         const canvas = document.createElement('canvas');
@@ -1723,13 +1786,36 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
         canvas.height = viewport.height;
         const ctx = canvas.getContext('2d');
         await page.render({ canvasContext: ctx, viewport }).promise;
-        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.8));
-        const base64 = await new Promise(res => {
+        pageCanvases.push(canvas);
+      }
+
+      // 将扫描到的目录页合成为 1 张双栏大图，严密遵从 NVIDIA NIM 的单图输入限制
+      let singleCollageBase64 = null;
+      if (pageCanvases.length > 0) {
+        const cols = pageCanvases.length <= 2 ? pageCanvases.length : 2;
+        const rows = Math.ceil(pageCanvases.length / cols);
+        const cellW = 750;
+        const cellH = Math.round((pageCanvases[0].height / pageCanvases[0].width) * cellW);
+
+        const collageCanvas = document.createElement('canvas');
+        collageCanvas.width = cellW * cols;
+        collageCanvas.height = cellH * rows;
+        const cCtx = collageCanvas.getContext('2d');
+        cCtx.fillStyle = '#ffffff';
+        cCtx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
+
+        pageCanvases.forEach((canv, idx) => {
+          const c = idx % cols;
+          const r = Math.floor(idx / cols);
+          cCtx.drawImage(canv, c * cellW, r * cellH, cellW, cellH);
+        });
+
+        const blob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.82));
+        singleCollageBase64 = await new Promise(res => {
           const reader = new FileReader();
           reader.onloadend = () => res(reader.result);
           reader.readAsDataURL(blob);
         });
-        tocImages.push(base64);
       }
 
       const headers = {
@@ -1745,7 +1831,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
         headers,
         body: JSON.stringify({
           text: tocText,
-          images: tocImages,
+          images: singleCollageBase64 ? [singleCollageBase64] : [],
           llm_base_url: llmConfig?.baseUrl,
           llm_api_key: llmConfig?.apiKey,
           llm_model: llmConfig?.model
@@ -1754,22 +1840,27 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
       const json = await resp.json();
 
       if (json.data?.units && json.data.units.length > 0) {
-        const detected = json.data.units.map(u => ({
-          unit_number: u.unit_number !== undefined ? u.unit_number : 1,
-          unit_title: u.unit_title || `Unit ${u.unit_number}`,
-          page_from: parseInt(u.page_from) || 4,
-          page_to: parseInt(u.page_to) || (parseInt(u.page_from) + 7 || 11),
-          selected: true,
-          status: 'idle',
-          vocabCount: 0,
-          patternCount: 0,
-          extraCount: 0,
-          extractedData: null
-        }));
+        const detected = json.data.units.map(u => {
+          const rawTitle = u.unit_title || '';
+          const isLesson = rawTitle.toLowerCase().includes('lesson');
+          return {
+            unit_number: u.unit_number !== undefined ? u.unit_number : 1,
+            unit_title: rawTitle || (isLesson ? `Lesson ${u.unit_number}` : `Unit ${u.unit_number}`),
+            page_from: parseInt(u.page_from) || 4,
+            page_to: parseInt(u.page_to) || (parseInt(u.page_from) + 3 || 7),
+            selected: true,
+            status: 'idle',
+            vocabCount: 0,
+            patternCount: 0,
+            extraCount: 0,
+            extractedData: null
+          };
+        });
         setOutline(detected);
-        setStatusMsg(`🎉 AI 视觉目录解析成功！已提取 ${detected.length} 个单元，请核对右侧页码偏移量`);
+        setStatusMsg(`🎉 AI 视觉目录解析成功！已提取 ${detected.length} 个课时/单元，请核对右侧页码偏移量`);
       } else {
-        alert('AI 目录解析未提取到清晰单元，请手动配置或检查目录图片');
+        const msg = json.error?.message || '未在目录图中识别到明确课时列表';
+        alert(`AI 目录解析提示: ${msg}\n\n建议使用右侧【📐 规律排课生成】快速生成完整课时大纲！`);
       }
     } catch (err) {
       alert('AI 目录扫描失败: ' + err.message);
@@ -2191,13 +2282,121 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                       onClick={handleAiTocDetection}
                       disabled={detectingToc || processing || loadingPdf}
                       className="h-8 text-xs bg-white border-blue-200 text-blue-700 hover:bg-blue-50"
-                      title="截取前 2-6 页目录给 AI 视觉大模型深度解析 (针对图片扫描版 PDF)"
+                      title="截取前 2-4 页目录合成全景图给 AI 视觉大模型深度解析 (针对图片扫描版 PDF)"
                     >
                       {detectingToc ? <Loader className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5 text-blue-500" />}
                       🤖 AI 视觉扫描目录
                     </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      onClick={() => setShowRuleGenerator(!showRuleGenerator)}
+                      disabled={processing || loadingPdf}
+                      className="h-8 text-xs bg-white border-amber-300 text-amber-800 hover:bg-amber-50"
+                      title="适用于无目录或固定课时的教材，一键生成 Lesson 1 ~ N 的标准起止页大纲"
+                    >
+                      <Layers className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+                      📐 规律排课生成
+                    </Button>
                   </div>
                 </div>
+
+                {/* 快速规则生成大纲抽屉 */}
+                {showRuleGenerator && (
+                  <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                        <Layers className="w-4 h-4 text-amber-600" />
+                        快速规律排课生成器 (按固定页数与课时批量生成大纲)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowRuleGenerator(false)}
+                        className="text-amber-700 hover:text-amber-950 font-bold text-xs"
+                      >
+                        ✕ 关闭
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">课时前缀</label>
+                        <select
+                          value={ruleConfig.prefix}
+                          onChange={e => setRuleConfig({ ...ruleConfig, prefix: e.target.value })}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        >
+                          <option value="Lesson">Lesson (课时)</option>
+                          <option value="Unit">Unit (单元)</option>
+                          <option value="Chapter">Chapter (章节)</option>
+                          <option value="Story">Story (故事)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">课时总数</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="60"
+                          value={ruleConfig.totalCount}
+                          onChange={e => setRuleConfig({ ...ruleConfig, totalCount: parseInt(e.target.value) || 1 })}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">首课印刷起始页</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={ruleConfig.startPage}
+                          onChange={e => setRuleConfig({ ...ruleConfig, startPage: parseInt(e.target.value) || 1 })}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">每课包含页数</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={ruleConfig.pagesPerLesson}
+                          onChange={e => setRuleConfig({ ...ruleConfig, pagesPerLesson: parseInt(e.target.value) || 1 })}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          type="button"
+                          onClick={handleGenerateOutlineByRule}
+                          className="w-full h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                        >
+                          ⚡ 立即生成大纲
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={ruleConfig.includeWelcome}
+                          onChange={e => setRuleConfig({ ...ruleConfig, includeWelcome: e.target.checked })}
+                          className="rounded text-amber-600 focus:ring-amber-500 w-3.5 h-3.5"
+                        />
+                        包含 Starter / Welcome 预备课
+                      </label>
+                      <span className="text-[11px] text-gray-400">（生成后可在下方列表中自由增删、修改标题或页码）</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -2269,7 +2468,9 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                                 className="rounded text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
                               />
                             </td>
-                            <td className="px-4 py-3 font-bold text-gray-900">U{u.unit_number}</td>
+                            <td className="px-4 py-3 font-bold text-gray-900">
+                              {(u.unit_title || '').toLowerCase().includes('lesson') ? `L${u.unit_number}` : `U${u.unit_number}`}
+                            </td>
                             <td className="px-4 py-3">
                               <input
                                 type="text"

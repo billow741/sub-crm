@@ -1918,27 +1918,28 @@ textbooks.post('/detect-toc/:code', async (c) => {
 
   const baseUrl = userBaseUrl || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
   const apiKey = userApiKey || c.env.LLM_API_KEY;
-  const model = userModel || c.env.LLM_MODEL || 'meta/llama-3.2-90b-vision-instruct';
+  const model = userModel || c.env.LLM_MODEL || 'meta/llama-3.2-11b-vision-instruct';
 
   if (!apiKey) {
     return c.json({ error: { code: 'CONFIG_ERROR', message: 'LLM API key is not configured' } }, 400);
   }
 
-  const prompt = `You are an expert English textbook and curriculum analyst.
-Analyze the provided Table of Contents (TOC) and initial pages for textbook "${code}".
-Identify ALL units, lessons, chapters, stories, or review units, and their starting and ending printed page numbers.
+  const prompt = `You are an expert textbook curriculum and structure analyzer.
+Analyze the provided Table of Contents (TOC) image or text for textbook "${code}".
+Carefully identify ALL sections, which may be organized as "Lesson" (e.g. Lesson 1, Lesson 2...), "Unit" (e.g. Unit 1...), "Chapter", "Story", or "Phonics".
 
-Requirements:
-1. "unit_number": Integer (e.g. Starter/Welcome = 0, Unit 1 / Lesson 1 = 1, Unit 2 / Lesson 2 = 2, Review 1 = next integer).
-2. "unit_title": The actual title of the unit/lesson/story (e.g. "Art Class", "Short a", "At the Park", "Animals").
-3. "page_from": The printed page number where this unit begins (integer).
-4. "page_to": The printed page number where this unit ends (integer). (If not explicitly written, set page_to as the page before the next unit starts, or page_from + 3 or + 7 depending on textbook standard).
+CRITICAL RULES:
+1. Many textbooks (such as Phonics books, Graded Readers, and Starter books) DO NOT HAVE "Unit" — they are organized strictly by "Lesson" or "Story" (e.g., Lesson 1, Lesson 2... or Story 1, Story 2...). In such cases, treat each Lesson or Story as an entry!
+2. Do NOT hallucinate or copy fictional names. Extract ONLY what is actually printed in the provided image or text!
+3. "unit_number": An integer index (1, 2, 3... Starter or Welcome is 0 if present).
+4. "unit_title": The actual title printed in the TOC (e.g., "Lesson 1: Aa, Bb, Cc", "Lesson 2: Dd, Ee, Ff", "Unit 1: Colors", "Story 1: The Dog").
+5. "page_from": The starting printed page number of this section (integer).
+6. "page_to": The ending printed page number of this section (integer, before next section starts).
 
-STRICT OUTPUT FORMAT: Return valid JSON only, without any markdown formatting or explanations:
+STRICT JSON OUTPUT ONLY (no markdown code blocks, no other text):
 {
   "units": [
-    { "unit_number": 0, "unit_title": "Welcome", "page_from": 2, "page_to": 3 },
-    { "unit_number": 1, "unit_title": "Art Class", "page_from": 4, "page_to": 11 }
+    { "unit_number": 1, "unit_title": "<Actual Title from TOC>", "page_from": 4, "page_to": 7 }
   ]
 }`;
 
@@ -1946,7 +1947,8 @@ STRICT OUTPUT FORMAT: Return valid JSON only, without any markdown formatting or
   if (tocText) {
     userContent.push({ type: 'text', text: `Extracted TOC Text from PDF:\n\n${tocText}` });
   }
-  for (const imgUrl of tocImages.slice(0, 4)) {
+  // NVIDIA NIM strictly allows at most 1 image per request
+  for (const imgUrl of tocImages.slice(0, 1)) {
     userContent.push({ type: 'image_url', image_url: { url: imgUrl } });
   }
 
@@ -1988,6 +1990,11 @@ STRICT OUTPUT FORMAT: Return valid JSON only, without any markdown formatting or
         page_from: pFrom,
         page_to: pTo
       };
+    });
+
+    resultUnits = resultUnits.filter(u => {
+      const t = (u.unit_title || '').toLowerCase();
+      return !t.includes('<actual title') && !t.includes('<title>');
     });
 
     resultUnits.sort((a, b) => a.page_from - b.page_from);
