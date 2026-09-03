@@ -2304,7 +2304,15 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
         headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
         body: JSON.stringify({ units: readyUnits })
       });
-      const json = await resp.json();
+      const text = await resp.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (pe) {
+        alert('保存失败: 服务器响应异常 (' + text.substring(0, 100) + ')');
+        setSavingAll(false);
+        return;
+      }
       if (json.data) {
         alert(`🎉 恭喜！已将 ${json.data.units_written} 个单元的所有切图与知识点全部存入系统与 R2！`);
         onClose();
