@@ -1224,8 +1224,8 @@
 
       <!-- 核心句型 -->
       <div id="preview-patterns-wrap" style="margin-bottom:12px;display:none;">
-        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:4px;">💬 重点句型预览：</div>
-        <div id="preview-patterns-list" style="font-size:13px;color:#1E293B;background:#F8FAFC;padding:8px 12px;border-radius:8px;border-left:3px solid #4B9FE0;"></div>
+        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">💬 重点句型预览：</div>
+        <div id="preview-patterns-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
       </div>
 
       <!-- 老师预告备注 -->
@@ -1735,7 +1735,9 @@ function renderPreviewAndNudge(data) {
         var pItem = prev.patterns_preview[j];
         var pattern = typeof pItem === 'string' ? pItem : (pItem.pattern || '');
         var pTrans = typeof pItem === 'object' && pItem.translation ? pItem.translation : '';
-        pHtml += '<div style="margin-bottom:4px;">• <b>' + spEsc(pattern) + '</b>' + (pTrans ? ' <span style="color:#64748B;font-size:12px;">(' + spEsc(pTrans) + ')</span>' : '') + '</div>';
+        pHtml += '<span style="background:#F0FDF4;color:#15803D;border:1px solid #BBF7D0;padding:4px 10px;border-radius:100px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">' +
+                 spEsc(pattern) + (pTrans ? '<span style="color:#16A34A;font-size:11px;">' + spEsc(pTrans) + '</span>' : '') +
+                 '</span>';
       }
       pListEl.innerHTML = pHtml;
       pWrap.style.display = 'block';
@@ -2215,7 +2217,7 @@ function spFormatPatternPills(patternStr) {
   if (!patternStr) return '';
   var patterns = patternStr.split(/\n/).map(function(p) { return p.trim(); }).filter(Boolean);
   if (patterns.length === 0) return spEsc(patternStr);
-  var h = '<div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;">';
+  var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">';
   patterns.forEach(function(rawP) {
     var en = rawP;
     var zh = '';
@@ -2223,16 +2225,22 @@ function spFormatPatternPills(patternStr) {
       var parts = rawP.split('·');
       en = parts[0].trim();
       zh = parts[1].trim();
-    } else if (window_patternTranslations[rawP]) {
-      zh = window_patternTranslations[rawP];
+    } else {
+      var m = rawP.match(/^([^\(（]+)[\(（]([^）\)]+)[\)）]$/);
+      if (m) {
+        en = m[1].trim();
+        zh = m[2].trim();
+      } else if (window_patternTranslations && window_patternTranslations[rawP.trim()]) {
+        zh = window_patternTranslations[rawP.trim()];
+      }
     }
 
-    h += '<div style="background:#F8FAFC;border-left:3px solid #4B9FE0;padding:6px 12px;border-radius:4px;font-size:12px;color:#1E293B;line-height:1.4;">';
-    h += '<div style="font-weight:700;color:#0F172A;">' + spEsc(en) + '</div>';
+    h += '<span style="display:inline-flex;align-items:center;background:#F0FDF4;color:#15803D;font-size:12px;padding:3.5px 10px;border-radius:100px;border:1px solid #BBF7D0;gap:5px;box-shadow:0 1px 2px rgba(0,0,0,0.03);">';
+    h += '<strong style="font-weight:600;">' + spEsc(en) + '</strong>';
     if (zh) {
-      h += '<div style="color:#64748B;font-size:11.5px;margin-top:2px;">' + spEsc(zh) + '</div>';
+      h += '<span style="color:#16A34A;font-size:11px;background:#DCFCE7;padding:0.5px 6px;border-radius:999px;">' + spEsc(zh) + '</span>';
     }
-    h += '</div>';
+    h += '</span>';
   });
   h += '</div>';
   return h;
