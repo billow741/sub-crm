@@ -1517,6 +1517,7 @@ export default function Textbooks() {
           bookName={selectedBook?.name || selectedBookCode}
           bookSchema={selectedBook?.content_schema}
           llmConfig={llmConfig}
+          onSync={() => selectBook(selectedBookCode)}
           onClose={() => {
             setShowBatchBookModal(false);
             selectBook(selectedBookCode);
@@ -1634,7 +1635,7 @@ const DEFAULT_OUTLINES = {
   ]
 };
 
-function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClose }) {
+function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSync, onClose }) {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   
@@ -2344,7 +2345,8 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
   };
 
   // 全部保存入库 (支持纯切片大纲入库，也支持带AI知识点的全量入库)
-  const handleCommitAll = async () => {
+  // shouldClose: 为 true 时保存后关闭窗口，为 false 时保存但保留窗口以便继续进行批量 AI 提取
+  const handleCommitAll = async (shouldClose = false) => {
     // 过滤出有效勾选单元，并确保 unit_number 为合法整数
     const seenUnitNums = new Set();
     const readyUnits = [];
@@ -2419,9 +2421,25 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
         return;
       }
       if (json.data) {
+        onSync?.();
         const hasAi = readyUnits.some(u => (u.vocab && u.vocab.length > 0) || (u.patterns && u.patterns.length > 0));
-        alert(`🎉 恭喜！已将 ${json.data.units_written} 个课时的大纲与切片原图全部保存入库！${hasAi ? '（含已提取的 AI 知识点）' : '（后续可在课时列表中随时点击【⚡ 提取此课】生成知识点）'}`);
-        onClose();
+
+        if (shouldClose) {
+          alert(`🎉 恭喜！已将 ${json.data.units_written} 个课时的大纲与切片原图全部保存入库！${hasAi ? '（含已提取的 AI 知识点）' : ''}`);
+          onClose();
+        } else {
+          setStatusMsg(`✅ 大纲与切片原图已成功保存入库 (${json.data.units_written} 个课时)！您可以继续点击【🤖 步骤二：批量 AI 知识点提取】`);
+
+          // 如果尚未进行 AI 提取，友好提示用户是否直接继续批量提取知识点
+          if (!hasAi) {
+            const startAiNow = confirm(`🎉 恭喜！已成功将 ${json.data.units_written} 个课时的大纲与切片原图保存入库！\n\n是否立即开始执行【🤖 步骤二：批量 AI 知识点提取】？\n\n• 点击【确定】：窗口保持打开，立即开始批量识别各课知识点\n• 点击【取消】：留在当前窗口，随时可手动提取或稍后退出`);
+            if (startAiNow) {
+              handleStartAiExtraction(null);
+            }
+          } else {
+            alert(`🎉 恭喜！已成功将 ${json.data.units_written} 个课时的最新数据（含 AI 知识点）保存入库！窗口已保留，核对无误后可随时关闭。`);
+          }
+        }
       } else {
         alert('保存失败: ' + (json.error?.message || '未知错误'));
       }
@@ -2774,18 +2792,18 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
                       {slicingUnits ? '切片处理中...' : '📸 步骤一：极速批量切片'}
                     </Button>
 
-                    {/* 切片后可直接保存大纲与切图 */}
+                    {/* 切片后可直接保存大纲与切图 (保留窗口) */}
                     {outline.some(u => u.status === 'sliced' || u.status === 'success' || (u.sliceThumbs && u.sliceThumbs.length > 0)) && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={handleCommitAll}
+                        onClick={() => handleCommitAll(false)}
                         disabled={savingAll || slicingUnits || extractingAi || loadingPdf}
                         className="bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 font-bold shadow-sm"
-                        title="切片完成后可直接将课时大纲与切片原图存入系统，无需等待 AI 提取"
+                        title="切片完成后直接将课时大纲与切片原图存入系统，保留当前窗口以便继续进行 AI 知识点提取"
                       >
                         {savingAll ? <Loader className="w-4 h-4 mr-1.5 animate-spin" /> : <Save className="w-4 h-4 mr-1.5 text-emerald-600" />}
-                        {savingAll ? '正在保存...' : '💾 保存切片大纲'}
+                        {savingAll ? '正在保存...' : '💾 保存切片大纲 (保留窗口)'}
                       </Button>
                     )}
 
@@ -3047,15 +3065,29 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onClo
           </Button>
 
           {outline.some(u => u.selected && (u.status === 'sliced' || u.status === 'success' || (u.sliceThumbs && u.sliceThumbs.length > 0) || u.extractedData)) && (
-            <Button
-              variant="success"
-              onClick={handleCommitAll}
-              disabled={savingAll || slicingUnits || extractingAi}
-              className="px-6 shadow-md font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2"
-            >
-              {savingAll ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <CheckCheck className="w-4 h-4 mr-2" />}
-              {savingAll ? '正在保存入库...' : `💾 保存已选大纲与切片 (${outline.filter(u => u.selected && (u.status === 'sliced' || u.status === 'success' || (u.sliceThumbs && u.sliceThumbs.length > 0) || u.extractedData)).length} 课时)`}
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => handleCommitAll(false)}
+                disabled={savingAll || slicingUnits || extractingAi}
+                className="px-4 border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-bold flex items-center gap-1.5 shadow-sm"
+                title="保存切片大纲到系统并保留当前窗口，方便继续进行 AI 知识点识别"
+              >
+                {savingAll ? <Loader className="w-4 h-4 mr-1.5 animate-spin" /> : <Save className="w-4 h-4 mr-1.5 text-emerald-600" />}
+                💾 仅保存大纲与切片 (保留窗口)
+              </Button>
+
+              <Button
+                variant="success"
+                onClick={() => handleCommitAll(true)}
+                disabled={savingAll || slicingUnits || extractingAi}
+                className="px-5 shadow-md font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2"
+                title="保存所有已选大纲、切片及知识点到数据库，并关闭当前导入窗口"
+              >
+                {savingAll ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <CheckCheck className="w-4 h-4 mr-2" />}
+                {savingAll ? '正在保存入库...' : `💾 保存并完成退出 (${outline.filter(u => u.selected && (u.status === 'sliced' || u.status === 'success' || (u.sliceThumbs && u.sliceThumbs.length > 0) || u.extractedData)).length} 课时)`}
+              </Button>
+            </div>
           )}
         </div>
       </Card>
