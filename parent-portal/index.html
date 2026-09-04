@@ -1035,6 +1035,42 @@
       .sp-toggle-btn { font-size: 12px; font-weight: 600; color: var(--sb-blue); display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; background: rgba(75,159,224,0.08); border: none; pointer-events: none; }
       .sp-arrow-icon { transition: transform 0.25s ease; display: inline-block; font-size: 10px; }
       .sp-arrow-icon.open { transform: rotate(180deg); }
+      /* Card Subtabs (分栏选项卡: 课后总结 vs 教材与作业) */
+      .sp-card-subtabs {
+        display: flex;
+        background: #F1F5F9;
+        border-radius: 10px;
+        padding: 3px;
+        margin-bottom: 12px;
+        border: 1px solid #E2E8F0;
+        gap: 4px;
+      }
+      .sp-card-subtab {
+        flex: 1;
+        border: none;
+        background: transparent;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #64748B;
+        border-radius: 7px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+      }
+      .sp-card-subtab.active {
+        background: #FFFFFF;
+        color: #1E293B;
+        font-weight: 700;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+      .sp-card-subtab:hover:not(.active) {
+        background: rgba(255, 255, 255, 0.6);
+        color: #334155;
+      }
       /* ===== 课本教材切图缩略图与灯箱 ===== */
       .tb-thumb-grid {
         display: flex;
@@ -1404,6 +1440,7 @@
     <!-- Tabs -->
     <div class="sp-tabs">
       <div class="sp-tab active" onclick="spSwitchTab('history')">📋 上课记录</div>
+      <div class="sp-tab" onclick="spSwitchTab('homework')">📚 课本与作业</div>
       <div class="sp-tab" onclick="spSwitchTab('reports')">📈 成长报告</div>
       <div class="sp-tab" onclick="spSwitchTab('timeline')">🗺️ 学习轨迹</div>
     </div>
@@ -1413,6 +1450,9 @@
       <div id="sp-vocab-banner" style="text-align:center;padding:10px 16px;background:linear-gradient(135deg,rgba(75,159,224,0.06),rgba(245,166,35,0.06));border-radius:12px;margin-bottom:12px;font-size:14px;color:var(--sb-dark);">📚 累计学习词汇 <b id="sp-vocab-count" style="font-size:20px;color:var(--sb-orange);">0</b> 个</div>
       <div id="sp-history-list"></div>
     </div>
+
+    <!-- Tab: 课本与作业 (专属独立资料专区) -->
+    <div class="sp-tab-content" id="sp-tab-homework"></div>
 
     <!-- Tab: 成长报告 -->
     <div class="sp-tab-content" id="sp-tab-reports">
@@ -2104,6 +2144,7 @@ function showViewFeedback(idx) {
     displayUnit = unitPrefix + displayUnit;
   }
 
+  // 1. 课程基本信息与进度
   if (bName || cls.textbook_code) {
     progInner += '<div style="margin-bottom:4px;"><span style="color:#4B9FE0;font-weight:700;">📖 所用教材：</span><b>' + esc(bName || cls.textbook_code) + '</b>' + (displayUnit ? ' · ' + esc(displayUnit) : '') + '</div>';
   }
@@ -2117,30 +2158,13 @@ function showViewFeedback(idx) {
     html += '<div class="modal-feedback__group"><label>📅 课程与教材进度</label><div class="modal-feedback__box">' + progInner + '</div></div>';
   }
 
-  // 📖 教材页码 (嵌入 PDF 真实页面图, 方便家长指导复习)
-  if (cls.textbook_code && (cls.unit_number || cls.fb_unit || cls.fb_lesson)) {
-    var pageLabel = (cls.page_from && cls.page_to) ? '第 ' + cls.page_from + '-' + cls.page_to + ' 页 (点击放大)' : '教材课本切图';
-    html += '<div class="modal-feedback__group"><label>📖 ' + esc(bName || cls.textbook_code) + (displayUnit ? ' · ' + esc(displayUnit) : '') + ' · ' + pageLabel + '</label>';
-    if (cls.page_from && cls.page_to) {
-      var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.sunnybridge.qzz.io/api/v1';
-      html += '<div class="tb-thumb-grid">';
-      for (var p = parseInt(cls.page_from); p <= parseInt(cls.page_to); p++) {
-        var url = API_TXT + '/textbooks/page-img/' + encodeURIComponent(cls.textbook_code) + '/' + encodeURIComponent(cls.unit_number || '0') + '/' + p;
-        var pTitle = esc(bName || cls.textbook_code) + (displayUnit ? ' · ' + esc(displayUnit) : '') + ' (第 ' + p + ' 页)';
-        html += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\')" title="点击放大查看第 ' + p + ' 页">';
-        html += '<div class="tb-thumb-img-wrap">';
-        html += '<img src="' + url + '" alt="P' + p + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
-        html += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
-        html += '</div>';
-        html += '<div class="tb-thumb-tag">P' + p + '</div>';
-        html += '</div>';
-      }
-      html += '</div>';
-    }
-    html += '</div>';
+  // 2. 💌 老师课后反馈 (置顶！突出核心评价)
+  var teacherMsg = cls.fb_teacher_message || cls.feedback;
+  if (teacherMsg) {
+    html += '<div class="modal-feedback__group"><label>💌 老师课后寄语与反馈</label><div class="modal-feedback__box" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:12px 14px;border-radius:10px;font-size:13.5px;line-height:1.6;font-weight:500;">' + esc(teacherMsg) + '</div></div>';
   }
 
-  // 📚 今日学习内容
+  // 3. 📚 今日学习内容 (词汇、句型、语法)
   if (cls.fb_vocab || cls.fb_patterns || cls.fb_grammar) {
     html += '<div class="modal-feedback__group"><label>📚 今日学习内容</label><div class="modal-feedback__box">';
     if (cls.fb_vocab) {
@@ -2155,32 +2179,64 @@ function showViewFeedback(idx) {
     html += '</div></div>';
   }
 
-  // 🗣️ 发音纠正
+  // 4. 🗣️ 发音纠正
   html += errorsHtml(cls.fb_pronunciation_errors, '发音纠正', '🗣️');
 
-  // 📝 语法纠正
+  // 5. 📝 语法纠正
   html += errorsHtml(cls.fb_grammar_errors, '语法纠正', '📝');
 
-  // 📋 课后总结
-  var teacherMsg = cls.fb_teacher_message || cls.feedback;
+  // 6. 📝 课后作业 (文字内容)
   var homework = cls.fb_homework || cls.homework;
   var preview = cls.fb_next_preview;
-  if (teacherMsg || homework || preview) {
-    html += '<div class="modal-feedback__group"><label>📋 课后总结</label><div class="modal-feedback__box">';
-    if (teacherMsg) html += '<div style="margin-bottom:8px;padding:8px;background:#eff6ff;border-radius:8px;"><b>💌 老师反馈</b><br>' + esc(teacherMsg) + '</div>';
+  if (homework || preview) {
+    html += '<div class="modal-feedback__group"><label>📝 课后任务与预告</label><div class="modal-feedback__box">';
     if (homework) {
-      html += '<div style="margin-bottom:8px;"><b>📝 课后作业</b><br>' + esc(homework) + '</div>';
-      // 智能关联练习册 (Workbook) 练习切页渲染容器
-      html += '<div id="modal-wb-container" style="margin-top:8px;padding-top:8px;border-top:1px dashed #E2E8F0;">';
+      html += '<div style="margin-bottom:8px;background:#fffdf7;border:1px solid #fef3c7;padding:10px 12px;border-radius:8px;color:#92400e;font-size:13px;line-height:1.5;"><b>📝 作业要求：</b>' + esc(homework) + '</div>';
+    }
+    if (preview) html += '<div><b>🎯 下节课预告：</b>' + esc(preview) + '</div>';
+    html += '</div></div>';
+  }
+
+  // 7. 📖 课程教材与配套练习册原件切片 (收拢在底部的专属资料专区)
+  var hasModalTb = cls.textbook_code && (cls.unit_number || cls.fb_unit || cls.fb_lesson) && cls.page_from && cls.page_to;
+  var hasModalWb = cls.textbook_code && (cls.unit_number || cls.fb_unit) && !cls.textbook_code.endsWith('-WB');
+  if (hasModalTb || hasModalWb) {
+    html += '<div class="modal-feedback__group" style="margin-top:16px;padding-top:14px;border-top:1.5px dashed #E2E8F0;">';
+    html += '<label style="font-size:13.5px;color:#1E293B;font-weight:800;display:flex;align-items:center;gap:6px;"><span>📖</span> 课程教材与配套练习册资料原件</label>';
+    
+    // 课本切片
+    if (hasModalTb) {
+      var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.sunnybridge.qzz.io/api/v1';
+      var pageLabel = '第 ' + cls.page_from + '-' + cls.page_to + ' 页 (点击放大)';
+      html += '<div style="margin-top:10px;background:#F8FAFC;padding:10px 12px;border-radius:10px;border:1px solid #E2E8F0;">';
+      html += '<div style="font-size:12px;font-weight:700;color:#1E293B;margin-bottom:6px;">📘 课堂教材课本：' + esc(bName || cls.textbook_code) + (displayUnit ? ' · ' + esc(displayUnit) : '') + ' · ' + pageLabel + '</div>';
+      html += '<div class="tb-thumb-grid">';
+      for (var p = parseInt(cls.page_from); p <= parseInt(cls.page_to); p++) {
+        var url = API_TXT + '/textbooks/page-img/' + encodeURIComponent(cls.textbook_code) + '/' + encodeURIComponent(cls.unit_number || '0') + '/' + p;
+        var pTitle = esc(bName || cls.textbook_code) + (displayUnit ? ' · ' + esc(displayUnit) : '') + ' (第 ' + p + ' 页)';
+        html += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\')" title="点击放大查看第 ' + p + ' 页">';
+        html += '<div class="tb-thumb-img-wrap">';
+        html += '<img src="' + url + '" alt="P' + p + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
+        html += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
+        html += '</div>';
+        html += '<div class="tb-thumb-tag">P' + p + '</div>';
+        html += '</div>';
+      }
+      html += '</div></div>';
+    }
+
+    // 练习册切片容器
+    if (hasModalWb) {
+      html += '<div id="modal-wb-container" style="margin-top:10px;background:#FAF5FF;padding:10px 12px;border-radius:10px;border:1px solid #E9D5FF;">';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
-      html += '<span style="font-size:12px;font-weight:700;color:#4F46E5;display:flex;align-items:center;gap:4px;"><span>📖</span> 配套练习册切页 (Workbook)</span>';
-      html += '<span style="font-size:11px;color:#64748B;">点击放大 / 长按保存或打印</span>';
+      html += '<span style="font-size:12px;font-weight:700;color:#6B21A8;display:flex;align-items:center;gap:4px;"><span>📝</span> 配套练习册切页 (Workbook)</span>';
+      html += '<span style="font-size:11px;color:#7E22CE;font-weight:600;">点击放大 / 长按保存或打印</span>';
       html += '</div>';
       html += '<div id="modal-wb-thumbs" class="tb-thumb-grid"><div style="font-size:12px;color:#94A3B8;padding:8px 0;">⏳ 正在加载练习题...</div></div>';
       html += '</div>';
     }
-    if (preview) html += '<div style="margin-bottom:8px;"><b>🎯 下节课预告</b><br>' + esc(preview) + '</div>';
-    html += '</div></div>';
+
+    html += '</div>';
   }
 
   // 📹 课堂录播回放
@@ -2281,10 +2337,209 @@ function spSwitchTab(tab) {
   document.querySelectorAll('.sp-tab').forEach(function(t) { t.classList.remove('active'); });
   document.querySelectorAll('.sp-tab-content').forEach(function(c) { c.classList.remove('active'); });
   var btns = document.querySelectorAll('.sp-tab');
-  var map = { history: 0, reports: 1, timeline: 2 };
+  var map = { history: 0, homework: 1, reports: 2, timeline: 3 };
   if (btns[map[tab]]) btns[map[tab]].classList.add('active');
   var content = document.getElementById('sp-tab-' + tab);
   if (content) content.classList.add('active');
+}
+
+function switchCardSubtab(clsId, tab) {
+  var sumPane = document.getElementById('card-pane-summary-' + clsId);
+  var matPane = document.getElementById('card-pane-materials-' + clsId);
+  var sumBtn = document.getElementById('subtab-btn-summary-' + clsId);
+  var matBtn = document.getElementById('subtab-btn-materials-' + clsId);
+
+  if (tab === 'materials') {
+    if (sumPane) sumPane.style.display = 'none';
+    if (matPane) matPane.style.display = 'block';
+    if (sumBtn) sumBtn.classList.remove('active');
+    if (matBtn) matBtn.classList.add('active');
+  } else {
+    if (sumPane) sumPane.style.display = 'block';
+    if (matPane) matPane.style.display = 'none';
+    if (sumBtn) sumBtn.classList.add('active');
+    if (matBtn) matBtn.classList.remove('active');
+  }
+}
+
+function renderHomeworkTab(pastClasses) {
+  var hwContainer = document.getElementById('sp-tab-homework');
+  if (!hwContainer) return;
+
+  var hwClasses = (pastClasses || []).filter(function(c) {
+    return c.fb_homework || c.homework || (c.textbook_code && (c.unit_number || c.fb_unit));
+  });
+
+  if (hwClasses.length === 0) {
+    hwContainer.innerHTML = '<div class="sp-card" style="text-align:center;color:var(--sb-muted);padding:36px 20px;"><div style="font-size:36px;margin-bottom:8px;">📚</div><div>暂无教材课本与课后作业记录</div></div>';
+    return;
+  }
+
+  var h = '';
+  var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.sunnybridge.qzz.io/api/v1';
+
+  // 1. 最新课后作业与配套资料 (Hero Card)
+  var latest = hwClasses[0];
+  var bFullName = getBookName(latest.textbook_code);
+  var isLessonBased = latest.textbook_code && (latest.textbook_code.includes('WE') || latest.textbook_code.includes('Phonics'));
+  var unitPrefix = isLessonBased ? 'Lesson ' : 'Unit ';
+  var rawUnit = latest.fb_lesson || latest.fb_unit || latest.unit_number;
+  var displayUnit = rawUnit ? String(rawUnit) : '';
+  if (displayUnit && !displayUnit.startsWith('Lesson') && !displayUnit.startsWith('Unit')) {
+    displayUnit = unitPrefix + displayUnit;
+  }
+
+  h += '<div class="sp-card" style="margin-bottom:14px;border:1.5px solid #E0E7FF;background:linear-gradient(180deg, #FFFFFF 0%, #F5F7FF 100%);box-shadow:0 4px 16px rgba(79,70,229,0.08);padding:16px 18px;">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed #C7D2FE;">';
+  h += '<div style="display:flex;align-items:center;gap:6px;">';
+  h += '<span style="font-size:15px;font-weight:800;color:#3730A3;">🌟 最新一课作业与教材原件</span>';
+  h += '<span style="font-size:11px;background:#4F46E5;color:#fff;padding:2px 8px;border-radius:100px;font-weight:700;">最新</span>';
+  h += '</div>';
+  h += '<span style="font-size:12px;color:#6366F1;font-weight:600;">' + (latest.date || '') + '</span>';
+  h += '</div>';
+
+  h += '<div style="font-size:12px;color:#64748B;margin-bottom:10px;">';
+  h += '执教老师: <b style="color:#1E293B;">' + (latest.teacher_name || '-') + '</b> · 教材: <b style="color:#4F46E5;">' + escapeHtml(bFullName || latest.textbook_code || '-') + (displayUnit ? ' · ' + escapeHtml(displayUnit) : '') + '</b>';
+  h += '</div>';
+
+  if (latest.fb_homework) {
+    h += '<div style="background:#FFFDF7;border-left:4px solid #F59E0B;border:1px solid #FEF3C7;padding:10px 12px;border-radius:8px;margin-bottom:12px;color:#92400E;font-size:13px;line-height:1.5;">';
+    h += '<b>📝 作业要求：</b>' + spEsc(latest.fb_homework);
+    h += '</div>';
+  }
+
+  // Workbook 切片
+  var wbCode = latest.textbook_code ? (latest.textbook_code + '-WB') : null;
+  var wbUnit = latest.unit_number || latest.fb_unit;
+  var wbFrom = null, wbTo = null;
+  var hwMatch = (latest.fb_homework || '').match(/P(\d+)(?:\s*-\s*P?(\d+))?/i);
+  if (hwMatch) {
+    wbFrom = parseInt(hwMatch[1], 10);
+    wbTo = hwMatch[2] ? parseInt(hwMatch[2], 10) : wbFrom;
+  } else if (latest.page_from && latest.page_to) {
+    wbFrom = parseInt(latest.page_from, 10);
+    wbTo = parseInt(latest.page_to, 10);
+  }
+
+  if (wbCode && wbUnit && wbFrom && wbTo) {
+    var wbName = getBookName(wbCode) || wbCode;
+    h += '<div style="margin-bottom:14px;background:#FAF5FF;padding:10px 12px;border-radius:10px;border:1px solid #E9D5FF;">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
+    h += '<span style="font-size:12.5px;font-weight:700;color:#6B21A8;">📖 配套练习册切页 (' + escapeHtml(wbName) + ' P' + wbFrom + (wbTo !== wbFrom ? '-P' + wbTo : '') + ')</span>';
+    h += '<span style="font-size:11px;color:#7E22CE;font-weight:600;">点击放大 / 长按保存或打印</span>';
+    h += '</div>';
+    h += '<div class="tb-thumb-grid">';
+    for (var wp = wbFrom; wp <= wbTo; wp++) {
+      var wUrl = API_TXT + '/textbooks/page-img/' + encodeURIComponent(wbCode) + '/' + encodeURIComponent(wbUnit) + '/' + wp;
+      var wTitle = escapeHtml(wbName) + ' (第 ' + wp + ' 页练习)';
+      h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + wUrl + '\', \'' + wTitle + '\')" title="点击放大第 ' + wp + ' 页练习题">';
+      h += '<div class="tb-thumb-img-wrap">';
+      h += '<img src="' + wUrl + '" alt="WB P' + wp + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
+      h += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
+      h += '</div>';
+      h += '<div class="tb-thumb-tag" style="background:#4F46E5;color:#fff;">WB P' + wp + '</div>';
+      h += '</div>';
+    }
+    h += '</div></div>';
+  }
+
+  // Student Book 切片
+  if (latest.textbook_code && latest.page_from && latest.page_to) {
+    var pFrom = parseInt(latest.page_from, 10);
+    var pTo = parseInt(latest.page_to, 10);
+    h += '<div style="background:#F8FAFC;padding:10px 12px;border-radius:10px;border:1px solid #E2E8F0;">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
+    h += '<span style="font-size:12.5px;font-weight:700;color:#1E293B;">📘 配套课堂教材课本 (Student Book P' + pFrom + (pTo !== pFrom ? '-P' + pTo : '') + ')</span>';
+    h += '<span style="font-size:11px;color:#64748B;">点击放大复习</span>';
+    h += '</div>';
+    h += '<div class="tb-thumb-grid">';
+    for (var pidx = pFrom; pidx <= pTo; pidx++) {
+      var purl = API_TXT + '/textbooks/page-img/' + encodeURIComponent(latest.textbook_code) + '/' + encodeURIComponent(latest.unit_number || '0') + '/' + pidx;
+      var pTitle = escapeHtml(bFullName || latest.textbook_code) + ' (第 ' + pidx + ' 页)';
+      h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + purl + '\', \'' + pTitle + '\')" title="点击放大第 ' + pidx + ' 页">';
+      h += '<div class="tb-thumb-img-wrap">';
+      h += '<img src="' + purl + '" alt="P' + pidx + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
+      h += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
+      h += '</div>';
+      h += '<div class="tb-thumb-tag">P' + pidx + '</div>';
+      h += '</div>';
+    }
+    h += '</div></div>';
+  }
+
+  h += '</div>'; // End Hero Card
+
+  // 2. 往期课程作业与教材
+  if (hwClasses.length > 1) {
+    h += '<div style="margin:16px 0 8px 4px;font-size:13px;font-weight:700;color:#475569;">📁 往期课程作业与教材资料</div>';
+    for (var i = 1; i < hwClasses.length; i++) {
+      var pastHw = hwClasses[i];
+      var pastBName = getBookName(pastHw.textbook_code);
+      var pastUnit = pastHw.fb_lesson || pastHw.fb_unit || pastHw.unit_number || '';
+      var pastCollapseId = 'past-hw-' + pastHw.id;
+      
+      h += '<div class="sp-card" style="margin-bottom:10px;padding:12px 14px;">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleCollapse(\'' + pastCollapseId + '\')">';
+      h += '<div>';
+      h += '<div style="font-size:13px;font-weight:700;color:#1E293B;">' + (pastHw.date || '') + ' · ' + escapeHtml(pastBName || pastHw.textbook_code || '课程作业') + (pastUnit ? ' Unit ' + escapeHtml(pastUnit) : '') + '</div>';
+      h += '<div style="font-size:11.5px;color:#64748B;margin-top:2px;">执教: ' + (pastHw.teacher_name || '-') + (pastHw.fb_homework ? ' · 作业: ' + escapeHtml(pastHw.fb_homework.substring(0, 30)) + '...' : '') + '</div>';
+      h += '</div>';
+      h += '<button class="sp-toggle-btn" type="button"><span id="' + pastCollapseId + '-txt">展开切片 ▼</span></button>';
+      h += '</div>';
+
+      h += '<div id="' + pastCollapseId + '" class="sp-collapse-body collapsed" style="margin-top:10px;padding-top:10px;border-top:1px dashed #E2E8F0;">';
+      if (pastHw.fb_homework) {
+        h += '<div style="background:#FFFBEB;border:1px solid #FEF3C7;padding:8px 10px;border-radius:6px;font-size:12px;color:#92400E;margin-bottom:8px;"><b>📝 作业要求：</b>' + spEsc(pastHw.fb_homework) + '</div>';
+      }
+      
+      // Workbook
+      var pWbCode = pastHw.textbook_code ? (pastHw.textbook_code + '-WB') : null;
+      var pWbUnit = pastHw.unit_number || pastHw.fb_unit;
+      var pWbFrom = null, pWbTo = null;
+      var pHwMatch = (pastHw.fb_homework || '').match(/P(\d+)(?:\s*-\s*P?(\d+))?/i);
+      if (pHwMatch) {
+        pWbFrom = parseInt(pHwMatch[1], 10);
+        pWbTo = pHwMatch[2] ? parseInt(pHwMatch[2], 10) : pWbFrom;
+      } else if (pastHw.page_from && pastHw.page_to) {
+        pWbFrom = parseInt(pastHw.page_from, 10);
+        pWbTo = parseInt(pastHw.page_to, 10);
+      }
+      if (pWbCode && pWbUnit && pWbFrom && pWbTo) {
+        h += '<div style="margin-bottom:8px;"><span style="font-size:11.5px;font-weight:700;color:#6B21A8;">📖 练习册切页 (P' + pWbFrom + '-P' + pWbTo + ')</span>';
+        h += '<div class="tb-thumb-grid">';
+        for (var pwp = pWbFrom; pwp <= pWbTo; pwp++) {
+          var pwUrl = API_TXT + '/textbooks/page-img/' + encodeURIComponent(pWbCode) + '/' + encodeURIComponent(pWbUnit) + '/' + pwp;
+          var pwTitle = escapeHtml(getBookName(pWbCode) || pWbCode) + ' (第 ' + pwp + ' 页练习)';
+          h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + pwUrl + '\', \'' + pwTitle + '\')" title="点击放大第 ' + pwp + ' 页">';
+          h += '<div class="tb-thumb-img-wrap"><img src="' + pwUrl + '" alt="WB P' + pwp + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'"><div class="tb-thumb-overlay"><span>🔍 放大</span></div></div>';
+          h += '<div class="tb-thumb-tag" style="background:#4F46E5;color:#fff;">WB P' + pwp + '</div>';
+          h += '</div>';
+        }
+        h += '</div></div>';
+      }
+
+      // Student book
+      if (pastHw.textbook_code && pastHw.page_from && pastHw.page_to) {
+        var ppFrom = parseInt(pastHw.page_from, 10);
+        var ppTo = parseInt(pastHw.page_to, 10);
+        h += '<div><span style="font-size:11.5px;font-weight:700;color:#1E293B;">📘 教材课本切页 (P' + ppFrom + '-P' + ppTo + ')</span>';
+        h += '<div class="tb-thumb-grid">';
+        for (var ppidx = ppFrom; ppidx <= ppTo; ppidx++) {
+          var ppurl = API_TXT + '/textbooks/page-img/' + encodeURIComponent(pastHw.textbook_code) + '/' + encodeURIComponent(pastHw.unit_number || '0') + '/' + ppidx;
+          var ppTitle = escapeHtml(pastBName || pastHw.textbook_code) + ' (第 ' + ppidx + ' 页)';
+          h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + ppurl + '\', \'' + ppTitle + '\')" title="点击放大第 ' + ppidx + ' 页">';
+          h += '<div class="tb-thumb-img-wrap"><img src="' + ppurl + '" alt="P' + ppidx + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'"><div class="tb-thumb-overlay"><span>🔍 放大</span></div></div>';
+          h += '<div class="tb-thumb-tag">P' + ppidx + '</div>';
+          h += '</div>';
+        }
+        h += '</div></div>';
+      }
+
+      h += '</div></div>';
+    }
+  }
+
+  hwContainer.innerHTML = h;
 }
 
 function spStarsHtml(val, max) {
@@ -2738,22 +2993,153 @@ function renderStudyProfile(student, allClasses) {
       if (hasFb || isTrialWithReport) {
         histHtml += '<div id="' + collapseId + '" class="sp-collapse-body ' + (isFirstClass ? '' : 'collapsed') + '" style="margin-top:12px;padding-top:12px;border-top:1px dashed #E2E8F0;">';
         
-        // 📖 教材与切图展示
-        if (c.textbook_code && (c.unit_number || c.fb_unit || c.fb_lesson)) {
-          var bFullName = getBookName(c.textbook_code);
-          var isLessonBased = (c.textbook_code.includes('WE') || c.textbook_code.includes('Phonics'));
-          var unitPrefix = isLessonBased ? 'Lesson ' : 'Unit ';
-          var rawUnit = c.fb_lesson || c.fb_unit || c.unit_number;
-          var displayUnit = rawUnit ? String(rawUnit) : '';
-          if (displayUnit && !displayUnit.startsWith('Lesson') && !displayUnit.startsWith('Unit')) {
-            displayUnit = unitPrefix + displayUnit;
+        // 1. 计算是否有教材切片或练习册切片
+        var bFullName = getBookName(c.textbook_code);
+        var isLessonBased = c.textbook_code && (c.textbook_code.includes('WE') || c.textbook_code.includes('Phonics'));
+        var unitPrefix = isLessonBased ? 'Lesson ' : 'Unit ';
+        var rawUnit = c.fb_lesson || c.fb_unit || c.unit_number;
+        var displayUnit = rawUnit ? String(rawUnit) : '';
+        if (displayUnit && !displayUnit.startsWith('Lesson') && !displayUnit.startsWith('Unit')) {
+          displayUnit = unitPrefix + displayUnit;
+        }
+        var tbPFrom = c.page_from ? parseInt(c.page_from, 10) : null;
+        var tbPTo = c.page_to ? parseInt(c.page_to, 10) : null;
+        var hasTbPages = !!(c.textbook_code && (c.unit_number || c.fb_unit || c.fb_lesson) && tbPFrom && tbPTo && tbPFrom <= tbPTo);
+        var tbPageCount = hasTbPages ? (tbPTo - tbPFrom + 1) : 0;
+
+        var wbCodeCard = c.textbook_code ? (c.textbook_code + '-WB') : null;
+        var wbUnitCard = c.unit_number || c.fb_unit;
+        var wbFrom = null, wbTo = null;
+        var hwMatch = (c.fb_homework || '').match(/P(\d+)(?:\s*-\s*P?(\d+))?/i);
+        if (hwMatch) {
+          wbFrom = parseInt(hwMatch[1], 10);
+          wbTo = hwMatch[2] ? parseInt(hwMatch[2], 10) : wbFrom;
+        } else if (c.page_from && c.page_to) {
+          wbFrom = parseInt(c.page_from, 10);
+          wbTo = parseInt(c.page_to, 10);
+        }
+        var hasWbPages = !!(wbCodeCard && wbUnitCard && wbFrom && wbTo && wbFrom <= wbTo);
+        var wbPageCount = hasWbPages ? (wbTo - wbFrom + 1) : 0;
+        var totalMaterialPages = tbPageCount + wbPageCount;
+        var hasMaterials = totalMaterialPages > 0;
+
+        // 如果本节课有切片，提供二合一分栏选项卡，把教材与作业彻底划入独立专区
+        if (hasMaterials) {
+          histHtml += '<div class="sp-card-subtabs">';
+          histHtml += '<button type="button" class="sp-card-subtab active" id="subtab-btn-summary-' + c.id + '" onclick="switchCardSubtab(\'' + c.id + '\', \'summary\')"><span>📝 课后总结</span></button>';
+          histHtml += '<button type="button" class="sp-card-subtab" id="subtab-btn-materials-' + c.id + '" onclick="switchCardSubtab(\'' + c.id + '\', \'materials\')"><span>📖 教材与作业 (' + totalMaterialPages + '页)</span></button>';
+          histHtml += '</div>';
+        }
+
+        // ==================== PANE 1: 📝 课后总结 (默认激活，纯文本与重点高亮，无大图干扰) ====================
+        histHtml += '<div id="card-pane-summary-' + c.id + '" class="card-pane-summary">';
+
+        // 💌 老师反馈 (最关键的课后总结，置顶醒目展示！)
+        if (c.fb_teacher_message) {
+          histHtml += '<div style="background:linear-gradient(135deg,rgba(75,159,224,0.08),rgba(99,102,241,0.06));border-left:4px solid #4B9FE0;padding:12px 14px;border-radius:10px;margin-bottom:12px;">';
+          histHtml += '<div style="font-size:12px;font-weight:700;color:#1E293B;display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">';
+          histHtml += '<span>💌 老师课后反馈与寄语</span>';
+          histHtml += '<span style="font-size:11px;color:#64748B;">执教: ' + spEsc(c.teacher_name || '-') + '</span>';
+          histHtml += '</div>';
+          histHtml += '<div style="font-size:13.5px;color:#334155;line-height:1.6;font-weight:500;">' + spEsc(c.fb_teacher_message) + '</div>';
+          histHtml += '</div>';
+        }
+
+        // 📚 词汇
+        if (c.fb_vocab) {
+          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📚 核心词汇</div><div class="sp-feedback-text">' + spFormatVocabPills(c.fb_vocab) + '</div></div>';
+        }
+
+        // 💬 句型
+        if (c.fb_patterns) {
+          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💬 重点句型</div><div class="sp-feedback-text">' + spFormatPatternPills(c.fb_patterns) + '</div></div>';
+        }
+
+        // 🗣️ 发音纠正
+        if (c.fb_pronunciation_errors) {
+          try {
+            var pErrs = JSON.parse(c.fb_pronunciation_errors);
+            if (pErrs.length) {
+              histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">🗣️ 发音纠正</div><div class="sp-feedback-text">';
+              pErrs.forEach(function(e) { histHtml += '<div style="color:#555;">✗ ' + spEsc(e.wrong) + ' → <span style="color:#16A34A;font-weight:600;">✓ ' + spEsc(e.right) + '</span></div>'; });
+              histHtml += '</div></div>';
+            }
+          } catch(ex) {}
+        }
+
+        // 📝 语法纠正
+        if (c.fb_grammar_errors) {
+          try {
+            var gErrs = JSON.parse(c.fb_grammar_errors);
+            if (gErrs.length) {
+              histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📝 语法纠正</div><div class="sp-feedback-text">';
+              gErrs.forEach(function(e) { histHtml += '<div style="color:#555;">✗ ' + spEsc(e.wrong) + ' → <span style="color:#16A34A;font-weight:600;">✓ ' + spEsc(e.right) + '</span></div>'; });
+              histHtml += '</div></div>';
+            }
+          } catch(ex) {}
+        }
+
+        // 📝 课后作业要求 (纯文字，条理清晰)
+        if (c.fb_homework) {
+          histHtml += '<div class="sp-feedback-group">';
+          histHtml += '<div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;">';
+          histHtml += '<span>📝 课后作业</span>';
+          if (hasMaterials) {
+            histHtml += '<span style="font-size:11px;color:#4F46E5;font-weight:600;cursor:pointer;" onclick="switchCardSubtab(\'' + c.id + '\', \'materials\')">👉 查看配套练习册切片 (' + wbPageCount + '页)</span>';
           }
-          var pLabel = (c.page_from && c.page_to) ? ' (第 ' + c.page_from + '-' + c.page_to + ' 页)' : '';
-          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📖 教材：' + escapeHtml(bFullName) + (displayUnit ? ' · ' + escapeHtml(displayUnit) : '') + pLabel + '</div>';
-          if (c.page_from && c.page_to) {
-            var API_TXT2 = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.sunnybridge.qzz.io/api/v1';
-            histHtml += '<div class="sp-feedback-text"><div class="tb-thumb-grid">';
-            for (var pidx = parseInt(c.page_from); pidx <= parseInt(c.page_to); pidx++) {
+          histHtml += '</div>';
+          histHtml += '<div class="sp-feedback-text" style="background:#FFFDF7;border:1px solid #FEF3C7;color:#92400E;padding:9px 12px;border-radius:8px;font-size:13px;line-height:1.5;">' + spEsc(c.fb_homework) + '</div>';
+          histHtml += '</div>';
+        }
+
+        // 👉 教材与练习册原件快捷引导卡片 (划入专区提示)
+        if (hasMaterials) {
+          histHtml += '<div onclick="switchCardSubtab(\'' + c.id + '\', \'materials\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#EEF2FF 0%,#F5F3FF 100%);border:1px dashed #A5B4FC;padding:9px 12px;border-radius:8px;margin:8px 0 10px;transition:all 0.2s ease;">';
+          histHtml += '<div style="display:flex;align-items:center;gap:7px;">';
+          histHtml += '<span style="font-size:16px;">📖</span>';
+          histHtml += '<div><div style="font-size:12px;font-weight:700;color:#3730A3;">配套教材与练习册切片已就绪 (共 ' + totalMaterialPages + ' 页)</div><div style="font-size:10.5px;color:#6366F1;">已单独划分至专属资料区，点击立即查看切片原图 ➔</div></div>';
+          histHtml += '</div>';
+          histHtml += '<span style="font-size:11px;font-weight:700;color:#4F46E5;background:#fff;padding:3px 8px;border-radius:6px;box-shadow:0 1px 3px rgba(79,70,229,0.12);flex-shrink:0;">去查看</span>';
+          histHtml += '</div>';
+        }
+
+        // 📹 录播回放
+        if (c.fb_recording_r2_key || c.fb_recording_status === 'ready') {
+          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;"><span>📹 录播回放 (私有高清)</span><span style="font-size:10px;color:#15803D;font-weight:600;">✅ 已归档</span></div><div class="sp-feedback-text" style="padding:6px;background:#0F172A;border-radius:8px;"><video controls playsinline style="width:100%;max-height:200px;border-radius:6px;outline:none;background:#000;" preload="metadata"><source src="' + API_BASE + '/classes/video/' + c.id + '" type="video/mp4"></video></div></div>';
+        } else if (c.fb_recording) {
+          var rec = parseRecordingInfo(c.fb_recording);
+          if (rec && rec.url) {
+            histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📹 录播回放</div><div class="sp-feedback-text"><a href="' + spEsc(rec.url) + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#4B9FE0,#2E7AC4);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 2px 6px rgba(75,159,224,0.25);">▶️ 观看录播回放</a></div></div>';
+          }
+        }
+
+        // Old format fallback
+        if (!c.fb_vocab && !c.fb_homework) {
+          if (c.content) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">上课内容</div><div class="sp-feedback-text">' + spEsc(c.content) + '</div></div>';
+          if (c.homework) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">作业</div><div class="sp-feedback-text">' + spEsc(c.homework) + '</div></div>';
+        }
+
+        histHtml += '</div>'; // End card-pane-summary
+
+        // ==================== PANE 2: 📖 教材与作业 (专属切图资料区，独立平铺) ====================
+        if (hasMaterials) {
+          var API_TXT2 = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.sunnybridge.qzz.io/api/v1';
+          histHtml += '<div id="card-pane-materials-' + c.id + '" class="card-pane-materials" style="display:none;">';
+          
+          histHtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:6px;border-bottom:1px dashed #E2E8F0;">';
+          histHtml += '<span style="font-size:12px;font-weight:700;color:#1E293B;">📖 课程配套教材与练习册切页</span>';
+          histHtml += '<button type="button" onclick="switchCardSubtab(\'' + c.id + '\', \'summary\')" style="border:none;background:none;color:#4B9FE0;font-size:11.5px;cursor:pointer;font-weight:600;">❮ 返回课后总结</button>';
+          histHtml += '</div>';
+
+          // 1. 课本切片 (Student Book)
+          if (hasTbPages) {
+            histHtml += '<div style="margin-bottom:12px;background:#F8FAFC;padding:10px 12px;border-radius:10px;border:1px solid #E2E8F0;">';
+            histHtml += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
+            histHtml += '<span style="font-size:12px;font-weight:700;color:#1E293B;">📘 课堂教材：' + escapeHtml(bFullName) + (displayUnit ? ' · ' + escapeHtml(displayUnit) : '') + ' (第 ' + tbPFrom + '-' + tbPTo + ' 页)</span>';
+            histHtml += '<span style="font-size:11px;color:#64748B;">共 ' + tbPageCount + ' 页 · 点击放大</span>';
+            histHtml += '</div>';
+            histHtml += '<div class="tb-thumb-grid">';
+            for (var pidx = tbPFrom; pidx <= tbPTo; pidx++) {
               var purl = API_TXT2 + '/textbooks/page-img/' + encodeURIComponent(c.textbook_code) + '/' + encodeURIComponent(c.unit_number || '0') + '/' + pidx;
               var pTitle = escapeHtml(bFullName || c.textbook_code) + (displayUnit ? ' · ' + escapeHtml(displayUnit) : '') + ' (第 ' + pidx + ' 页)';
               histHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + purl + '\', \'' + pTitle + '\')" title="点击放大查看第 ' + pidx + ' 页">';
@@ -2766,91 +3152,34 @@ function renderStudyProfile(student, allClasses) {
             }
             histHtml += '</div></div>';
           }
-          histHtml += '</div>';
-        }
-        if (c.fb_vocab) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📚 词汇</div><div class="sp-feedback-text">' + spFormatVocabPills(c.fb_vocab) + '</div></div>';
-        if (c.fb_patterns) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💬 句型</div><div class="sp-feedback-text">' + spFormatPatternPills(c.fb_patterns) + '</div></div>';
-        
-        // 发音纠正
-        if (c.fb_pronunciation_errors) {
-          try {
-            var pErrs = JSON.parse(c.fb_pronunciation_errors);
-            if (pErrs.length) {
-              histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">🗣️ 发音纠正</div><div class="sp-feedback-text">';
-              pErrs.forEach(function(e) { histHtml += '<div style="color:#555;">✗ ' + spEsc(e.wrong) + ' → ✓ ' + spEsc(e.right) + '</div>'; });
-              histHtml += '</div></div>';
-            }
-          } catch(ex) {}
-        }
-        // 语法纠正
-        if (c.fb_grammar_errors) {
-          try {
-            var gErrs = JSON.parse(c.fb_grammar_errors);
-            if (gErrs.length) {
-              histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📝 语法纠正</div><div class="sp-feedback-text">';
-              gErrs.forEach(function(e) { histHtml += '<div style="color:#555;">✗ ' + spEsc(e.wrong) + ' → ✓ ' + spEsc(e.right) + '</div>'; });
-              histHtml += '</div></div>';
-            }
-          } catch(ex) {}
-        }
-        if (c.fb_homework) {
-          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;"><span>📝 作业</span>';
-          if (c.textbook_code && (c.unit_number || c.fb_unit)) {
-            histHtml += '<span style="font-size:11px;color:#4F46E5;font-weight:600;">📖 配套练习册切页 (点击放大)</span>';
-          }
-          histHtml += '</div><div class="sp-feedback-text">' + spEsc(c.fb_homework) + '</div>';
 
-          // 自动识别与展示配套练习册切图 (直接平铺在卡片内，无需打开弹窗)
-          if (c.textbook_code && (c.unit_number || c.fb_unit)) {
-            var wbCodeCard = c.textbook_code + '-WB';
-            var wbUnitCard = c.unit_number || c.fb_unit;
-            var wbFrom = null, wbTo = null;
-
-            // 1. 优先从作业文本提取具体页码，如 P12-P16 或 P12
-            var hwMatch = (c.fb_homework || '').match(/P(\d+)(?:\s*-\s*P?(\d+))?/i);
-            if (hwMatch) {
-              wbFrom = parseInt(hwMatch[1], 10);
-              wbTo = hwMatch[2] ? parseInt(hwMatch[2], 10) : wbFrom;
-            } else if (c.page_from && c.page_to) {
-              // 2. 否则根据上课的页码对齐
-              wbFrom = parseInt(c.page_from, 10);
-              wbTo = parseInt(c.page_to, 10);
+          // 2. 练习册切片 (Workbook)
+          if (hasWbPages) {
+            var wbBookName = getBookName(wbCodeCard) || wbCodeCard;
+            histHtml += '<div style="background:#FAF5FF;padding:10px 12px;border-radius:10px;border:1px solid #E9D5FF;">';
+            histHtml += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
+            histHtml += '<span style="font-size:12px;font-weight:700;color:#6B21A8;">📝 练习册作业：' + escapeHtml(wbBookName) + ' · Unit ' + escapeHtml(wbUnitCard) + ' (第 ' + wbFrom + '-' + wbTo + ' 页)</span>';
+            histHtml += '<span style="font-size:11px;color:#7E22CE;font-weight:600;">共 ' + wbPageCount + ' 页 · 可保存/打印</span>';
+            histHtml += '</div>';
+            if (c.fb_homework) {
+              histHtml += '<div style="font-size:11.5px;color:#6B21A8;margin-bottom:8px;background:rgba(255,255,255,0.7);padding:6px 10px;border-radius:6px;"><b>任务要求：</b>' + spEsc(c.fb_homework) + '</div>';
             }
-
-            if (wbFrom && wbTo) {
-              var API_TXT_WB = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.sunnybridge.qzz.io/api/v1';
-              histHtml += '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(79,70,229,0.2);">';
-              histHtml += '<div class="tb-thumb-grid">';
-              for (var wp = wbFrom; wp <= wbTo; wp++) {
-                var wUrl = API_TXT_WB + '/textbooks/page-img/' + encodeURIComponent(wbCodeCard) + '/' + encodeURIComponent(wbUnitCard) + '/' + wp;
-                var wTitle = escapeHtml(getBookName(wbCodeCard) || wbCodeCard) + ' (第 ' + wp + ' 页练习)';
-                histHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + wUrl + '\', \'' + wTitle + '\')" title="点击放大查看第 ' + wp + ' 页练习题">';
-                histHtml += '<div class="tb-thumb-img-wrap">';
-                histHtml += '<img src="' + wUrl + '" alt="WB P' + wp + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
-                histHtml += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
-                histHtml += '</div>';
-                histHtml += '<div class="tb-thumb-tag" style="background:#4F46E5;color:#fff;">WB P' + wp + '</div>';
-                histHtml += '</div>';
-              }
-              histHtml += '</div></div>';
+            histHtml += '<div class="tb-thumb-grid">';
+            for (var wp = wbFrom; wp <= wbTo; wp++) {
+              var wUrl = API_TXT2 + '/textbooks/page-img/' + encodeURIComponent(wbCodeCard) + '/' + encodeURIComponent(wbUnitCard) + '/' + wp;
+              var wTitle = escapeHtml(wbBookName) + ' (第 ' + wp + ' 页练习)';
+              histHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + wUrl + '\', \'' + wTitle + '\')" title="点击放大查看第 ' + wp + ' 页练习题">';
+              histHtml += '<div class="tb-thumb-img-wrap">';
+              histHtml += '<img src="' + wUrl + '" alt="WB P' + wp + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
+              histHtml += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
+              histHtml += '</div>';
+              histHtml += '<div class="tb-thumb-tag" style="background:#4F46E5;color:#fff;">WB P' + wp + '</div>';
+              histHtml += '</div>';
             }
+            histHtml += '</div></div>';
           }
-          histHtml += '</div>';
-        }
-        if (c.fb_teacher_message) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师反馈</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:8px 10px;border-radius:8px;">' + spEsc(c.fb_teacher_message) + '</div></div>';
-        if (c.fb_recording_r2_key || c.fb_recording_status === 'ready') {
-          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;"><span>📹 录播回放 (私有高清)</span><span style="font-size:10px;color:#15803D;font-weight:600;">✅ 已归档</span></div><div class="sp-feedback-text" style="padding:6px;background:#0F172A;border-radius:8px;"><video controls playsinline style="width:100%;max-height:200px;border-radius:6px;outline:none;background:#000;" preload="metadata"><source src="' + API_BASE + '/classes/video/' + c.id + '" type="video/mp4"></video></div></div>';
-        } else if (c.fb_recording) {
-          var rec = parseRecordingInfo(c.fb_recording);
-          if (rec && rec.url) {
-            histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📹 录播回放</div><div class="sp-feedback-text"><a href="' + spEsc(rec.url) + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#4B9FE0,#2E7AC4);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 2px 6px rgba(75,159,224,0.25);">▶️ 观看录播回放</a></div></div>';
-          }
-        }
-        
-        // Old format fallback
-        if (!c.fb_vocab && !c.fb_homework) {
-          if (c.content) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">上课内容</div><div class="sp-feedback-text">' + spEsc(c.content) + '</div></div>';
-          if (c.homework) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">作业</div><div class="sp-feedback-text">' + spEsc(c.homework) + '</div></div>';
+
+          histHtml += '</div>'; // End card-pane-materials
         }
 
         histHtml += '<div style="display:flex;gap:8px;margin-top:10px;">';
@@ -2872,6 +3201,9 @@ function renderStudyProfile(student, allClasses) {
   });
   var hListEl = document.getElementById('sp-history-list');
   if (hListEl) hListEl.innerHTML = histHtml;
+
+  // 渲染独立的【📚 课本与作业】全局专区
+  renderHomeworkTab(pastClasses);
 
   // === Tab: 成长报告 ===
   var assessments = window_allAssessments || [];
