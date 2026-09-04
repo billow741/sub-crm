@@ -881,18 +881,6 @@ export default function Textbooks() {
                           >
                             <Edit3 className="w-3 h-3" />
                           </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteUnit(selectedBookCode, u.unit_number, title);
-                            }}
-                            className={`opacity-0 group-hover/title:opacity-100 p-0.5 rounded transition-opacity shrink-0 ${
-                              isSelected ? 'hover:bg-white/20 text-white hover:text-red-200' : 'hover:bg-red-50 text-gray-400 hover:text-red-600'
-                            }`}
-                            title={`删除 ${title}`}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
                         </div>
                       )}
                     </div>
@@ -946,16 +934,6 @@ export default function Textbooks() {
                 </div>
 
                 <div className="flex items-center gap-2.5">
-                  <Button
-                    variant="outline"
-                    onClick={() => handleDeleteUnit(selectedBookCode, selectedUnitNum, unitDetail.unit_title)}
-                    className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-all font-medium text-xs shadow-xs"
-                    title="彻底删除此课时/单元及已提取的词汇与句型"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 mr-1 text-red-500" />
-                    删除此单元
-                  </Button>
-
                   <Button
                     variant="outline"
                     onClick={handleAiExtract}
