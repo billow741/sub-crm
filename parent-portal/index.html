@@ -2793,7 +2793,50 @@ function renderStudyProfile(student, allClasses) {
             }
           } catch(ex) {}
         }
-        if (c.fb_homework) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📝 作业</div><div class="sp-feedback-text">' + spEsc(c.fb_homework) + '</div></div>';
+        if (c.fb_homework) {
+          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;"><span>📝 作业</span>';
+          if (c.textbook_code && (c.unit_number || c.fb_unit)) {
+            histHtml += '<span style="font-size:11px;color:#4F46E5;font-weight:600;">📖 配套练习册切页 (点击放大)</span>';
+          }
+          histHtml += '</div><div class="sp-feedback-text">' + spEsc(c.fb_homework) + '</div>';
+
+          // 自动识别与展示配套练习册切图 (直接平铺在卡片内，无需打开弹窗)
+          if (c.textbook_code && (c.unit_number || c.fb_unit)) {
+            var wbCodeCard = c.textbook_code + '-WB';
+            var wbUnitCard = c.unit_number || c.fb_unit;
+            var wbFrom = null, wbTo = null;
+
+            // 1. 优先从作业文本提取具体页码，如 P12-P16 或 P12
+            var hwMatch = (c.fb_homework || '').match(/P(\d+)(?:\s*-\s*P?(\d+))?/i);
+            if (hwMatch) {
+              wbFrom = parseInt(hwMatch[1], 10);
+              wbTo = hwMatch[2] ? parseInt(hwMatch[2], 10) : wbFrom;
+            } else if (c.page_from && c.page_to) {
+              // 2. 否则根据上课的页码对齐
+              wbFrom = parseInt(c.page_from, 10);
+              wbTo = parseInt(c.page_to, 10);
+            }
+
+            if (wbFrom && wbTo) {
+              var API_TXT_WB = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.sunnybridge.qzz.io/api/v1';
+              histHtml += '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(79,70,229,0.2);">';
+              histHtml += '<div class="tb-thumb-grid">';
+              for (var wp = wbFrom; wp <= wbTo; wp++) {
+                var wUrl = API_TXT_WB + '/textbooks/page-img/' + encodeURIComponent(wbCodeCard) + '/' + encodeURIComponent(wbUnitCard) + '/' + wp;
+                var wTitle = escapeHtml(getBookName(wbCodeCard) || wbCodeCard) + ' (第 ' + wp + ' 页练习)';
+                histHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + wUrl + '\', \'' + wTitle + '\')" title="点击放大查看第 ' + wp + ' 页练习题">';
+                histHtml += '<div class="tb-thumb-img-wrap">';
+                histHtml += '<img src="' + wUrl + '" alt="WB P' + wp + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
+                histHtml += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
+                histHtml += '</div>';
+                histHtml += '<div class="tb-thumb-tag" style="background:#4F46E5;color:#fff;">WB P' + wp + '</div>';
+                histHtml += '</div>';
+              }
+              histHtml += '</div></div>';
+            }
+          }
+          histHtml += '</div>';
+        }
         if (c.fb_teacher_message) histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师反馈</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:8px 10px;border-radius:8px;">' + spEsc(c.fb_teacher_message) + '</div></div>';
         if (c.fb_recording_r2_key || c.fb_recording_status === 'ready') {
           histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;"><span>📹 录播回放 (私有高清)</span><span style="font-size:10px;color:#15803D;font-weight:600;">✅ 已归档</span></div><div class="sp-feedback-text" style="padding:6px;background:#0F172A;border-radius:8px;"><video controls playsinline style="width:100%;max-height:200px;border-radius:6px;outline:none;background:#000;" preload="metadata"><source src="' + API_BASE + '/classes/video/' + c.id + '" type="video/mp4"></video></div></div>';
