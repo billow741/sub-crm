@@ -2168,7 +2168,17 @@ function showViewFeedback(idx) {
   if (teacherMsg || homework || preview) {
     html += '<div class="modal-feedback__group"><label>📋 课后总结</label><div class="modal-feedback__box">';
     if (teacherMsg) html += '<div style="margin-bottom:8px;padding:8px;background:#eff6ff;border-radius:8px;"><b>💌 老师反馈</b><br>' + esc(teacherMsg) + '</div>';
-    if (homework) html += '<div style="margin-bottom:8px;"><b>📝 课后作业</b><br>' + esc(homework) + '</div>';
+    if (homework) {
+      html += '<div style="margin-bottom:8px;"><b>📝 课后作业</b><br>' + esc(homework) + '</div>';
+      // 智能关联练习册 (Workbook) 练习切页渲染容器
+      html += '<div id="modal-wb-container" style="margin-top:8px;padding-top:8px;border-top:1px dashed #E2E8F0;">';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
+      html += '<span style="font-size:12px;font-weight:700;color:#4F46E5;display:flex;align-items:center;gap:4px;"><span>📖</span> 配套练习册切页 (Workbook)</span>';
+      html += '<span style="font-size:11px;color:#64748B;">点击放大 / 长按保存或打印</span>';
+      html += '</div>';
+      html += '<div id="modal-wb-thumbs" class="tb-thumb-grid"><div style="font-size:12px;color:#94A3B8;padding:8px 0;">⏳ 正在加载练习题...</div></div>';
+      html += '</div>';
+    }
     if (preview) html += '<div style="margin-bottom:8px;"><b>🎯 下节课预告</b><br>' + esc(preview) + '</div>';
     html += '</div></div>';
   }
@@ -2224,6 +2234,46 @@ function showViewFeedback(idx) {
 
   document.getElementById('feedback-modal-body').innerHTML = html;
   document.getElementById('feedback-modal').classList.add('show');
+
+  // 异步加载练习册切页 (如果存在配套 Workbook)
+  var wbContainer = document.getElementById('modal-wb-container');
+  var wbThumbs = document.getElementById('modal-wb-thumbs');
+  if (wbContainer && wbThumbs) {
+    var tbCode = cls.textbook_code || '';
+    var uVal = cls.unit_number || cls.fb_unit || '';
+    // 如果教材本身带有 -WB，或找不到教材代码，则隐藏
+    if (!tbCode || !uVal || tbCode.endsWith('-WB')) {
+      wbContainer.style.display = 'none';
+    } else {
+      var wbCode = tbCode + '-WB';
+      var API_TXT = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://api.sunnybridge.qzz.io/api/v1';
+      apiGet('/textbooks/unit-pages/' + encodeURIComponent(wbCode) + '/' + encodeURIComponent(uVal))
+        .then(function(res) {
+          var pages = (res.data && res.data.pages) ? res.data.pages : [];
+          if (pages.length === 0) {
+            wbContainer.style.display = 'none';
+            return;
+          }
+          var wHtml = '';
+          var wbName = getBookName(wbCode) || (wbCode + ' Unit ' + uVal);
+          pages.forEach(function(pg) {
+            var url = pg.url || (API_TXT + '/textbooks/page-img/' + encodeURIComponent(wbCode) + '/' + encodeURIComponent(uVal) + '/' + pg.page_num);
+            var pTitle = wbName + ' (第 ' + pg.page_num + ' 页练习)';
+            wHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\')" title="点击放大查看练习册第 ' + pg.page_num + ' 页">';
+            wHtml += '<div class="tb-thumb-img-wrap">';
+            wHtml += '<img src="' + url + '" alt="WB P' + pg.page_num + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
+            wHtml += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
+            wHtml += '</div>';
+            wHtml += '<div class="tb-thumb-tag" style="background:#4F46E5;color:#fff;">WB P' + pg.page_num + '</div>';
+            wHtml += '</div>';
+          });
+          wbThumbs.innerHTML = wHtml;
+        })
+        .catch(function() {
+          wbContainer.style.display = 'none';
+        });
+    }
+  }
 }
 
 // ===== Study Profile =====
