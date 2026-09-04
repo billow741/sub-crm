@@ -247,9 +247,13 @@ textbooks.post('/content/:code/:num', async (c) => {
   }
 
   const body = await c.req.json();
-  const vocab = JSON.stringify(body.vocab || []);
-  const patterns = JSON.stringify(body.patterns || []);
-  const grammar = JSON.stringify(body.grammar || []);
+  const { cleanedVocab, extraSentences } = cleanVocabList(body.vocab || []);
+  const cleanPatterns = cleanPatternList(body.patterns || [], extraSentences);
+  const cleanGrammar = cleanGrammarList(body.grammar || []);
+
+  const vocab = JSON.stringify(cleanedVocab);
+  const patterns = JSON.stringify(cleanPatterns);
+  const grammar = JSON.stringify(cleanGrammar);
   const extraContent = body.extra_content ? JSON.stringify(body.extra_content) : null;
   const extractedBy = body.extracted_by || 'manual';
 
@@ -462,15 +466,23 @@ function buildExtractionPrompt(schema = null) {
 }
 
 【少儿英语切图识别严格铁律】：
-1. 🎯 核心词汇：
-   - 提取图片中带有数字编号 (1, 2, 3...) 的实物生词、故事生词或字母发音拓展词，一字不差，绝对严禁编造或借用其他单元的词！
-2. 💬 重点句型与日常交际：
-   - 提取本页对话框或句型框中印刷的核心交际句型（例如问答、物品陈述、日常打招呼与交际句型），绝不漏句！
-3. 🚫 绝对黑名单（严禁作为句型或语法点输出）：
+1. 🎯 核心词汇 (vocab) 严格标准：
+   - 必须只能提取独立的【目标生词】或【固定名词短语】（如 pen, pencil, backpack, pencil case 等）！
+   - 🚫 绝对严禁带不定冠词 a/an（提取 pen 而不是 a pen；提取 eraser 而不是 an eraser）！
+   - 🚫 绝对严禁把句子或交际短语放入词汇（如 "Thank you.", "I'm fine.", "Hi!", "I'm OK." 绝不是词汇，严禁放入 vocab，必须归入 patterns 句型中）！
+   - 🚫 单词项绝不能包含句号、问号、感叹号等标点符号！
+2. 💬 重点句型 (patterns) 严格标准：
+   - 提取本课核心目标交际句型与问答模版（如 "What is it? It's a pen." 或 "How are you? I'm fine. Thank you."）！
+   - 🚫 严禁整首歌谣/歌曲 (Song/Chant) 的重复歌词大段堆砌输出！必须提纯为简练的标准交际问答句！
+   - 🚫 严禁把语法注释说明（如 "It's = It is"、"isn't = is not"）粘连在句型末尾！语法规则必须单独提取到 grammar 中！
+   - 🚫 严格避免重复句型！相同结构的句子（如 "It's a pen." 和 "It's a book."）只提取最具代表性的 1~2 个句型，不要罗列十几个同构句！
+3. 📖 语法点 (grammar)：
+   - 提取本页涉及的核心语法规则或结构解析（如 "缩写形式：It's = It is, isn't = is not"、"be动词特殊疑问句：What is it? / It's a..."）！
+4. 🚫 绝对黑名单（严禁作为句型或语法点输出）：
    - 严禁提取课堂指令词！例如：
      ${blacklistFormatted}
    - 严禁输出任何与本页图片无关的词汇或句子！
-4. 🇨🇳 翻译全部使用规范准确的【简体中文】。`;
+5. 🇨🇳 翻译全部使用规范准确的【简体中文】。`;
 }
 
 // 兼容老调用代码的通用 Prompt 导出
@@ -501,6 +513,236 @@ function cleanAndParseJson(rawText) {
   }
 
   return null;
+}
+
+// ============================================================
+// 词汇与句型智能提纯清洗与去重工具函数
+// ============================================================
+const FUNCTION_WORDS = new Set([
+  'a', 'an', 'the', 'this', 'that', 'these', 'those',
+  'is', 'are', 'am', 'was', 'were', 'be', 'been', 'being',
+  'my', 'your', 'his', 'her', 'its', 'our', 'their',
+  'me', 'him', 'them', 'us', 'it', 'and', 'or', 'but',
+  'at', 'in', 'on', 'to', 'for', 'of', 'with', 'by', 'from',
+  'up', 'about', 'into', 'over', 'after',
+  'can', 'cant', "can't", 'do', 'dont', "don't", 'does', 'did', 'not', 'no', 'yes'
+]);
+
+function isCommandInstruction(s) {
+  return /^(listen|point|say|sing|ask|answer|look|read|circle|write|number|trace|color|match|talk|chant|clap|stomp|tap|show\s+and\s+tell|make\s+a)\b/i.test((s || '').trim());
+}
+
+function isSentenceOrGreeting(s) {
+  const trimmed = (s || '').trim();
+  if (!trimmed) return false;
+  // 包含句末或标点符号
+  if (/[?!.]/.test(trimmed)) return true;
+  // 包含常见主谓/问候/交际句首
+  if (/^(thank\s*you|thanks|hi|hello|good\s+(morning|afternoon|evening|night)|goodbye|bye|how\s+are\s+you|how\s+do\s+you|nice\s+to\s+meet|see\s+you|i'?m\b|it'?s\b|what'?s\b|what\s+is\b|who\s+is\b|how\s+is\b|where\s+is\b|this\s+is\b|that\s+is\b|is\s+it\b|are\s+you\b|are\s+they\b|do\s+you\b|can\s+you\b|my\s+name\s+is\b|your\s+name\b|yes\b|no\b|excuse\s+me)\b/i.test(trimmed)) {
+    return true;
+  }
+  // 单词数 >= 4 (通常是完整句子或长复合句)
+  if (trimmed.split(/\s+/).length >= 4) return true;
+  return false;
+}
+
+function normalizeVocabWord(w) {
+  let s = (w || '').trim();
+  // 剥离冠词 a/an/the
+  s = s.replace(/^(?:a|an|the)\s+/i, '').trim();
+  // 剥离前后非英文字母标点
+  s = s.replace(/^[^\w]+|[^\w]+$/g, '').trim();
+  return s;
+}
+
+function cleanVocabList(rawList) {
+  const cleaned = [];
+  const seen = new Set();
+  const misclassifiedSentences = [];
+
+  const list = Array.isArray(rawList) ? rawList : [];
+  for (const item of list) {
+    const rawWord = (typeof item === 'string' ? item : (item.word || item.name || '')).trim();
+    const rawTrans = (typeof item === 'object' ? (item.translation || item.chinese || item.meaning || '') : '').trim();
+    if (!rawWord || isCommandInstruction(rawWord)) continue;
+
+    if (isSentenceOrGreeting(rawWord)) {
+      misclassifiedSentences.push({
+        pattern: rawWord,
+        translation: rawTrans || rawWord,
+        is_core: true
+      });
+      continue;
+    }
+
+    const normWord = normalizeVocabWord(rawWord);
+    if (!normWord || isCommandInstruction(normWord)) continue;
+
+    const key = normWord.toLowerCase();
+    // 过滤纯虚词/代词/功能词 (如 this, is, my, these, are, at, and)
+    if (FUNCTION_WORDS.has(key)) continue;
+
+    // 单复数去重：如果单数形式已存在，不重复添加复数
+    if (key.endsWith('s') && seen.has(key.slice(0, -1))) continue;
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      cleaned.push({
+        word: normWord,
+        translation: rawTrans || normWord,
+        is_core: true,
+        difficulty: item.difficulty || 1
+      });
+    }
+  }
+  return { cleanedVocab: cleaned, extraSentences: misclassifiedSentences };
+}
+
+function cleanPatternList(rawList, extraCandidates = []) {
+  const allList = [...(Array.isArray(rawList) ? rawList : []), ...extraCandidates];
+  const patternMap = new Map();
+  const seenQuestionPrefixes = new Set();
+
+  // 检查是否已有较完整的日常交际问句 (如 How are you? ...)
+  const hasFullGreeting = allList.some(item => {
+    const p = (typeof item === 'string' ? item : (item.pattern || item.sentence || '')).trim();
+    return /how\s+are\s+you/i.test(p);
+  });
+
+  for (const item of allList) {
+    let p = (typeof item === 'string' ? item : (item.pattern || item.sentence || '')).trim();
+    let trans = (typeof item === 'object' ? (item.translation || item.chinese || '') : '').trim();
+    if (!p || isCommandInstruction(p)) continue;
+
+    // 1. 规范标点符号
+    p = p.replace(/！/g, '! ').replace(/？/g, '? ').replace(/。/g, '. ').replace(/，/g, ', ').replace(/\s+/g, ' ').trim();
+
+    // 2. 剥离末尾粘连的语法注释 (如 "It's = It is", "isn't = is not", "Can't = can not")
+    p = p.replace(/\s*(?:It'?s\s*=\s*It\s*is|isn'?t\s*=\s*is\s*not|What'?s\s*=\s*What\s*is|I'?m\s*=\s*I\s*am|Can'?t\s*=\s*can\s*not).*$/i, '').trim();
+
+    // 3. 过滤歌谣/Chant长串 (同词反复出现且长度超长)
+    if (p.length > 30 && (p.split(/\s+/).length > 8 || /(\b\w+\b).*\1.*\1/i.test(p))) {
+      const mQa = p.match(/(What\s+is\s+it\?\s*It'?s\s+a\s+[^.]+\.)/i) || p.match(/(Is\s+it\s+a\s+[^?]+\?\s*(?:Yes,\s*it\s*is|No,\s*it\s*isn'?t)\.?)/i);
+      const mEx = p.match(/(Excuse\s+me\.?\s*(?:I\s+can'?t\s+see\.?)?)/i);
+      if (mQa) {
+        p = mQa[1];
+        if (trans.length > 30 || /歌|chant|notebook|桌子|铅笔/i.test(trans)) {
+          trans = p.toLowerCase().includes('what is it') ? '它是什么？它是一本书。' : '它是一只...吗？是的/不是。';
+        }
+      } else if (mEx) {
+        p = mEx[1].trim();
+        if (!p.endsWith('.')) p += '.';
+        trans = '打扰一下。/ 对不起，我看不见。';
+      } else {
+        const mNeg = p.match(/(It\s+isn'?t\s+a\s+[^.]+\.)/i);
+        if (mNeg) {
+          p = mNeg[1];
+          if (trans.length > 30) trans = '它不是一个...。';
+        } else {
+          continue; // 丢弃长歌词
+        }
+      }
+    }
+
+    // 4. 规范日常问候多重重复
+    if (/How\s+are\s+you.*How\s+are\s+you/i.test(p)) {
+      p = "How are you? - I'm fine. / I'm OK. / I'm great. Thank you.";
+      trans = "你好吗？我很好。/ 我还行。/ 我棒极了。谢谢你。";
+    }
+
+    // 5. 如果已有完整问候，过滤孤立的微小问候/应答碎片 (如 "Hi!", "I'm OK!", "I'm great!", "Thank you.")
+    if (hasFullGreeting && /^(hi|hello|thank\s*you|thanks|i'?m\s*(fine|ok|great|good)|goodbye|bye)\b[!. ]*$/i.test(p)) {
+      continue;
+    }
+
+    if (!p) continue;
+
+    // 6. 句型问答模版去重 (如果已有相同前缀>=3个词的疑问句，避免出现多个相同句式仅换名词的句子，如 "Are these my eyes?", "Are these my ears?")
+    const words = p.split(/\s+/);
+    if (p.endsWith('?') && words.length >= 3) {
+      const qPrefix = words.slice(0, -1).join(' ').toLowerCase().replace(/[^\w\s]/g, '');
+      if (seenQuestionPrefixes.has(qPrefix)) {
+        continue;
+      }
+      seenQuestionPrefixes.add(qPrefix);
+    }
+
+    // 7. 语义指纹去重 (去除标点、统一缩写)
+    const fp = p.toLowerCase()
+      .replace(/what's/g, 'what is')
+      .replace(/it's/g, 'it is')
+      .replace(/isn't/g, 'is not')
+      .replace(/i'm/g, 'i am')
+      .replace(/you're/g, 'you are')
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    let isDup = false;
+    for (const [existingFp, existingItem] of patternMap.entries()) {
+      if (fp === existingFp) {
+        isDup = true;
+        break;
+      }
+      // 包含关系：若现有句型是新句型子集且较长，用完整句型替换
+      if (fp.includes(existingFp) && existingFp.length > 12) {
+        patternMap.delete(existingFp);
+        break;
+      }
+      // 反之，若已有更长更完整的句型，跳过子句
+      if (existingFp.includes(fp) && fp.length > 12) {
+        isDup = true;
+        break;
+      }
+    }
+
+    if (!isDup) {
+      patternMap.set(fp, {
+        pattern: p,
+        translation: trans || p,
+        is_core: true
+      });
+    }
+  }
+
+  return Array.from(patternMap.values());
+}
+
+function cleanGrammarList(rawList) {
+  const list = Array.isArray(rawList) ? rawList : [];
+  const grammarMap = new Map();
+
+  for (const g of list) {
+    let pt = (g.point || g.topic || g.title || '').trim();
+    let ex = (g.example || g.explanation || g.desc || '').trim();
+    if (!pt || isCommandInstruction(pt)) continue;
+
+    // 剥离歌词误入语法
+    if (pt.length > 30 && (/\b(\w+)\b.*\b\1\b.*\b\1\b/i.test(pt) || /\.\s*\w+\s*\.\s*\w+\s*\./.test(pt) || /\bmy\s*\./i.test(pt))) continue;
+
+    // 规整纯问答句为标准语法点描述
+    if (/^what\s+is\s+it/i.test(pt)) {
+      pt = '特殊疑问句：What is it? / It is a...';
+      if (!ex || ex === pt) ex = "What is it? - It's a pen.";
+    } else if (/^how\s+are\s+you/i.test(pt)) {
+      pt = '日常交际问候：How are you? / I am...';
+      if (!ex || ex === pt) ex = "How are you? - I'm fine. Thank you.";
+    } else if (/it'?s\s*=\s*it\s*is/i.test(pt)) {
+      pt = "缩写形式：It's = It is, isn't = is not";
+      if (!ex || ex === pt) ex = "It's a book. It isn't a notebook.";
+    }
+
+    const gFp = pt.toLowerCase().replace(/[^\w\u4e00-\u9fa5]/g, '');
+    if (!grammarMap.has(gFp)) {
+      grammarMap.set(gFp, {
+        point: pt,
+        example: ex || pt,
+        is_core: true
+      });
+    }
+  }
+
+  return Array.from(grammarMap.values());
 }
 
 // ============================================================
@@ -712,6 +954,12 @@ textbooks.post('/extract', async (c) => {
       const { text: pdfText } = await extractText(pdfDoc, { mergePages: true });
       if (pdfText && pdfText.trim().length > 0) {
         const result = await callLLM(c, pdfText);
+        if (result) {
+          const { cleanedVocab, extraSentences } = cleanVocabList(result.vocab || []);
+          result.vocab = cleanedVocab;
+          result.patterns = cleanPatternList(result.patterns || [], extraSentences);
+          result.grammar = cleanGrammarList(result.grammar || []);
+        }
         return c.json({ data: result, _method: 'unpdf' });
       }
       return c.json({ error: { code: 'NO_TEXT', message: 'PDF 提取不到文字 (可能是扫描版,需用浏览器先转图片后上传)' } }, 400);
@@ -723,6 +971,12 @@ textbooks.post('/extract', async (c) => {
   // 有图片 → 调 vision LLM
   try {
     const result = await callLLMWithImages(c, images);
+    if (result) {
+      const { cleanedVocab, extraSentences } = cleanVocabList(result.vocab || []);
+      result.vocab = cleanedVocab;
+      result.patterns = cleanPatternList(result.patterns || [], extraSentences);
+      result.grammar = cleanGrammarList(result.grammar || []);
+    }
     return c.json({ data: result, _method: 'vision' });
   } catch (err) {
     return c.json({ error: { code: 'LLM_ERROR', message: err.message } }, 502);
@@ -781,10 +1035,15 @@ textbooks.post('/extract/:code/:num', async (c) => {
     await R2.put(r2Key, await images[0].arrayBuffer(), { httpMetadata: { contentType: images[0].type } });
   }
 
+  // 运行智能清洗管道
+  const { cleanedVocab, extraSentences } = cleanVocabList(content.vocab || []);
+  const cleanPatterns = cleanPatternList(content.patterns || [], extraSentences);
+  const cleanGrammar = cleanGrammarList(content.grammar || []);
+
   // 写入 unit_content
-  const vocab = JSON.stringify(content.vocab || []);
-  const patterns = JSON.stringify(content.patterns || []);
-  const grammar = JSON.stringify(content.grammar || []);
+  const vocab = JSON.stringify(cleanedVocab);
+  const patterns = JSON.stringify(cleanPatterns);
+  const grammar = JSON.stringify(cleanGrammar);
 
   const existing = await DB.prepare('SELECT id FROM unit_content WHERE unit_id = ?').bind(unit.id).first();
   if (existing) {
@@ -1140,24 +1399,30 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
     const llmModel = formData.get('llm_model') || c.req.header('x-llm-model');
     const unitText = formData.get('unit_text') || '';
 
-    // 对选取的关键切片页面分别提取并聚合
+    // 对选取的关键切片页面受控并发提取并聚合 (每次并发 3 页，兼顾极速吞吐与频控)
     const groupResults = [];
-    for (let i = 0; i < imagesToLLM.length; i++) {
-      try {
-        const singlePage = [imagesToLLM[i]];
-        const res = await callLLMWithImages(c, singlePage, {
-          bookMode: false,
-          maxPages: 1,
-          baseUrl: llmBaseUrl,
-          apiKey: llmApiKey,
-          model: llmModel,
-          unitText,
-          schema
-        });
-        if (res) groupResults.push(res);
-      } catch (err) {
-        console.warn(`Page ${i} extract warn:`, err.message);
-      }
+    const BATCH_CONCURRENCY = 3;
+    for (let i = 0; i < imagesToLLM.length; i += BATCH_CONCURRENCY) {
+      const chunk = imagesToLLM.slice(i, i + BATCH_CONCURRENCY);
+      const chunkPromises = chunk.map(async (imgItem, subIdx) => {
+        try {
+          const singlePage = [imgItem];
+          return await callLLMWithImages(c, singlePage, {
+            bookMode: false,
+            maxPages: 1,
+            baseUrl: llmBaseUrl,
+            apiKey: llmApiKey,
+            model: llmModel,
+            unitText,
+            schema
+          });
+        } catch (err) {
+          console.warn(`Page ${i + subIdx} extract warn:`, err.message);
+          return null;
+        }
+      });
+      const chunkRes = await Promise.all(chunkPromises);
+      groupResults.push(...chunkRes.filter(Boolean));
     }
 
     // 把这次上传的 PDF 页面图保存到 R2 (path: `${code}/Unit${num}/page-${i}.png`)
@@ -1354,15 +1619,16 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       }
     }
 
-    const cleanVocab = Array.from(vocabMap.values());
-    let cleanPatterns = Array.from(patternMap.values());
-    let cleanGrammar = Array.from(grammarMap.values()).filter(g => !isCommand(g.point));
+    // 运行智能提纯清洗与去重管道
+    const { cleanedVocab, extraSentences } = cleanVocabList(Array.from(vocabMap.values()));
+    let cleanPatterns = cleanPatternList(Array.from(patternMap.values()), extraSentences);
+    let cleanGrammar = cleanGrammarList(Array.from(grammarMap.values()).filter(g => !isCommandInstruction(g.point)));
 
     // 仅综合英语模式在句型为空时生成标准交际句型，绝不污染 Phonics / 阅读教材
     if (schema.type === 'general_english') {
-      if (cleanPatterns.length === 0 && cleanVocab.length > 0) {
-        const firstWord = cleanVocab[0].word;
-        const firstTrans = cleanVocab[0].translation;
+      if (cleanPatterns.length === 0 && cleanedVocab.length > 0) {
+        const firstWord = cleanedVocab[0].word;
+        const firstTrans = cleanedVocab[0].translation;
         cleanPatterns = [
           { pattern: `I have ${firstWord}.`, translation: `我有一张/个${firstTrans}。`, is_core: true },
           { pattern: `What do you have? - I have ${firstWord}.`, translation: `你有什么？- 我有${firstTrans}。`, is_core: true }
@@ -1394,7 +1660,7 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
     return c.json({ data: {
       unit_number: num,
       unit_title: finalUnitTitle || (num === 0 ? 'Welcome' : `Unit ${num}`),
-      vocab: cleanVocab,
+      vocab: cleanedVocab,
       patterns: cleanPatterns,
       grammar: cleanGrammar,
       extra_content: extraContent,
@@ -1569,14 +1835,16 @@ textbooks.get('/unit-pages/:code/:num', async (c) => {
   return c.json({ data: {
     textbook_code: code,
     unit_number: num,
-    pages: items.map(it => ({
-      ...it,
-      url: `${baseUrl}/${it.page_num}?key=${encodeURIComponent(it.key)}`
-    }))
+    pages: items.map(it => {
+      const v = it.uploaded ? new Date(it.uploaded).getTime() : Date.now();
+      return {
+        ...it,
+        url: `${baseUrl}/${it.page_num}?key=${encodeURIComponent(it.key)}&v=${v}`
+      };
+    })
   }});
 });
 
-// GET /page-img/:code/:num/:page — 获取 R2 里某 unit 的指定页面图 (公开访问, 多重 Fallback 兼容)
 // GET /page-img/:code/:num/:page — 获取 R2 里某 unit 的指定页面图 (公开访问, 跨课时多重 Fallback 兼容)
 textbooks.get('/page-img/:code/:num/:page', async (c) => {
   const R2 = c.env.TEXTBOOKS_R2;
@@ -1647,7 +1915,8 @@ textbooks.get('/page-img/:code/:num/:page', async (c) => {
   return new Response(obj.body, {
     headers: {
       'Content-Type': ct,
-      'Cache-Control': 'public, max-age=31536000',
+      'Cache-Control': 'no-cache, must-revalidate',
+      'ETag': `"${obj.httpEtag || obj.version || Date.now()}"`,
       'Access-Control-Allow-Origin': '*'
     }
   });
@@ -1660,7 +1929,10 @@ textbooks.get('/page-img/:code/:page', async (c) => {
   const page = parseInt(c.req.param('page'));
   if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 未配置' } }, 500);
 
+  const exts = ['.jpg', '.jpeg', '.png', '.webp'];
   let obj = null;
+
+  // 尝试在所有 Unit 中检索该页码
   try {
     const listRes = await R2.list({ prefix: `${code}/`, limit: 500 });
     const pageRegex = new RegExp(`page[_-]0*${page}\\.(png|jpg|jpeg|webp)$`, 'i');
@@ -1671,14 +1943,15 @@ textbooks.get('/page-img/:code/:page', async (c) => {
   } catch {}
 
   if (!obj) {
-    return c.json({ error: { code: 'NOT_FOUND', message: `教材 ${code} 第 ${page} 页切图未找到` } }, 404);
+    return c.json({ error: { code: 'NOT_FOUND', message: `全书未找到第 ${page} 页切图` } }, 404);
   }
 
   const ct = obj.httpMetadata?.contentType || (obj.key?.endsWith('.png') ? 'image/png' : 'image/jpeg');
   return new Response(obj.body, {
     headers: {
       'Content-Type': ct,
-      'Cache-Control': 'public, max-age=31536000',
+      'Cache-Control': 'no-cache, must-revalidate',
+      'ETag': `"${obj.httpEtag || obj.version || Date.now()}"`,
       'Access-Control-Allow-Origin': '*'
     }
   });
@@ -1842,15 +2115,63 @@ textbooks.patch('/units-manage/:code/:num', async (c) => {
   return c.json({ data: { action: 'updated', unit_number: body.new_unit_number ?? oldNum } });
 });
 
-// DELETE /units-manage/:code/:num — 删 unit (有 unit_content 关联也没事,ON DELETE CASCADE 会一起删)
+// DELETE /units-manage/:code/:num — 删单个 unit
 textbooks.delete('/units-manage/:code/:num', async (c) => {
   const DB = c.env.DB;
   const code = c.req.param('code');
   const num = parseInt(c.req.param('num'));
+
+  await DB.prepare(
+    'DELETE FROM unit_content WHERE textbook_code = ? AND unit_number = ?'
+  ).bind(code, num).run();
+
   await DB.prepare(
     'DELETE FROM textbook_units WHERE textbook_code = ? AND unit_number = ?'
   ).bind(code, num).run();
+
+  // 重新计算并更新教材的 total_units
+  const maxUnit = await DB.prepare(
+    'SELECT MAX(unit_number) as max_u FROM textbook_units WHERE textbook_code = ?'
+  ).bind(code).first();
+  await DB.prepare(
+    'UPDATE textbooks SET total_units = COALESCE(?, 0), updated_at = datetime("now") WHERE code = ?'
+  ).bind(maxUnit?.max_u ?? 0, code).run();
+
   return c.json({ data: { action: 'deleted', unit_number: num } });
+});
+
+// POST /units-manage/:code/batch-delete — 批量删除或清空单元
+textbooks.post('/units-manage/:code/batch-delete', async (c) => {
+  const DB = c.env.DB;
+  const code = c.req.param('code');
+  let body = {};
+  try { body = await c.req.json(); } catch {}
+
+  if (body.clear_all) {
+    await DB.prepare('DELETE FROM unit_content WHERE textbook_code = ?').bind(code).run();
+    await DB.prepare('DELETE FROM textbook_units WHERE textbook_code = ?').bind(code).run();
+    await DB.prepare('UPDATE textbooks SET total_units = 0, updated_at = datetime("now") WHERE code = ?').bind(code).run();
+    return c.json({ data: { action: 'cleared_all', textbook_code: code } });
+  }
+
+  const unitNums = Array.isArray(body.unit_numbers) ? body.unit_numbers.map(n => parseInt(n)).filter(n => !isNaN(n)) : [];
+  if (unitNums.length === 0) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: 'No unit_numbers provided' } }, 400);
+  }
+
+  for (const num of unitNums) {
+    await DB.prepare('DELETE FROM unit_content WHERE textbook_code = ? AND unit_number = ?').bind(code, num).run();
+    await DB.prepare('DELETE FROM textbook_units WHERE textbook_code = ? AND unit_number = ?').bind(code, num).run();
+  }
+
+  const maxUnit = await DB.prepare(
+    'SELECT MAX(unit_number) as max_u FROM textbook_units WHERE textbook_code = ?'
+  ).bind(code).first();
+  await DB.prepare(
+    'UPDATE textbooks SET total_units = COALESCE(?, 0), updated_at = datetime("now") WHERE code = ?'
+  ).bind(maxUnit?.max_u ?? 0, code).run();
+
+  return c.json({ data: { action: 'batch_deleted', unit_numbers: unitNums } });
 });
 
 // ============================================================
@@ -1913,6 +2234,22 @@ textbooks.post('/upload-unit-slices/:code/:num', async (c) => {
   let pagesSaved = 0;
 
   if (R2 && images.length > 0) {
+    // 自动清理当前单元旧切片，杜绝不同偏移量或旧切图残留混杂
+    try {
+      const prefix1 = `${code}/Unit${num}/`;
+      const prefix2 = `${code}/Unit${num}_`;
+      const [res1, res2] = await Promise.all([
+        R2.list({ prefix: prefix1, limit: 100 }),
+        R2.list({ prefix: prefix2, limit: 100 })
+      ]);
+      const oldObjs = [...(res1.objects || []), ...(res2.objects || [])];
+      for (const o of oldObjs) {
+        try { await R2.delete(o.key); } catch {}
+      }
+    } catch (cleanErr) {
+      console.warn('Failed to clean old unit slices:', cleanErr);
+    }
+
     const images_arr = Array.isArray(images) ? images : [images];
     pagesSaved = images_arr.length;
     for (let i = 0; i < images_arr.length; i++) {
@@ -1996,9 +2333,13 @@ textbooks.post('/commit-units/:code', async (c) => {
         continue;
       }
 
-      const vocab = JSON.stringify(item.vocab || []);
-      const patterns = JSON.stringify(item.patterns || []);
-      const grammar = JSON.stringify(item.grammar || []);
+      const { cleanedVocab, extraSentences } = cleanVocabList(item.vocab || []);
+      const cleanPatterns = cleanPatternList(item.patterns || [], extraSentences);
+      const cleanGrammar = cleanGrammarList(item.grammar || []);
+
+      const vocab = JSON.stringify(cleanedVocab);
+      const patterns = JSON.stringify(cleanPatterns);
+      const grammar = JSON.stringify(cleanGrammar);
 
       // 提取并持久化起止页码、偏移量等元数据至 extra_content
       let extraObj = {};
@@ -2024,11 +2365,27 @@ textbooks.post('/commit-units/:code', async (c) => {
         }
         const finalExtra = JSON.stringify(mergedExtra);
 
-        // 如果新传入的 vocab 为空但数据库已有提取数据，则保留数据库现有内容，避免纯切片保存覆盖已提取词汇
+        // 如果新传入的 vocab 为空但数据库已有提取数据，则保留数据库现有内容并运行清洗管道
         const keepExisting = (!item.vocab || item.vocab.length === 0) && existing.vocab && existing.vocab !== '[]';
-        const finalVocab = keepExisting ? existing.vocab : vocab;
-        const finalPatterns = keepExisting ? existing.patterns : patterns;
-        const finalGrammar = keepExisting ? existing.grammar : grammar;
+        let finalVocab = vocab;
+        let finalPatterns = patterns;
+        let finalGrammar = grammar;
+
+        if (keepExisting) {
+          try {
+            const oldV = JSON.parse(existing.vocab || '[]');
+            const oldP = JSON.parse(existing.patterns || '[]');
+            const oldG = JSON.parse(existing.grammar || '[]');
+            const { cleanedVocab: cV, extraSentences: eS } = cleanVocabList(oldV);
+            finalVocab = JSON.stringify(cV);
+            finalPatterns = JSON.stringify(cleanPatternList(oldP, eS));
+            finalGrammar = JSON.stringify(cleanGrammarList(oldG));
+          } catch {
+            finalVocab = existing.vocab;
+            finalPatterns = existing.patterns;
+            finalGrammar = existing.grammar;
+          }
+        }
 
         await DB.prepare(
           `UPDATE unit_content SET vocab = ?, patterns = ?, grammar = ?, extra_content = ?, updated_at = datetime('now') WHERE unit_id = ?`

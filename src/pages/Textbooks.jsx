@@ -35,6 +35,7 @@ export default function Textbooks() {
   // 弹窗状态
   const [showBooksManage, setShowBooksManage] = useState(false);
   const [showBatchBookModal, setShowBatchBookModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showLlmSettingsModal, setShowLlmSettingsModal] = useState(false);
   const [previewImageModal, setPreviewImageModal] = useState(null);
 
@@ -167,6 +168,70 @@ export default function Textbooks() {
     }
   };
 
+  // 删除单个课时/单元
+  const handleDeleteUnit = async (code, unitNum, unitTitle) => {
+    const title = unitTitle || `Unit ${unitNum}`;
+    if (!confirm(`确定要彻底删除【${title}】吗？\n该单元已录入的词汇与句型等内容也将一并清除。`)) {
+      return;
+    }
+
+    try {
+      await request(`/textbooks/units-manage/${code}/${unitNum}`, {
+        method: 'DELETE'
+      });
+      if (selectedUnitNum === unitNum) {
+        setSelectedUnitNum(null);
+        setUnitDetail(null);
+      }
+      await selectBook(code);
+    } catch (e) {
+      alert('删除失败: ' + e.message);
+    }
+  };
+
+  // 批量删除选中的课时/单元
+  const handleBatchDeleteUnits = async (code, unitNumbers) => {
+    if (!unitNumbers || unitNumbers.length === 0) return;
+    if (!confirm(`确定要彻底删除选中的 ${unitNumbers.length} 个课时/单元吗？\n已录入的词汇与句型等内容也将一并清除。`)) {
+      return;
+    }
+
+    try {
+      await request(`/textbooks/units-manage/${code}/batch-delete`, {
+        method: 'POST',
+        body: { unit_numbers: unitNumbers }
+      });
+      if (unitNumbers.includes(selectedUnitNum)) {
+        setSelectedUnitNum(null);
+        setUnitDetail(null);
+      }
+      await selectBook(code);
+      setShowDeleteModal(false);
+    } catch (e) {
+      alert('批量删除失败: ' + e.message);
+    }
+  };
+
+  // 清空整本教材目录
+  const handleClearAllUnits = async (code) => {
+    if (!confirm(`⚠️ 高风险操作！\n确定要清空教材【${code}】的所有课时与已录入内容吗？此操作不可逆！`)) {
+      return;
+    }
+
+    try {
+      await request(`/textbooks/units-manage/${code}/batch-delete`, {
+        method: 'POST',
+        body: { clear_all: true }
+      });
+      setSelectedUnitNum(null);
+      setUnitDetail(null);
+      await selectBook(code);
+      setShowDeleteModal(false);
+    } catch (e) {
+      alert('清空失败: ' + e.message);
+    }
+  };
+
   // 切换选中单元
   const selectUnit = async (code, unitNum) => {
     setSelectedUnitNum(unitNum);
@@ -209,7 +274,7 @@ export default function Textbooks() {
   const loadUnitPages = async (code, unitNum) => {
     setLoadingPages(true);
     try {
-      const resp = await request(`/textbooks/unit-pages/${code}/${unitNum}`);
+      const resp = await request(`/textbooks/unit-pages/${code}/${unitNum}?_t=${Date.now()}`);
       setR2Pages(resp.data?.pages || []);
     } catch (e) {
       setR2Pages([]);
@@ -703,13 +768,22 @@ export default function Textbooks() {
                 {bookUnits.length} 项
               </Badge>
               {selectedBookCode && (
-                <button
-                  onClick={() => handleAddNewUnit(selectedBookCode)}
-                  className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
-                  title="添加新课时/单元"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    onClick={() => handleAddNewUnit(selectedBookCode)}
+                    className="p-1 text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                    title="添加新课时/单元"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                    title="删除课时/单元选项"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -807,6 +881,18 @@ export default function Textbooks() {
                           >
                             <Edit3 className="w-3 h-3" />
                           </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteUnit(selectedBookCode, u.unit_number, title);
+                            }}
+                            className={`opacity-0 group-hover/title:opacity-100 p-0.5 rounded transition-opacity shrink-0 ${
+                              isSelected ? 'hover:bg-white/20 text-white hover:text-red-200' : 'hover:bg-red-50 text-gray-400 hover:text-red-600'
+                            }`}
+                            title={`删除 ${title}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       )}
                     </div>
@@ -859,7 +945,17 @@ export default function Textbooks() {
                   />
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDeleteUnit(selectedBookCode, selectedUnitNum, unitDetail.unit_title)}
+                    className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-all font-medium text-xs shadow-xs"
+                    title="彻底删除此课时/单元及已提取的词汇与句型"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1 text-red-500" />
+                    删除此单元
+                  </Button>
+
                   <Button
                     variant="outline"
                     onClick={handleAiExtract}
@@ -1544,6 +1640,19 @@ export default function Textbooks() {
           }}
         />
       )}
+
+      {/* 课时/单元大纲删除管理 Modal */}
+      {showDeleteModal && selectedBookCode && (
+        <DeleteUnitsModal
+          bookCode={selectedBookCode}
+          bookName={selectedBook?.name}
+          units={bookUnits}
+          onDeleteSingle={handleDeleteUnit}
+          onBatchDelete={handleBatchDeleteUnits}
+          onClearAll={handleClearAllUnits}
+          onClose={() => setShowDeleteModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1665,6 +1774,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
   const [tocStartPage, setTocStartPage] = useState(6);
   const [tocEndPage, setTocEndPage] = useState(8);
   const [tocSampleThumb, setTocSampleThumb] = useState(null);
+  const [extractionMode, setExtractionMode] = useState('deep'); // 'deep' 深度全量提取 (推荐) | 'fast' 极速概览模式
 
   const renderTocSample = async (doc, pageNum) => {
     if (!doc || pageNum < 1 || pageNum > doc.numPages) return;
@@ -2151,7 +2261,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
           const ctx = canvas.getContext('2d');
           await page.render({ canvasContext: ctx, viewport }).promise;
           const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
-          thumbs.push({ url: URL.createObjectURL(blob), pageNum: bookPageNum, pdfPage: p });
+          thumbs.push({ url: URL.createObjectURL(blob), pageNum: bookPageNum, pdfPage: p, blob });
           fd.append('images', blob, `page-${String(bookPageNum).padStart(2, '0')}.jpg`);
         }
 
@@ -2243,37 +2353,66 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
             const ctx = canvas.getContext('2d');
             await page.render({ canvasContext: ctx, viewport }).promise;
             const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
-            thumbs.push({ url: URL.createObjectURL(blob), pageNum: p - pageOffset, pdfPage: p });
+            thumbs.push({ url: URL.createObjectURL(blob), pageNum: p - pageOffset, pdfPage: p, blob });
           }
         }
 
         if (thumbs.length > 0) {
-          const loadedImgs = await Promise.all(thumbs.map(t => new Promise(res => {
-            const img = new Image();
-            img.onload = () => res(img);
-            img.src = t.url;
-          })));
+          if (extractionMode === 'deep') {
+            // 🔍 深度全量提取：直接向后端发送关键课时的高清独立单页切片，与工作台单单元提取深度完全一致
+            setStatusMsg(`🤖 AI 正在深度扫描 U${item.unit_number} (${item.unit_title}) 核心课文 (全量词汇/句型/语法)...`);
+            
+            const totalP = thumbs.length;
+            let targetThumbs = [];
+            if (totalP <= 6) {
+              targetThumbs = thumbs;
+            } else {
+              // 典型8页单元结构：覆盖 Lesson 1 词汇、Lesson 2 词汇、Lesson 3 故事/对话、Lesson 4 拓展
+              const keyIndices = [0, 1, 2, Math.min(4, totalP - 1), Math.min(6, totalP - 1)].filter((v, i, a) => a.indexOf(v) === i && v < totalP);
+              targetThumbs = keyIndices.map(i => thumbs[i]);
+            }
 
-          const cols = loadedImgs.length <= 2 ? loadedImgs.length : (loadedImgs.length <= 4 ? 2 : 4);
-          const rows = Math.ceil(loadedImgs.length / cols);
-          const singleW = 800;
-          const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
+            for (const t of targetThumbs) {
+              let b = t.blob;
+              if (!b && t.url) {
+                try {
+                  const fetched = await fetch(t.url);
+                  b = await fetched.blob();
+                } catch {}
+              }
+              if (b) {
+                fd.append('images', b, `page-${String(t.pageNum).padStart(2, '0')}.jpg`);
+              }
+            }
+          } else {
+            // ⚡ 极速概览模式：拼合成一张 4x2 全景大图单次识别
+            const loadedImgs = await Promise.all(thumbs.map(t => new Promise(res => {
+              const img = new Image();
+              img.onload = () => res(img);
+              img.src = t.url;
+            })));
 
-          const collageCanvas = document.createElement('canvas');
-          collageCanvas.width = singleW * cols;
-          collageCanvas.height = singleH * rows;
-          const cCtx = collageCanvas.getContext('2d');
-          cCtx.fillStyle = '#ffffff';
-          cCtx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
+            const cols = loadedImgs.length <= 2 ? loadedImgs.length : (loadedImgs.length <= 4 ? 2 : 4);
+            const rows = Math.ceil(loadedImgs.length / cols);
+            const singleW = 800;
+            const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
 
-          loadedImgs.forEach((img, i) => {
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
-          });
+            const collageCanvas = document.createElement('canvas');
+            collageCanvas.width = singleW * cols;
+            collageCanvas.height = singleH * rows;
+            const cCtx = collageCanvas.getContext('2d');
+            cCtx.fillStyle = '#ffffff';
+            cCtx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
 
-          const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
-          fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
+            loadedImgs.forEach((img, i) => {
+              const col = i % cols;
+              const row = Math.floor(i / cols);
+              cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
+            });
+
+            const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
+            fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
+          }
         }
 
         if (bookSchema) fd.append('content_schema', JSON.stringify(bookSchema));
@@ -2807,16 +2946,45 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                       </Button>
                     )}
 
+                    {/* 提取深度模式切换 */}
+                    <div className="inline-flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200 text-xs shadow-inner">
+                      <button
+                        type="button"
+                        onClick={() => setExtractionMode('deep')}
+                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 ${
+                          extractionMode === 'deep'
+                            ? 'bg-white text-primary-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-800'
+                        }`}
+                        title="逐页深度分析多课时切片，词汇最全（15~25+词汇），与单元提取质量 100% 对齐"
+                      >
+                        <span>🔍 深度全量提取</span>
+                        <span className="text-[10px] bg-primary-100 text-primary-700 px-1 rounded">推荐</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExtractionMode('fast')}
+                        className={`px-2.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 ${
+                          extractionMode === 'fast'
+                            ? 'bg-white text-amber-800 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-800'
+                        }`}
+                        title="拼合全景图单次快速粗筛，适合快速出大纲"
+                      >
+                        <span>⚡ 极速概览</span>
+                      </button>
+                    </div>
+
                     <Button
                       variant="primary"
                       size="sm"
                       onClick={() => handleStartAiExtraction(null)}
                       disabled={processing || slicingUnits || extractingAi || loadingPdf}
                       className="bg-primary-600 hover:bg-primary-700 text-white font-bold shadow-sm"
-                      title="核对切片原图无误后，调用 AI 视觉大模型批量提取知识点"
+                      title={extractionMode === 'deep' ? '多课时高清切片逐页扫描并聚合，词汇句型最全' : '九宫格拼图单次快速提取'}
                     >
                       {extractingAi ? <Loader className="w-4 h-4 mr-1.5 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1.5" />}
-                      {extractingAi ? 'AI 正在批量识别...' : '🤖 步骤二：批量 AI 知识点提取'}
+                      {extractingAi ? 'AI 正在批量识别...' : extractionMode === 'deep' ? '🤖 步骤二：批量 AI 深度全量提取' : '🤖 步骤二：批量 AI 极速提取'}
                     </Button>
                   </div>
                 </div>
@@ -3614,6 +3782,146 @@ function LlmSettingsModal({ config, onSave, onClose }) {
           </div>
         </div>
       </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// 🗑️ 课时/单元大纲删除管理 Modal
+// ============================================================
+function DeleteUnitsModal({ bookCode, bookName, units = [], onDeleteSingle, onBatchDelete, onClearAll, onClose }) {
+  const [selectedNums, setSelectedNums] = useState([]);
+
+  const toggleSelect = (num) => {
+    setSelectedNums(prev => prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num]);
+  };
+
+  const selectAll = () => {
+    if (selectedNums.length === units.length) {
+      setSelectedNums([]);
+    } else {
+      setSelectedNums(units.map(u => u.unit_number));
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
+          <div>
+            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-500" />
+              删除课时 / 单元选项
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {bookCode} · {bookName || '教材目录管理'}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Toolbar */}
+        <div className="p-4 border-b border-gray-100 bg-red-50/40 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={selectAll}
+              className="text-xs font-medium text-gray-700 hover:text-primary-600 bg-white border border-gray-200 px-2.5 py-1 rounded-md shadow-xs transition-colors"
+            >
+              {selectedNums.length === units.length ? '全不选' : '全选'}
+            </button>
+            <span className="text-xs text-gray-600">
+              已勾选 <span className="font-bold text-red-600">{selectedNums.length}</span> / {units.length} 项
+            </span>
+          </div>
+
+          <button
+            onClick={() => onClearAll(bookCode)}
+            className="text-xs text-red-600 hover:text-red-700 hover:bg-red-100/60 px-2 py-1 rounded transition-colors font-bold"
+          >
+            ⚠️ 清空整本目录
+          </button>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-1.5 divide-y divide-gray-50">
+          {units.length === 0 ? (
+            <div className="py-8 text-center text-xs text-gray-400">
+              当前教材暂无课时或单元
+            </div>
+          ) : (
+            units.map(u => {
+              const checked = selectedNums.includes(u.unit_number);
+              const hasContent = u.has_content || u.content_count > 0;
+              const title = u.unit_title || `Unit ${u.unit_number}`;
+              return (
+                <div
+                  key={u.unit_number}
+                  onClick={() => toggleSelect(u.unit_number)}
+                  className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-colors ${
+                    checked ? 'bg-red-50/70 border border-red-200' : 'hover:bg-gray-50 border border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleSelect(u.unit_number)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded border-gray-300 text-red-600 focus:ring-red-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 shrink-0">
+                      U{u.unit_number}
+                    </span>
+                    <span className="text-xs font-medium text-gray-900 truncate">
+                      {title}
+                    </span>
+                    {hasContent && (
+                      <Badge variant="secondary" className="text-[10px] bg-green-50 text-green-700 border border-green-200 shrink-0">
+                        已录入
+                      </Badge>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteSingle(bookCode, u.unit_number, title);
+                    }}
+                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors shrink-0"
+                    title={`删除 ${title}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3.5 border-t border-gray-100 bg-gray-50/80 flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            取消
+          </Button>
+
+          <Button
+            variant="danger"
+            size="sm"
+            disabled={selectedNums.length === 0}
+            onClick={() => onBatchDelete(bookCode, selectedNums)}
+            className="bg-red-600 hover:bg-red-700 text-white font-bold shadow-sm"
+          >
+            <Trash2 className="w-4 h-4 mr-1.5" />
+            彻底删除选中的 {selectedNums.length} 项
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
