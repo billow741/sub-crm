@@ -213,44 +213,44 @@
       </h3>
       <div class="flex items-center gap-2">
         <button type="button" id="fb-suggest-toggle-btn" onclick="toggleSuggestionsBox()" class="hidden text-xs px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold rounded-md border border-purple-200 flex items-center gap-1.5 transition-colors shadow-2xs">
-          <span>✨ 从教材库智能选词</span>
+          <span>✨ Suggest from Textbook</span>
           <span id="fb-suggest-toggle-arrow">▼</span>
         </button>
       </div>
     </div>
 
-    <!-- Smart Suggestion Pills Box (按需展开，选择完一键收起消失) -->
+    <!-- Smart Suggestion Pills Box (Expand as needed, collapse once selected) -->
     <div id="fb-suggestions-box" class="hidden mb-3 p-3 bg-gradient-to-b from-purple-50/90 to-white border border-purple-200 rounded-lg shadow-xs space-y-2.5">
       <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-purple-100">
         <div class="text-xs font-bold text-purple-900 flex items-center gap-1.5">
           <span>📖</span> <span id="fb-suggest-unit-title">Unit Content</span>
         </div>
         <div class="flex items-center gap-1.5">
-          <button type="button" onclick="selectAllCoreVocab()" class="text-xs px-2 py-0.5 bg-purple-200 hover:bg-purple-300 text-purple-800 rounded font-medium">⚡ 选入核心词</button>
-          <button type="button" onclick="clearVocabSelection()" class="text-xs px-1.5 py-0.5 text-gray-500 hover:text-gray-700">清空</button>
+          <button type="button" onclick="selectAllCoreVocab()" class="text-xs px-2 py-0.5 bg-purple-200 hover:bg-purple-300 text-purple-800 rounded font-medium">⚡ Select Core Words</button>
+          <button type="button" onclick="clearVocabSelection()" class="text-xs px-1.5 py-0.5 text-gray-500 hover:text-gray-700">Clear</button>
           <button type="button" onclick="finishVocabSelection()" class="text-xs px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded shadow-xs flex items-center gap-1">
-            <span>✓ 选好了 (收起)</span>
+            <span>✓ Done (Collapse)</span>
           </button>
         </div>
       </div>
       
       <!-- Vocabulary Pills -->
       <div>
-        <div class="text-[11px] font-medium text-gray-600 mb-1.5">点击勾选词汇（自动填入输入框，选完点击「✓ 选好了」）：</div>
+        <div class="text-[11px] font-medium text-gray-600 mb-1.5">Click words to select (auto-filled into Vocabulary, click "Done" when finished):</div>
         <div id="fb-vocab-pills" class="flex flex-wrap gap-1.5"></div>
       </div>
 
       <!-- Sentence Pattern Pills -->
       <div id="fb-patterns-box" class="hidden pt-1.5 border-t border-purple-100/80">
-        <div class="text-[11px] font-medium text-gray-600 mb-1.5">点击勾选重点句型：</div>
+        <div class="text-[11px] font-medium text-gray-600 mb-1.5">Click to select key sentence patterns:</div>
         <div id="fb-patterns-pills" class="flex flex-wrap gap-1.5"></div>
       </div>
 
-      <!-- 底部完成选择按钮 -->
+      <!-- Bottom Done Button -->
       <div class="pt-2 border-t border-purple-100 flex items-center justify-between">
-        <span class="text-[11px] text-gray-500" id="fb-suggest-selected-count">已选 0 个词汇</span>
+        <span class="text-[11px] text-gray-500" id="fb-suggest-selected-count">0 words selected</span>
         <button type="button" onclick="finishVocabSelection()" class="text-xs px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded shadow-xs flex items-center gap-1">
-          <span>✓ 选好了，完成选择 (收起)</span>
+          <span>✓ Done Selecting (Collapse)</span>
         </button>
       </div>
     </div>
@@ -291,9 +291,9 @@
       <div>
         <div class="flex items-center justify-between mb-1">
           <label class="block text-xs text-gray-500 font-medium">📝 Homework</label>
-          <span class="text-[11px] text-gray-400">系统将无条件自动关联同页码练习册</span>
+          <span class="text-[11px] text-gray-400">Matching workbook exercises are automatically linked</span>
         </div>
-        <textarea id="fb-homework" rows="2" placeholder="完成练习册对应页码练习题，巩固本课所学..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea>
+        <textarea id="fb-homework" rows="2" placeholder="Complete the workbook exercises to reinforce today's lesson..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea>
       </div>
       <!-- 🎯 Next Lesson Preview -->
       <div class="pt-2 border-t border-purple-200/70">
@@ -1071,30 +1071,25 @@ async function onUnitSelectChange() {
   autoSyncHomeworkText();
 }
 
-// ===== 📖 练习册作业页码无条件自动对齐 =====
+// ===== 📖 Auto-sync Homework Text (English, No Page Numbers) =====
 function autoSyncHomeworkText() {
   var hwArea = document.getElementById('fb-homework');
   if (!hwArea) return;
-  var from = document.getElementById('fb-page-from') ? parseInt(document.getElementById('fb-page-from').value, 10) : null;
-  var to = document.getElementById('fb-page-to') ? parseInt(document.getElementById('fb-page-to').value, 10) : null;
   var unitSelect = document.getElementById('fb-unit-select');
   var unitVal = unitSelect ? unitSelect.value : (document.getElementById('fb-unit-num')?.value || '');
   var curVal = hwArea.value.trim();
 
-  // 如果老师选定了页码，生成精简对齐模板
-  var pageStr = (from && to && !isNaN(from) && !isNaN(to) && from <= to) 
-    ? (from === to ? ('P' + from) : ('P' + from + '-P' + to)) 
-    : '';
-  var autoTpl = pageStr 
-    ? ('完成练习册对应页码 (' + pageStr + ') 练习题，巩固本课所学内容。')
-    : (unitVal ? ('完成练习册 Unit ' + unitVal + ' 配套练习题，巩固本课所学内容。') : '');
+  // No page numbers; strictly English
+  var autoTpl = unitVal 
+    ? ('Complete Workbook Unit ' + unitVal + ' exercises to reinforce today\'s lesson.')
+    : 'Complete the workbook exercises to reinforce today\'s lesson.';
 
   if (!curVal) {
-    if (autoTpl) hwArea.value = autoTpl;
+    hwArea.value = autoTpl;
   } else {
-    // 如果已有文本符合自动化模板特征，则无缝实时更新页码，防止残留旧单元页码
-    var isAutoTpl = /完成(?:练习册|Workbook Unit \d+).*练习题.*/.test(curVal);
-    if (isAutoTpl && autoTpl) {
+    // If current text matches auto template (in English or old Chinese), seamlessly update
+    var isAutoTpl = /^(?:Complete (?:the )?[Ww]orkbook.*|完成(?:练习册|Workbook).*)/i.test(curVal);
+    if (isAutoTpl) {
       hwArea.value = autoTpl;
     }
   }
@@ -1737,14 +1732,14 @@ function updateSuggestBtnLabel() {
   var count = selectedVocabSet.size;
   var arrow = isSuggestBoxOpen ? '▲' : '▼';
   if (count > 0) {
-    btn.innerHTML = '<span>✨ 已选 ' + count + ' 个词汇 (点击重新选词)</span> <span id="fb-suggest-toggle-arrow">' + arrow + '</span>';
+    btn.innerHTML = '<span>✨ ' + count + ' words selected (Edit)</span> <span id="fb-suggest-toggle-arrow">' + arrow + '</span>';
     btn.className = 'text-xs px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-md shadow-2xs flex items-center gap-1.5 transition-colors';
   } else {
-    btn.innerHTML = '<span>✨ 从教材库智能选词</span> <span id="fb-suggest-toggle-arrow">' + arrow + '</span>';
+    btn.innerHTML = '<span>✨ Suggest from Textbook</span> <span id="fb-suggest-toggle-arrow">' + arrow + '</span>';
     btn.className = 'text-xs px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold rounded-md border border-purple-200 flex items-center gap-1.5 transition-colors shadow-2xs';
   }
   var countEl = document.getElementById('fb-suggest-selected-count');
-  if (countEl) countEl.textContent = '已选 ' + count + ' 个词汇';
+  if (countEl) countEl.textContent = count + ' words selected';
 }
 
 async function refreshTextbookSuggestions(overrideUnit) {
@@ -1959,23 +1954,23 @@ function renderPagesPreview() {
 
   var html = '<div class="mt-2 p-2 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">';
   html += '<div class="text-xs text-gray-700 flex items-center gap-1.5">';
-  html += '<span>📄</span> <span><b>' + escapeHtml(code) + '</b> · 第 ' + from + '-' + to + ' 页 (共 ' + pageCount + ' 页切片)</span>';
+  html += '<span>📄</span> <span><b>' + escapeHtml(code) + '</b> · Pages ' + from + '-' + to + ' (' + pageCount + ' pages)</span>';
   html += '</div>';
   html += '<button type="button" onclick="togglePagesPreview()" class="text-xs px-2.5 py-1 bg-white hover:bg-gray-100 text-indigo-600 font-semibold border border-indigo-200 rounded shadow-2xs transition-colors">';
-  html += isPagesPreviewOpen ? '收起课本切片 ▲' : '👁️ 预览课本切片 (' + pageCount + '页) ▼';
+  html += isPagesPreviewOpen ? 'Collapse Preview ▲' : '👁️ Preview Book Pages (' + pageCount + ' pages) ▼';
   html += '</button>';
   html += '</div>';
 
   if (isPagesPreviewOpen) {
     html += '<div class="mt-2 p-2.5 bg-white border border-indigo-100 rounded-lg shadow-xs">';
     html += '<div class="flex items-center justify-between mb-2 text-xs text-gray-500">';
-    html += '<span>点击单页可在新标签页放大查看：</span>';
-    html += '<button type="button" onclick="togglePagesPreview()" class="text-xs text-gray-400 hover:text-gray-600">✕ 收起</button>';
+    html += '<span>Click any page to enlarge in a new tab:</span>';
+    html += '<button type="button" onclick="togglePagesPreview()" class="text-xs text-gray-400 hover:text-gray-600">✕ Close</button>';
     html += '</div>';
     html += '<div class="grid grid-cols-4 sm:grid-cols-6 gap-1.5">';
     for (var p = from; p <= to; p++) {
       var url = API_BASE + '/textbooks/page-img/' + encodeURIComponent(code) + '/' + encodeURIComponent(unit || '0') + '/' + p;
-      html += '<a href="' + url + '" target="_blank" class="block border rounded-lg overflow-hidden hover:shadow-md bg-white text-center transition-all group" title="第 ' + p + ' 页 (点击放大)">';
+      html += '<a href="' + url + '" target="_blank" class="block border rounded-lg overflow-hidden hover:shadow-md bg-white text-center transition-all group" title="Page ' + p + ' (click to enlarge)">';
       html += '<div class="h-20 sm:h-24 overflow-hidden bg-gray-50 flex items-center justify-center p-0.5">';
       html += '<img src="' + url + '" alt="P' + p + '" class="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform" loading="lazy" onerror="this.parentElement.innerHTML=\'<span class=\\\'text-[10px] text-gray-400\\\'>P' + p + '</span>\'">';
       html += '</div>';
@@ -1984,7 +1979,7 @@ function renderPagesPreview() {
     }
     html += '</div>';
     html += '<div class="mt-2 p-1.5 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800">';
-    html += '💡 <b>跨单元提示：</b> 若涉及跨课（如 Lesson 12 & 13），可在上方输入框写 <b>12-13</b>，系统将自动合并！';
+    html += '💡 <b>Tip for Cross-Lesson:</b> If this class covers multiple lessons (e.g. Lesson 12 & 13), enter <b>12-13</b> in the Unit/Lesson field above. Content will be merged automatically!';
     html += '</div>';
     html += '</div>';
   }
