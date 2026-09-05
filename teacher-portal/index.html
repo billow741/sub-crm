@@ -659,18 +659,21 @@ function showViewFeedback(idx) {
 
   // 📹 Lesson Recording
   if (cls.fb_recording_r2_key || cls.fb_recording_status === 'ready') {
-    html += '<div class="border border-blue-200 rounded-lg p-3 bg-blue-50/60 space-y-2">';
-    html += '<div class="font-medium text-blue-900 text-sm flex items-center justify-between">';
+    html += '<div class="border border-blue-200 rounded-lg p-3 bg-blue-50/60 flex items-center justify-between flex-wrap gap-2">';
+    html += '<div>';
+    html += '<div class="font-medium text-blue-900 text-sm flex items-center gap-1.5 mb-0.5">';
     html += '<span class="flex items-center gap-1.5"><span>📹</span> Lesson Recording (Cloud HD)</span>';
     html += '<span class="text-[11px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">✅ Archived to Cloud</span>';
     html += '</div>';
-    html += '<video controls playsinline class="w-full rounded-lg bg-black max-h-60" style="max-height:240px;" preload="metadata">';
-    html += '<source src="' + API_BASE + '/classes/video/' + cls.id + '" type="video/mp4">';
-    html += 'Your browser does not support HTML5 video.';
-    html += '</video>';
-    html += '<div class="flex items-center justify-between text-xs text-gray-500 pt-1">';
-    html += '<span>💡 Supports playback speed and seeking</span>';
-    html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" download="lesson_' + cls.id + '.mp4" class="text-blue-600 hover:underline">⬇️ Download Video</a>';
+    html += '<p class="text-xs text-gray-500">HD cloud recording ready for playback and review</p>';
+    html += '</div>';
+    html += '<div class="flex items-center gap-2">';
+    html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all">';
+    html += '▶️ Play Video';
+    html += '</a>';
+    html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" download="lesson_' + cls.id + '.mp4" class="text-xs text-blue-600 hover:underline px-2 py-1">';
+    html += '⬇️ Download';
+    html += '</a>';
     html += '</div>';
     html += '</div>';
   } else if (cls.fb_recording) {

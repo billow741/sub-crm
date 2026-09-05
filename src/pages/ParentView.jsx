@@ -445,28 +445,29 @@ function ParentStudentView() {
 
                         {/* 录播回放 */}
                         {cls.fb_recording_r2_key || cls.fb_recording_status === 'ready' ? (
-                          <div className="mt-2 bg-slate-900 border border-slate-700 p-3 rounded-lg text-white">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sky-400 text-xs font-bold flex items-center gap-1">📹 课堂录播回放 (私有高清)</span>
-                              <span className="text-[10px] px-2 py-0.5 bg-emerald-900/80 text-emerald-300 font-semibold rounded-full">✅ 已归档</span>
+                          <div className="mt-2 bg-slate-900 border border-slate-700 p-3 rounded-lg text-white flex items-center justify-between flex-wrap gap-2">
+                            <div>
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className="text-sky-400 text-xs font-bold flex items-center gap-1">📹 课堂录播回放 (私有高清)</span>
+                                <span className="text-[10px] px-2 py-0.5 bg-emerald-900/80 text-emerald-300 font-semibold rounded-full">✅ 已归档</span>
+                              </div>
+                              <p className="text-[11px] text-slate-400">支持在新窗口播放、全屏与倍速控制</p>
                             </div>
-                            <video
-                              controls
-                              playsInline
-                              className="w-full rounded bg-black max-h-56"
-                              preload="metadata"
-                            >
-                              <source src={`${API_BASE_URL}/classes/video/${cls.id}`} type="video/mp4" />
-                              您的浏览器不支持视频播放
-                            </video>
-                            <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
-                              <span>💡 支持倍速、全屏播放与进度拖拽</span>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`${API_BASE_URL}/classes/video/${cls.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm"
+                              >
+                                ▶️ 播放录播视频
+                              </a>
                               <a
                                 href={`${API_BASE_URL}/classes/video/${cls.id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 download={`lesson_${cls.id}.mp4`}
-                                className="text-sky-400 hover:underline"
+                                className="text-xs text-sky-400 hover:underline px-2 py-1"
                               >
                                 ⬇️ 下载保存
                               </a>

@@ -828,18 +828,21 @@ function showDetailFeedback(classId) {
       ${(c.fb_teacher_message || c.feedback) ? `<div class="mb-4"><h3 class="text-sm font-medium text-gray-700 mb-1">💌 老师反馈</h3><div class="bg-blue-50/60 rounded-lg p-3 text-sm text-gray-700 whitespace-pre-wrap">${esc(c.fb_teacher_message || c.feedback)}</div></div>` : ''}
       ${(c.fb_homework || c.homework) ? `<div class="mb-4"><h3 class="text-sm font-medium text-gray-700 mb-1">📝 课后作业</h3><div class="bg-orange-50/60 rounded-lg p-3 text-sm text-gray-700 whitespace-pre-wrap">${esc(c.fb_homework || c.homework)}</div></div>` : ''}
       ${c.fb_recording_r2_key || c.fb_recording_status === 'ready' ? `
-        <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-bold text-blue-900 flex items-center gap-1"><span>📹</span> 课堂录播回放 (私有高清)</h3>
-            <span class="text-[11px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">✅ 已归档</span>
+        <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <div class="text-sm font-bold text-blue-900 flex items-center gap-1 mb-0.5">
+              <span>📹</span> 课堂录播回放 (私有高清)
+              <span class="text-[11px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium ml-1">✅ 已归档</span>
+            </div>
+            <p class="text-xs text-gray-500">支持在新窗口播放、全屏与倍速控制</p>
           </div>
-          <video controls playsinline class="w-full rounded-lg bg-black max-h-60" style="max-height:220px;" preload="metadata">
-            <source src="${API}/classes/video/${c.id}" type="video/mp4">
-            浏览器不支持视频播放
-          </video>
-          <div class="flex justify-between items-center text-xs text-gray-500 pt-1">
-            <span>💡 支持倍速、全屏播放</span>
-            <a href="${API}/classes/video/${c.id}" target="_blank" download="lesson_${c.id}.mp4" class="text-blue-600 hover:underline">⬇️ 下载视频</a>
+          <div class="flex items-center gap-2">
+            <a href="${API}/classes/video/${c.id}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm">
+              ▶️ 播放录播视频
+            </a>
+            <a href="${API}/classes/video/${c.id}" target="_blank" download="lesson_${c.id}.mp4" class="text-xs text-blue-600 hover:underline px-2 py-1">
+              ⬇️ 下载保存
+            </a>
           </div>
         </div>
       ` : c.fb_recording ? (() => {

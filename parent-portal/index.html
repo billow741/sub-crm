@@ -2440,15 +2440,12 @@ function showViewFeedback(idx) {
     html += '<label style="margin:0;font-size:13px;font-weight:700;color:#1E293B;">📹 课堂录播回放 (私有高清)</label>';
     html += '<span style="font-size:11px;padding:2px 8px;background:#DCFCE7;color:#15803D;border-radius:12px;font-weight:600;">✅ 已归档</span>';
     html += '</div>';
-    html += '<div class="modal-feedback__box" style="background:#0F172A;border:1px solid #334155;border-radius:12px;padding:8px;">';
-    html += '<video controls playsinline style="width:100%;max-height:260px;border-radius:8px;outline:none;background:#000;" preload="metadata">';
-    html += '<source src="' + API_BASE + '/classes/video/' + cls.id + '" type="video/mp4">';
-    html += '您的浏览器暂不支持直接播放该视频';
-    html += '</video>';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px 2px;font-size:11px;color:#94A3B8;">';
-    html += '<span>💡 支持倍速、全屏播放与进度拖拽复习</span>';
-    html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" download="lesson_' + cls.id + '.mp4" style="color:#38BDF8;text-decoration:none;">⬇️ 下载保存</a>';
+    html += '<div class="modal-feedback__box" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">';
+    html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+    html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;box-shadow:0 2px 6px rgba(37,99,235,0.25);">▶️ 播放录播视频</a>';
+    html += '<span style="font-size:11px;color:#64748B;">💡 点击在新窗口直接播放，支持全屏与倍速</span>';
     html += '</div>';
+    html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" download="lesson_' + cls.id + '.mp4" style="color:#2563EB;font-size:12px;text-decoration:none;font-weight:600;">⬇️ 下载保存</a>';
     html += '</div></div>';
   } else if (cls.fb_recording) {
     var rec = parseRecordingInfo(cls.fb_recording);
@@ -3355,7 +3352,7 @@ function renderStudyProfile(student, allClasses) {
 
         // 📹 录播回放
         if (c.fb_recording_r2_key || c.fb_recording_status === 'ready') {
-          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;"><span>📹 录播回放 (私有高清)</span><span style="font-size:10px;color:#15803D;font-weight:600;">✅ 已归档</span></div><div class="sp-feedback-text" style="padding:6px;background:#0F172A;border-radius:8px;"><video controls playsinline style="width:100%;max-height:200px;border-radius:6px;outline:none;background:#000;" preload="metadata"><source src="' + API_BASE + '/classes/video/' + c.id + '" type="video/mp4"></video></div></div>';
+          histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;"><span>📹 录播回放 (私有高清)</span><span style="font-size:10px;color:#15803D;font-weight:600;">✅ 已归档</span></div><div class="sp-feedback-text" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:4px 0;"><a href="' + API_BASE + '/classes/video/' + c.id + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 2px 6px rgba(37,99,235,0.25);">▶️ 播放录播视频</a><a href="' + API_BASE + '/classes/video/' + c.id + '" target="_blank" download="lesson_' + c.id + '.mp4" style="display:inline-flex;align-items:center;gap:4px;color:#64748B;font-size:12px;text-decoration:none;padding:6px 10px;border-radius:6px;background:#F1F5F9;">⬇️ 下载保存</a></div></div>';
         } else if (c.fb_recording) {
           var rec = parseRecordingInfo(c.fb_recording);
           if (rec && rec.url) {
