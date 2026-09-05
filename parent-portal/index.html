@@ -2472,7 +2472,7 @@ function showViewFeedback(idx) {
   var lNum = cls.fb_lesson;
   
   var progInner = '';
-  var isLessonBased = cls.textbook_code && (cls.textbook_code.includes('WE') || cls.textbook_code.includes('Phonics'));
+  var isLessonBased = (cls.fb_lesson && !cls.fb_unit) || (cls.textbook_code && cls.textbook_code.startsWith('WE'));
   var unitPrefix = isLessonBased ? 'Lesson ' : 'Unit ';
   var rawUnit = cls.fb_lesson || cls.fb_unit || cls.unit_number;
   var displayUnit = rawUnit ? String(rawUnit) : '';
@@ -2757,7 +2757,7 @@ function renderHomeworkTab(pastClasses) {
   // 1. 最新课后作业与配套资料 (Hero Card)
   var latest = hwClasses[0];
   var bFullName = getBookName(latest.textbook_code);
-  var isLessonBased = latest.textbook_code && (latest.textbook_code.includes('WE') || latest.textbook_code.includes('Phonics'));
+  var isLessonBased = (latest.fb_lesson && !latest.fb_unit) || (latest.textbook_code && latest.textbook_code.startsWith('WE'));
   var unitPrefix = isLessonBased ? 'Lesson ' : 'Unit ';
   var rawUnit = latest.fb_lesson || latest.fb_unit || latest.unit_number;
   var displayUnit = rawUnit ? String(rawUnit) : '';
@@ -3375,7 +3375,7 @@ function renderStudyProfile(student, allClasses) {
         
         // 1. 计算是否有教材切片或练习册切片
         var bFullName = getBookName(c.textbook_code);
-        var isLessonBased = c.textbook_code && (c.textbook_code.includes('WE') || c.textbook_code.includes('Phonics'));
+        var isLessonBased = (c.fb_lesson && !c.fb_unit) || (c.textbook_code && c.textbook_code.startsWith('WE'));
         var unitPrefix = isLessonBased ? 'Lesson ' : 'Unit ';
         var rawUnit = c.fb_lesson || c.fb_unit || c.unit_number;
         var displayUnit = rawUnit ? String(rawUnit) : '';

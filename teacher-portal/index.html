@@ -631,7 +631,7 @@ function showViewFeedback(idx) {
 
   // 📖 Textbook Pages (Embedded PDF page scans)
   if (cls.textbook_code && (cls.unit_number || cls.fb_unit || cls.fb_lesson) && cls.page_from && cls.page_to) {
-    var isLesson = (cls.textbook_code.includes('WE') || cls.textbook_code.includes('Phonics'));
+    var isLesson = (cls.textbook_code.startsWith('WE') || (cls.fb_lesson && !cls.fb_unit));
     var prefix = isLesson ? 'Lesson ' : 'Unit ';
     var rawUnit = cls.fb_lesson || cls.fb_unit || cls.unit_number;
     var displayUnit = rawUnit ? String(rawUnit) : '';
@@ -1068,8 +1068,8 @@ async function onTextbookChange() {
     return;
   }
 
-  // Determine if Lesson or Unit
-  var isLesson = code.includes('WE') || code.includes('Phonics') || (sel.selectedOptions && sel.selectedOptions[0] && sel.selectedOptions[0].text.toLowerCase().includes('phonics'));
+  // Determine if Lesson or Unit (WhaleEnglish uses Lesson, Oxford Phonics / Everybody Up use Unit)
+  var isLesson = code.startsWith('WE');
   var unitPrefix = isLesson ? 'Lesson' : 'Unit';
   if (labelEl) labelEl.textContent = unitPrefix;
 
@@ -1083,6 +1083,22 @@ async function onTextbookChange() {
     var bookData = res.data;
     var units = (bookData && bookData.units) ? bookData.units : [];
     window_textbookUnitsMap[code] = units;
+
+    // Dynamically adjust prefix based on actual structure_type or unit titles
+    var structType = 'unit';
+    if (bookData && bookData.content_schema) {
+      try {
+        var cs = typeof bookData.content_schema === 'string' ? JSON.parse(bookData.content_schema) : bookData.content_schema;
+        if (cs.structure_type) structType = cs.structure_type;
+      } catch(_) {}
+    } else if (units.some(function(u) { return (u.unit_title || '').toLowerCase().startsWith('lesson'); })) {
+      structType = 'lesson';
+    } else if (code.startsWith('WE')) {
+      structType = 'lesson';
+    }
+    isLesson = structType === 'lesson';
+    unitPrefix = isLesson ? 'Lesson' : (structType === 'chapter' ? 'Chapter' : (structType === 'story' ? 'Story' : 'Unit'));
+    if (labelEl) labelEl.textContent = unitPrefix;
 
     if (unitSelect) {
       unitSelect.disabled = false;
@@ -1128,7 +1144,7 @@ async function onUnitSelectChange() {
   if (unitNumInput) unitNumInput.value = unitVal;
 
   // Sync Lesson Info Unit/Lesson fields
-  var isLesson = code.includes('WE') || code.includes('Phonics');
+  var isLesson = code.startsWith('WE');
   var fbUnitInput = document.getElementById('fb-unit');
   var fbLessonInput = document.getElementById('fb-lesson');
   if (unitVal !== '') {
@@ -1483,7 +1499,7 @@ async function onNextLessonPagesChange() {
   var nextUnitNumInput = document.getElementById('fb-next-unit-num');
   if (nextUnitNumInput) nextUnitNumInput.value = nextUnit;
 
-  var isLesson = tbCode.includes('WE') || tbCode.includes('Phonics');
+  var isLesson = tbCode.startsWith('WE');
   var pfx = isLesson ? 'Lesson' : 'Unit';
 
   var pRangeStr = (nextTo && nextTo >= nextFrom) ? ('Pages ' + nextFrom + '-' + nextTo) : ('Page ' + nextFrom);
@@ -2126,7 +2142,7 @@ function renderPagesPreview() {
   if (!box) return;
   if (!code || isNaN(from) || isNaN(to) || from > to) { box.innerHTML = ''; return; }
 
-  var isLesson = code.includes('WE') || code.includes('Phonics');
+  var isLesson = code.startsWith('WE');
   var pageCount = to - from + 1;
 
   var html = '<div class="mt-2 p-2 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">';

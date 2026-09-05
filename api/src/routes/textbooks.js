@@ -60,15 +60,25 @@ textbooks.get('/suggest', async (c) => {
   // 查询所有涉及 unit 的 content
   const placeholders = unitNumbers.map(() => '?').join(',');
   const contents = await DB.prepare(`
-    SELECT uc.unit_number, uc.vocab, uc.patterns, uc.grammar, u.unit_title
+    SELECT uc.unit_number, uc.vocab, uc.patterns, uc.grammar, u.unit_title, b.content_schema
     FROM unit_content uc
     LEFT JOIN textbook_units u ON u.textbook_code = uc.textbook_code AND u.unit_number = uc.unit_number
+    LEFT JOIN textbooks b ON b.code = uc.textbook_code
     WHERE uc.textbook_code = ? AND uc.unit_number IN (${placeholders})
     ORDER BY uc.unit_number ASC
   `).bind(code, ...unitNumbers).all();
 
-  const isLessonBased = code.includes('WE') || code.includes('Phonics');
-  const prefix = isLessonBased ? 'Lesson ' : 'Unit ';
+  let structType = 'unit';
+  const firstRow = contents.results?.[0];
+  if (firstRow?.content_schema) {
+    try {
+      const cs = JSON.parse(firstRow.content_schema);
+      if (cs.structure_type) structType = cs.structure_type;
+    } catch (_) {}
+  } else if (code.startsWith('WE-') || code.includes('WE')) {
+    structType = 'lesson';
+  }
+  const prefix = structType === 'lesson' ? 'Lesson ' : (structType === 'chapter' ? 'Chapter ' : (structType === 'story' ? 'Story ' : 'Unit '));
 
   let allVocab = [];
   let allPatterns = [];
@@ -77,7 +87,10 @@ textbooks.get('/suggest', async (c) => {
 
   (contents.results || []).forEach(row => {
     if (row.unit_title) {
-      titleParts.push(prefix + row.unit_number + ' (' + row.unit_title + ')');
+      const uTitle = row.unit_title.startsWith('Unit') || row.unit_title.startsWith('Lesson')
+        ? row.unit_title
+        : prefix + row.unit_number + ' (' + row.unit_title + ')';
+      titleParts.push(uTitle);
     }
     try {
       const vList = JSON.parse(row.vocab || '[]');
@@ -1881,12 +1894,20 @@ textbooks.post('/books-manage', async (c) => {
   const existing = await DB.prepare('SELECT id FROM textbooks WHERE code = ?').bind(body.code).first();
   if (existing) return c.json({ error: { code: 'CONFLICT', message: `code ${body.code} 已存在` } }, 409);
 
-  const structType = body.structure_type || (body.name?.toLowerCase().includes('phonics') ? 'lesson' : 'unit');
-  const schemaJson = body.content_schema
-    ? (typeof body.content_schema === 'object' ? JSON.stringify(body.content_schema) : body.content_schema)
-    : (body.name?.toLowerCase().includes('phonics') || structType === 'lesson'
-        ? JSON.stringify(DEFAULT_CONTENT_SCHEMAS.phonics)
-        : JSON.stringify(DEFAULT_CONTENT_SCHEMAS.general_english));
+  const structType = body.structure_type
+    || (body.content_schema && typeof body.content_schema === 'object' ? body.content_schema.structure_type : null)
+    || (body.code?.startsWith('WE-') ? 'lesson' : 'unit');
+
+  let schemaObj = {};
+  if (body.content_schema) {
+    schemaObj = typeof body.content_schema === 'object' ? { ...body.content_schema } : JSON.parse(body.content_schema || '{}');
+  } else if (body.name?.toLowerCase().includes('phonics') || body.code?.toLowerCase().includes('phonics')) {
+    schemaObj = { ...DEFAULT_CONTENT_SCHEMAS.phonics };
+  } else {
+    schemaObj = { ...DEFAULT_CONTENT_SCHEMAS.general_english };
+  }
+  schemaObj.structure_type = structType;
+  const schemaJson = JSON.stringify(schemaObj);
 
   const r = await DB.prepare(
     `INSERT INTO textbooks (code, name, series, level, publisher, total_units, description, content_schema, is_active)
@@ -1919,11 +1940,15 @@ textbooks.post('/init-units/:code', async (c) => {
   let body = {};
   try { body = await c.req.json(); } catch {}
 
-  const book = await DB.prepare('SELECT id, name, total_units FROM textbooks WHERE code = ?').bind(code).first();
+  const book = await DB.prepare('SELECT id, name, total_units, content_schema FROM textbooks WHERE code = ?').bind(code).first();
   if (!book) return c.json({ error: { code: 'NOT_FOUND', message: '教材不存在' } }, 404);
 
   const total = book.total_units || 8;
-  const structType = body.structure_type || (book.name?.toLowerCase().includes('phonics') ? 'lesson' : 'unit');
+  let savedStruct = null;
+  if (book.content_schema) {
+    try { savedStruct = JSON.parse(book.content_schema).structure_type; } catch (_) {}
+  }
+  const structType = body.structure_type || savedStruct || (code.startsWith('WE-') ? 'lesson' : 'unit');
   const prefix = structType === 'lesson' ? 'Lesson' : structType === 'chapter' ? 'Chapter' : structType === 'story' ? 'Story' : 'Unit';
   
   let added = 0;
@@ -3095,7 +3120,7 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
     // 老师预告文案
     let teacherNote = lastCompletedClass ? lastCompletedClass.fb_next_preview : null;
     if (!teacherNote) {
-      const isLesson = targetCode.includes('WE') || targetCode.includes('Phonics');
+      const isLesson = targetCode.startsWith('WE-') || (uc?.unit_title && uc.unit_title.toLowerCase().startsWith('lesson'));
       const pfx = isLesson ? 'Lesson' : 'Unit';
       const pageInfo = (targetPageFrom && targetPageTo) ? `Pages ${targetPageFrom}-${targetPageTo}` : (targetPageFrom ? `Page ${targetPageFrom}` : `${pfx} ${targetUnit}`);
       teacherNote = `${pageInfo}: Learn target vocabulary and practice sentence patterns.`;

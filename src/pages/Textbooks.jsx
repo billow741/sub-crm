@@ -877,9 +877,10 @@ export default function Textbooks() {
                 const isSelected = u.unit_number === selectedUnitNum;
                 const hasContent = u.has_content || u.content_count > 0;
                 const title = u.unit_title || `Unit ${u.unit_number}`;
-                const isLesson = title.toLowerCase().includes('lesson') || selectedBook?.name?.toLowerCase().includes('phonics');
-                const isChapter = title.toLowerCase().includes('chapter');
-                const isStory = title.toLowerCase().includes('story');
+                const bookStruct = selectedBook?.content_schema?.structure_type || selectedBook?.structure_type;
+                const isLesson = bookStruct === 'lesson' || (!bookStruct && title.toLowerCase().includes('lesson'));
+                const isChapter = bookStruct === 'chapter' || (!bookStruct && title.toLowerCase().includes('chapter'));
+                const isStory = bookStruct === 'story' || (!bookStruct && title.toLowerCase().includes('story'));
                 const badgeText = isLesson ? `L${u.unit_number}` : isChapter ? `Ch${u.unit_number}` : isStory ? `St${u.unit_number}` : `U${u.unit_number}`;
 
                 return (
@@ -2002,10 +2003,11 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
   
   // 页码偏移量 (PDF 真实页码 = 课本印刷页码 + pageOffset)
   // 若课本第 6 页在 PDF 中就是第 6 页，则 offset = 0
-  const isPhonics = bookCode?.includes('P') || bookCode?.toLowerCase().includes('phonics');
-  const [pageOffset, setPageOffset] = useState(isPhonics ? 0 : 2);
+  const isLessonStructure = bookSchema?.structure_type === 'lesson' || (!bookSchema?.structure_type && bookCode?.startsWith('WE-P'));
+  const isPhonics = bookCode?.startsWith('WE-P') || bookSchema?.type === 'phonics';
+  const [pageOffset, setPageOffset] = useState(bookCode?.startsWith('WE') ? 0 : 2);
   const [previewThumbnail, setPreviewThumbnail] = useState(null);
-  const [previewingPdfPage, setPreviewingPdfPage] = useState(isPhonics ? 6 : 4);
+  const [previewingPdfPage, setPreviewingPdfPage] = useState(bookCode?.startsWith('WE') ? 6 : 4);
 
   // 单元目录大纲列表
   const [outline, setOutline] = useState(() => {
@@ -2048,8 +2050,8 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
 
   const [showRuleGenerator, setShowRuleGenerator] = useState(false);
   const [ruleConfig, setRuleConfig] = useState({
-    prefix: 'Lesson',
-    totalCount: 16,
+    prefix: isLessonStructure ? 'Lesson' : 'Unit',
+    totalCount: isLessonStructure ? 16 : 8,
     startPage: 4,
     pagesPerLesson: 4,
     includeWelcome: false
@@ -2295,12 +2297,13 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
       const json = await resp.json();
 
       if (json.data?.units && json.data.units.length > 0) {
-        const hasLessonKeyword = isPhonics || json.data.units.some(x => (x.unit_title || '').toLowerCase().includes('lesson'));
+        const structType = bookSchema?.structure_type || (json.data.units.some(x => (x.unit_title || '').toLowerCase().includes('lesson')) ? 'lesson' : 'unit');
+        const defaultPrefix = structType === 'lesson' ? 'Lesson ' : (structType === 'chapter' ? 'Chapter ' : (structType === 'story' ? 'Story ' : 'Unit '));
         const detected = json.data.units.map((u, i) => {
           const rawTitle = u.unit_title || '';
           return {
             unit_number: u.unit_number !== undefined ? u.unit_number : i + 1,
-            unit_title: rawTitle || (hasLessonKeyword ? `Lesson ${u.unit_number}` : `Unit ${u.unit_number}`),
+            unit_title: rawTitle || `${defaultPrefix}${u.unit_number !== undefined ? u.unit_number : i + 1}`,
             page_from: parseInt(u.page_from) || 4,
             page_to: parseInt(u.page_to) || (parseInt(u.page_from) + 3 || 7),
             selected: true,
@@ -3298,7 +3301,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {(() => {
-                        const isLessonMode = isPhonics || outline.some(it => (it.unit_title || '').toLowerCase().includes('lesson'));
+                        const isLessonMode = bookSchema?.structure_type === 'lesson' || (!bookSchema?.structure_type && outline.some(it => (it.unit_title || '').toLowerCase().includes('lesson')));
                         return outline.map((u, idx) => {
                           const pdfFrom = u.page_from + pageOffset;
                           const pdfTo = u.page_to + pageOffset;
@@ -3535,10 +3538,12 @@ function BooksManageModal({ books, onClose }) {
     try {
       const schemaObj = {
         type: form.schema_type || 'general_english',
+        structure_type: form.structure_type || 'unit',
         target_age: form.target_age || (form.schema_type === 'phonics' ? '4-8' : '5-12')
       };
       const payload = {
         ...form,
+        structure_type: form.structure_type || 'unit',
         content_schema: schemaObj
       };
 
@@ -3639,8 +3644,8 @@ function BooksManageModal({ books, onClose }) {
                   onChange={e => setForm({ ...form, structure_type: e.target.value })}
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-medium text-gray-800"
                 >
-                  <option value="unit">按 Unit 单元 (如 Unit 1 ~ 8，适合综合课本)</option>
-                  <option value="lesson">按 Lesson 课时 (如 Lesson 1 ~ 16，适合拼读/专项)</option>
+                  <option value="unit">按 Unit 单元 (如 Unit 1 ~ 8，适合综合课本、Oxford Phonics 等)</option>
+                  <option value="lesson">按 Lesson 课时 (如 Lesson 1 ~ 16，适合 WhaleEnglish 拼读/专项)</option>
                   <option value="chapter">按 Chapter 章节 (如 Chapter 1 ~ 10，适合阅读)</option>
                   <option value="story">按 Story 故事/绘本 (适合绘本分级)</option>
                 </select>
@@ -3655,7 +3660,9 @@ function BooksManageModal({ books, onClose }) {
                   value={form.schema_type || 'general_english'}
                   onChange={e => {
                     const t = e.target.value;
-                    const struct = t === 'phonics' ? 'lesson' : (t === 'graded_reader' ? 'story' : form.structure_type);
+                    // 自然拼读教材既有按 Unit 划分的 (如 Oxford Phonics World)，也有按 Lesson 划分的 (如 WhaleEnglish)
+                    // 不强制覆盖用户所选的结构类型
+                    const struct = t === 'graded_reader' ? 'story' : form.structure_type;
                     setForm({ ...form, schema_type: t, structure_type: struct });
                   }}
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-medium text-gray-800"
@@ -3751,7 +3758,7 @@ function BooksManageModal({ books, onClose }) {
                           code: b.code,
                           name: b.name,
                           series: b.series || '',
-                          structure_type: b.structure_type || 'unit',
+                          structure_type: b.content_schema?.structure_type || b.structure_type || (b.code?.startsWith('WE-') ? 'lesson' : 'unit'),
                           level: b.level || 'A1',
                           publisher: b.publisher || 'Oxford',
                           total_units: b.total_units || 8,
