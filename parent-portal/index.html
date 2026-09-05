@@ -1035,6 +1035,11 @@
       .sp-toggle-btn { font-size: 12px; font-weight: 600; color: var(--sb-blue); display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; background: rgba(75,159,224,0.08); border: none; pointer-events: none; }
       .sp-arrow-icon { transition: transform 0.25s ease; display: inline-block; font-size: 10px; }
       .sp-arrow-icon.open { transform: rotate(180deg); }
+      /* Summary Card (课后总结聚合卡片，对齐教师端) */
+      .sp-summary-card {
+        max-width: 100%;
+        box-sizing: border-box;
+      }
       /* Card Subtabs (分栏选项卡: 课后总结 vs 教材与作业) */
       .sp-card-subtabs {
         display: flex;
@@ -2158,13 +2163,7 @@ function showViewFeedback(idx) {
     html += '<div class="modal-feedback__group"><label>📅 课程与教材进度</label><div class="modal-feedback__box">' + progInner + '</div></div>';
   }
 
-  // 2. 💌 老师课后反馈 (置顶！突出核心评价)
-  var teacherMsg = cls.fb_teacher_message || cls.feedback;
-  if (teacherMsg) {
-    html += '<div class="modal-feedback__group"><label>💌 老师课后寄语与反馈</label><div class="modal-feedback__box" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:12px 14px;border-radius:10px;font-size:13.5px;line-height:1.6;font-weight:500;">' + esc(teacherMsg) + '</div></div>';
-  }
-
-  // 3. 📚 今日学习内容 (词汇、句型、语法)
+  // 2. 📚 今日学习内容 (词汇、句型、语法)
   if (cls.fb_vocab || cls.fb_patterns || cls.fb_grammar) {
     html += '<div class="modal-feedback__group"><label>📚 今日学习内容</label><div class="modal-feedback__box">';
     if (cls.fb_vocab) {
@@ -2179,21 +2178,42 @@ function showViewFeedback(idx) {
     html += '</div></div>';
   }
 
-  // 4. 🗣️ 发音纠正
+  // 3. 🗣️ 发音纠正
   html += errorsHtml(cls.fb_pronunciation_errors, '发音纠正', '🗣️');
 
-  // 5. 📝 语法纠正
+  // 4. 📝 语法纠正
   html += errorsHtml(cls.fb_grammar_errors, '语法纠正', '📝');
 
-  // 6. 📝 课后作业 (文字内容)
+  // 5. 📋 课后总结 Summary (与教师端顺序一致，位于发音/语法纠正下方，保留换行格式与饱满排版)
+  var teacherMsg = cls.fb_teacher_message || cls.feedback;
   var homework = cls.fb_homework || cls.homework;
   var preview = cls.fb_next_preview;
-  if (homework || preview) {
-    html += '<div class="modal-feedback__group"><label>📝 课后任务与预告</label><div class="modal-feedback__box">';
-    if (homework) {
-      html += '<div style="margin-bottom:8px;background:#fffdf7;border:1px solid #fef3c7;padding:10px 12px;border-radius:8px;color:#92400e;font-size:13px;line-height:1.5;"><b>📝 作业要求：</b>' + esc(homework) + '</div>';
+  if (teacherMsg || homework || preview) {
+    html += '<div class="modal-feedback__group" style="margin-top:14px;">';
+    html += '<label style="font-size:13.5px;font-weight:800;color:#6B21A8;display:flex;align-items:center;gap:6px;"><span>📋</span> Summary 课后总结</label>';
+    html += '<div style="background:linear-gradient(135deg,rgba(243,232,255,0.45) 0%,rgba(248,250,252,0.95) 100%);border:1px solid #E9D5FF;border-radius:12px;padding:12px 14px;box-shadow:0 1px 4px rgba(147,51,234,0.04);">';
+
+    if (teacherMsg) {
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="font-size:11.5px;font-weight:700;color:#374151;margin-bottom:4px;display:flex;align-items:center;gap:4px;"><span>💌</span> <span>Teacher\'s Feedback 老师反馈与寄语</span></div>';
+      html += '<div style="background:#FFFFFF;border:1px solid #E2E8F0;border-left:3.5px solid #8B5CF6;border-radius:8px;padding:10px 12px;font-size:13px;color:#1E293B;line-height:1.65;white-space:pre-wrap;word-break:break-word;">' + esc(teacherMsg) + '</div>';
+      html += '</div>';
     }
-    if (preview) html += '<div><b>🎯 下节课预告：</b>' + esc(preview) + '</div>';
+
+    if (homework) {
+      html += '<div style="margin-bottom:8px;">';
+      html += '<div style="font-size:11.5px;font-weight:700;color:#374151;margin-bottom:4px;display:flex;align-items:center;gap:4px;"><span>📝</span> <span>Homework 课后作业</span></div>';
+      html += '<div style="background:#FFFDF7;border:1px solid #FEF3C7;border-left:3.5px solid #F59E0B;padding:9px 12px;border-radius:8px;font-size:12.5px;color:#92400E;line-height:1.6;white-space:pre-wrap;word-break:break-word;">' + esc(homework) + '</div>';
+      html += '</div>';
+    }
+
+    if (preview) {
+      html += '<div>';
+      html += '<div style="font-size:11.5px;font-weight:700;color:#374151;margin-bottom:4px;display:flex;align-items:center;gap:4px;"><span>🎯</span> <span>Next Lesson Preview 下节预告</span></div>';
+      html += '<div style="background:#F0FDF4;border:1px solid #DCFCE7;border-left:3.5px solid #16A34A;padding:8px 12px;border-radius:8px;font-size:12px;color:#166534;line-height:1.5;white-space:pre-wrap;word-break:break-word;">' + esc(preview) + '</div>';
+      html += '</div>';
+    }
+
     html += '</div></div>';
   }
 
@@ -3069,17 +3089,6 @@ function renderStudyProfile(student, allClasses) {
         // ==================== PANE 1: 📝 课后总结 (默认激活，纯文本与重点高亮，无大图干扰) ====================
         histHtml += '<div id="card-pane-summary-' + c.id + '" class="card-pane-summary">';
 
-        // 💌 老师反馈 (最关键的课后总结，置顶醒目展示！)
-        if (c.fb_teacher_message) {
-          histHtml += '<div style="background:linear-gradient(135deg,rgba(75,159,224,0.08),rgba(99,102,241,0.06));border-left:4px solid #4B9FE0;padding:12px 14px;border-radius:10px;margin-bottom:12px;">';
-          histHtml += '<div style="font-size:12px;font-weight:700;color:#1E293B;display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">';
-          histHtml += '<span>💌 老师课后反馈与寄语</span>';
-          histHtml += '<span style="font-size:11px;color:#64748B;">执教: ' + spEsc(c.teacher_name || '-') + '</span>';
-          histHtml += '</div>';
-          histHtml += '<div style="font-size:13.5px;color:#334155;line-height:1.6;font-weight:500;">' + spEsc(c.fb_teacher_message) + '</div>';
-          histHtml += '</div>';
-        }
-
         // 📚 词汇
         if (c.fb_vocab) {
           histHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📚 核心词汇</div><div class="sp-feedback-text">' + spFormatVocabPills(c.fb_vocab) + '</div></div>';
@@ -3114,17 +3123,49 @@ function renderStudyProfile(student, allClasses) {
           } catch(ex) {}
         }
 
-        // 📝 课后作业要求 (纯文字，条理清晰)
-        if (c.fb_homework) {
-          histHtml += '<div class="sp-feedback-group">';
-          histHtml += '<div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;">';
-          histHtml += '<span>📝 课后作业</span>';
-          if (hasMaterials) {
-            histHtml += '<span style="font-size:11px;color:#4F46E5;font-weight:600;cursor:pointer;" onclick="switchCardSubtab(\'' + c.id + '\', \'materials\')">👉 查看配套练习册切片 (' + wbPageCount + '页)</span>';
+        // ===== 📋 课后总结 Summary (与教师端顺序一致，位于发音/语法纠正下方，饱满舒适宽度并保留换行排版) =====
+        var hasSummaryContent = !!(c.fb_teacher_message || c.fb_homework || c.fb_next_preview);
+        if (hasSummaryContent) {
+          histHtml += '<div class="sp-summary-card" style="margin-top:10px;margin-bottom:12px;background:linear-gradient(135deg,rgba(243,232,255,0.45) 0%,rgba(248,250,252,0.95) 100%);border:1px solid #E9D5FF;border-radius:12px;padding:12px 14px;box-shadow:0 1px 4px rgba(147,51,234,0.04);">';
+          histHtml += '<div style="font-size:12px;font-weight:800;color:#6B21A8;display:flex;align-items:center;gap:5px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(233,213,255,0.6);">';
+          histHtml += '<span>📋</span> <span>Summary 课后总结</span>';
+          histHtml += '</div>';
+
+          // 💌 老师反馈与寄语
+          if (c.fb_teacher_message) {
+            histHtml += '<div style="margin-bottom:10px;">';
+            histHtml += '<div style="font-size:11.5px;font-weight:700;color:#374151;display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">';
+            histHtml += '<span style="display:flex;align-items:center;gap:4px;"><span>💌</span> <span>Teacher\'s Feedback 老师反馈与寄语</span></span>';
+            histHtml += '<span style="font-size:11px;color:#6B7280;font-weight:normal;">执教: ' + spEsc(c.teacher_name || '-') + '</span>';
+            histHtml += '</div>';
+            histHtml += '<div style="background:#FFFFFF;border:1px solid #E2E8F0;border-left:3.5px solid #8B5CF6;border-radius:8px;padding:10px 12px;font-size:13px;color:#1E293B;line-height:1.65;white-space:pre-wrap;word-break:break-word;">' + spEsc(c.fb_teacher_message) + '</div>';
+            histHtml += '</div>';
           }
-          histHtml += '</div>';
-          histHtml += '<div class="sp-feedback-text" style="background:#FFFDF7;border:1px solid #FEF3C7;color:#92400E;padding:9px 12px;border-radius:8px;font-size:13px;line-height:1.5;">' + spEsc(c.fb_homework) + '</div>';
-          histHtml += '</div>';
+
+          // 📝 课后作业 (Homework)
+          if (c.fb_homework) {
+            histHtml += '<div style="margin-bottom:8px;">';
+            histHtml += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">';
+            histHtml += '<span style="font-size:11.5px;font-weight:700;color:#374151;display:flex;align-items:center;gap:4px;"><span>📝</span> <span>Homework 课后作业</span></span>';
+            if (hasMaterials) {
+              histHtml += '<span style="font-size:11px;color:#4F46E5;font-weight:600;cursor:pointer;" onclick="switchCardSubtab(\'' + c.id + '\', \'materials\')">👉 查看配套练习册 (' + wbPageCount + '页)</span>';
+            }
+            histHtml += '</div>';
+            histHtml += '<div style="background:#FFFDF7;border:1px solid #FEF3C7;border-left:3.5px solid #F59E0B;padding:9px 12px;border-radius:8px;font-size:12.5px;color:#92400E;line-height:1.6;white-space:pre-wrap;word-break:break-word;">' + spEsc(c.fb_homework) + '</div>';
+            histHtml += '</div>';
+          }
+
+          // 🎯 下节课预告 (Next Lesson Preview)
+          if (c.fb_next_preview) {
+            histHtml += '<div>';
+            histHtml += '<div style="font-size:11.5px;font-weight:700;color:#374151;margin-bottom:4px;display:flex;align-items:center;gap:4px;">';
+            histHtml += '<span>🎯</span> <span>Next Lesson Preview 下节预告</span>';
+            histHtml += '</div>';
+            histHtml += '<div style="background:#F0FDF4;border:1px solid #DCFCE7;border-left:3.5px solid #16A34A;padding:8px 12px;border-radius:8px;font-size:12px;color:#166534;line-height:1.5;white-space:pre-wrap;word-break:break-word;">' + spEsc(c.fb_next_preview) + '</div>';
+            histHtml += '</div>';
+          }
+
+          histHtml += '</div>'; // End sp-summary-card
         }
 
         // 👉 教材与练习册原件快捷引导卡片 (划入专区提示)
