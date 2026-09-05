@@ -3584,6 +3584,7 @@ function BooksManageModal({ books, onClose }) {
     name: '',
     series: '',
     structure_type: 'unit',
+    workbook_align: 'page',
     level: 'A1',
     publisher: 'Oxford',
     total_units: 8,
@@ -3603,6 +3604,7 @@ function BooksManageModal({ books, onClose }) {
       const schemaObj = {
         type: form.schema_type || 'general_english',
         structure_type: form.structure_type || 'unit',
+        workbook_align: form.workbook_align || (form.code?.startsWith('OPW') ? 'unit' : 'page'),
         target_age: form.target_age || (form.schema_type === 'phonics' ? '4-8' : '5-12')
       };
       const payload = {
@@ -3619,7 +3621,7 @@ function BooksManageModal({ books, onClose }) {
       const resp = await request('/textbooks');
       setList(resp.data || []);
       setEditingCode(null);
-      setForm({ code: '', name: '', series: '', structure_type: 'unit', level: 'A1', publisher: 'Oxford', total_units: 8, description: '', schema_type: 'general_english', target_age: '' });
+      setForm({ code: '', name: '', series: '', structure_type: 'unit', workbook_align: 'page', level: 'A1', publisher: 'Oxford', total_units: 8, description: '', schema_type: 'general_english', target_age: '' });
     } catch (err) {
       alert('保存失败: ' + err.message);
     }
@@ -3724,8 +3726,6 @@ function BooksManageModal({ books, onClose }) {
                   value={form.schema_type || 'general_english'}
                   onChange={e => {
                     const t = e.target.value;
-                    // 自然拼读教材既有按 Unit 划分的 (如 Oxford Phonics World)，也有按 Lesson 划分的 (如 WhaleEnglish)
-                    // 不强制覆盖用户所选的结构类型
                     const struct = t === 'graded_reader' ? 'story' : form.structure_type;
                     setForm({ ...form, schema_type: t, structure_type: struct });
                   }}
@@ -3738,6 +3738,20 @@ function BooksManageModal({ books, onClose }) {
                 </select>
               </div>
               <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">配套练习册 (Workbook) 对齐模式</label>
+                <select
+                  value={form.workbook_align || 'page'}
+                  onChange={e => setForm({ ...form, workbook_align: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none font-medium text-gray-800"
+                >
+                  <option value="page">📖 按页码对齐 (如 Everybody Up 课本与练习册页码 1:1 一致)</option>
+                  <option value="unit">📦 按单元对齐 (如 Oxford Phonics World 练习册独立按单元切片)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">目标年龄 / 年级描述</label>
                 <input
                   type="text"
@@ -3747,9 +3761,6 @@ function BooksManageModal({ books, onClose }) {
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">CEFR 等级</label>
                 <select
@@ -3781,7 +3792,7 @@ function BooksManageModal({ books, onClose }) {
                   variant="outline" size="sm"
                   onClick={() => {
                     setEditingCode(null);
-                    setForm({ code: '', name: '', series: '', level: 'A1', publisher: 'Oxford', total_units: 8, description: '', schema_type: 'general_english', target_age: '' });
+                    setForm({ code: '', name: '', series: '', structure_type: 'unit', workbook_align: 'page', level: 'A1', publisher: 'Oxford', total_units: 8, description: '', schema_type: 'general_english', target_age: '' });
                   }}
                 >
                   取消
@@ -3803,13 +3814,18 @@ function BooksManageModal({ books, onClose }) {
                       <Book className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-bold text-gray-900 text-sm">{b.name}</span>
                         <Badge variant="secondary" className="px-1.5 py-0 text-[10px] bg-gray-100 uppercase">{b.level}</Badge>
                         {b.series && <Badge variant="outline" className="px-1.5 py-0 text-[10px] border-primary-200 text-primary-700 bg-primary-50/50">{b.series}</Badge>}
                         <Badge variant="outline" className="px-1.5 py-0 text-[10px] border-blue-200 text-blue-700 bg-blue-50/60">
                           {b.content_schema?.type === 'phonics' ? '🔤 自然拼读' : (b.content_schema?.type === 'graded_reader' ? '📚 分级阅读' : (b.content_schema?.type === 'grammar' ? '📝 语法课本' : '📖 综合英语'))}
                         </Badge>
+                        {(b.content_schema?.workbook_align === 'unit' || b.code?.startsWith('OPW')) && (
+                          <Badge variant="outline" className="px-1.5 py-0 text-[10px] border-purple-200 text-purple-700 bg-purple-50/70">
+                            📦 练习册按单元对齐
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-xs text-gray-500 font-mono">{b.code} · 共 {b.total_units || 8} 单元</div>
                     </div>
@@ -3823,6 +3839,7 @@ function BooksManageModal({ books, onClose }) {
                           name: b.name,
                           series: b.series || '',
                           structure_type: b.content_schema?.structure_type || b.structure_type || (b.code?.startsWith('WE-') ? 'lesson' : 'unit'),
+                          workbook_align: b.content_schema?.workbook_align || (b.code?.startsWith('OPW') ? 'unit' : 'page'),
                           level: b.level || 'A1',
                           publisher: b.publisher || 'Oxford',
                           total_units: b.total_units || 8,
