@@ -670,8 +670,8 @@ function cleanPatternList(rawList, extraCandidates = []) {
     // 2. 剥离末尾粘连的语法注释 (如 "It's = It is", "isn't = is not", "Can't = can not")
     p = p.replace(/\s*(?:It'?s\s*=\s*It\s*is|isn'?t\s*=\s*is\s*not|What'?s\s*=\s*What\s*is|I'?m\s*=\s*I\s*am|Can'?t\s*=\s*can\s*not).*$/i, '').trim();
 
-    // 3. 过滤歌谣/Chant长串 (同词反复出现且长度超长)
-    if (p.length > 30 && (p.split(/\s+/).length > 8 || /(\b\w+\b).*\1.*\1/i.test(p))) {
+    // 3. 过滤歌谣/Chant长串 (长度超长且同一有效单词>=3字母反复出现3次以上)
+    if (p.length > 50 && (/\b([a-zA-Z]{3,})\b.*\b\1\b.*\b\1\b/i.test(p) || p.split(/\s+/).length > 15)) {
       const mQa = p.match(/(What\s+is\s+it\?\s*It'?s\s+a\s+[^.]+\.)/i) || p.match(/(Is\s+it\s+a\s+[^?]+\?\s*(?:Yes,\s*it\s*is|No,\s*it\s*isn'?t)\.?)/i);
       const mEx = p.match(/(Excuse\s+me\.?\s*(?:I\s+can'?t\s+see\.?)?)/i);
       if (mQa) {
