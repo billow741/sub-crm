@@ -1875,34 +1875,148 @@ async function handleRecordingUpload(input) {
   var file = input.files && input.files[0];
   if (!file || !selectedClass) return;
   var progressEl = document.getElementById('fb-upload-progress');
-  if (progressEl) {
+
+  var setProgress = function(text, isError, isSuccess) {
+    if (!progressEl) return;
     progressEl.classList.remove('hidden');
-    progressEl.className = 'text-xs text-blue-600 font-medium mt-1';
-    progressEl.textContent = '⏳ Uploading video to cloud (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)...';
-  }
-  var formData = new FormData();
-  formData.append('video', file);
-  try {
-    var res = await fetch(API_BASE + '/classes/upload-recording/' + selectedClass.id, {
-      method: 'POST',
-      headers: { 'X-API-Key': API_KEY },
-      body: formData
-    });
-    var json = await res.json();
-    if (res.ok && json.data) {
-      if (progressEl) {
-        progressEl.textContent = '✅ Upload successful! Cloud playback ready.';
-        progressEl.className = 'text-xs text-green-600 font-medium mt-1';
-      }
-      selectedClass.fb_recording_status = 'ready';
-      selectedClass.fb_recording_r2_key = json.data.key;
-      updateRecordingStatusTag(selectedClass);
+    progressEl.textContent = text;
+    if (isError) {
+      progressEl.className = 'text-xs text-red-600 font-medium mt-1';
+    } else if (isSuccess) {
+      progressEl.className = 'text-xs text-green-600 font-medium mt-1';
     } else {
-      throw new Error(json.error?.message || 'Upload failed');
+      progressEl.className = 'text-xs text-blue-600 font-medium mt-1';
     }
+  };
+
+  var totalSize = file.size;
+  var totalMB = (totalSize / (1024 * 1024)).toFixed(1);
+  setProgress('⏳ Preparing video upload (' + totalMB + ' MB)...');
+
+  var CHUNK_SIZE = 8 * 1024 * 1024; // 8MB 分片 (符合 R2 >= 5MB 且低于边缘 100MB 限制)
+  var totalParts = Math.ceil(totalSize / CHUNK_SIZE);
+  var uploadId = null;
+  var key = null;
+
+  try {
+    // 1. 初始化分片上传任务
+    var initRes = await fetch(API_BASE + '/classes/recording-upload-init/' + selectedClass.id, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY
+      },
+      body: JSON.stringify({
+        filename: file.name,
+        contentType: file.type || 'video/mp4',
+        size: totalSize
+      })
+    });
+    var initData = await initRes.json();
+    if (!initRes.ok || !initData.data) {
+      throw new Error(initData.error?.message || 'Failed to initialize upload session');
+    }
+
+    uploadId = initData.data.uploadId;
+    key = initData.data.key;
+    if (initData.data.partSize) {
+      CHUNK_SIZE = initData.data.partSize;
+      totalParts = Math.ceil(totalSize / CHUNK_SIZE);
+    }
+
+    var uploadedParts = [];
+
+    // 2. 逐片上传 (流式二进制传输，避免内存溢出与边缘超时)
+    for (var partNumber = 1; partNumber <= totalParts; partNumber++) {
+      var start = (partNumber - 1) * CHUNK_SIZE;
+      var end = Math.min(start + CHUNK_SIZE, totalSize);
+      var chunk = file.slice(start, end);
+
+      var percent = Math.round((start / totalSize) * 100);
+      var uploadedMB = (start / (1024 * 1024)).toFixed(1);
+      setProgress('⏳ Uploading: ' + percent + '% (Part ' + partNumber + '/' + totalParts + ', ' + uploadedMB + '/' + totalMB + ' MB)...');
+
+      // 单片支持最多重试 3 次
+      var etag = null;
+      var lastErr = null;
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        try {
+          var partUrl = API_BASE + '/classes/recording-upload-part/' + selectedClass.id +
+            '?uploadId=' + encodeURIComponent(uploadId) +
+            '&key=' + encodeURIComponent(key) +
+            '&partNumber=' + partNumber;
+
+          var partRes = await fetch(partUrl, {
+            method: 'POST',
+            headers: {
+              'X-API-Key': API_KEY,
+              'Content-Type': 'application/octet-stream'
+            },
+            body: chunk
+          });
+
+          var partJson = await partRes.json();
+          if (partRes.ok && partJson.data && partJson.data.etag) {
+            etag = partJson.data.etag;
+            break;
+          } else {
+            throw new Error(partJson.error?.message || ('Part ' + partNumber + ' failed'));
+          }
+        } catch (e) {
+          lastErr = e;
+          if (attempt < 3) {
+            await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
+          }
+        }
+      }
+
+      if (!etag) {
+        throw new Error('Failed to upload part ' + partNumber + ' after 3 attempts: ' + (lastErr ? lastErr.message : 'Network error'));
+      }
+
+      uploadedParts.push({ partNumber: partNumber, etag: etag });
+    }
+
+    // 3. 完成合并分片
+    setProgress('⏳ Finalizing video archival to cloud...');
+    var compRes = await fetch(API_BASE + '/classes/recording-upload-complete/' + selectedClass.id, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY
+      },
+      body: JSON.stringify({
+        uploadId: uploadId,
+        key: key,
+        parts: uploadedParts,
+        size: totalSize
+      })
+    });
+    var compJson = await compRes.json();
+    if (!compRes.ok || !compJson.data) {
+      throw new Error(compJson.error?.message || 'Failed to finalize video upload');
+    }
+
+    setProgress('✅ Upload successful! Cloud playback ready (' + totalMB + ' MB).', false, true);
+    selectedClass.fb_recording_status = 'ready';
+    selectedClass.fb_recording_r2_key = compJson.data.key;
+    updateRecordingStatusTag(selectedClass);
+
   } catch (err) {
+    console.error('Video upload error:', err);
+    setProgress('❌ Upload failed: ' + err.message, true, false);
     alert('Video upload failed: ' + err.message);
-    if (progressEl) progressEl.classList.add('hidden');
+
+    // 发生异常时尝试取消未完成的分片任务
+    if (uploadId && key) {
+      fetch(API_BASE + '/classes/recording-upload-abort/' + selectedClass.id, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ uploadId: uploadId, key: key })
+      }).catch(function() {});
+    }
+  } finally {
+    input.value = '';
   }
 }
 

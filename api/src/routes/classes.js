@@ -940,7 +940,137 @@ classes.get('/video/:id', async (c) => {
   });
 });
 
-// POST /upload-recording/:id — 直接上传本地录制的 MP4 视频到私有 R2
+// ============================================================
+// 📹 录播视频分片上传与直接上传 (支持任意大文件，彻底避免 100MB 限制与 OOM)
+// ============================================================
+
+// POST /recording-upload-init/:id — 初始化分片上传
+classes.post('/recording-upload-init/:id', async (c) => {
+  const DB = c.env.DB;
+  const R2 = c.env.TEXTBOOKS_R2;
+  const id = c.req.param('id');
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 存储未配置' } }, 500);
+
+  const cls = await DB.prepare('SELECT id, student_id FROM classes WHERE id = ?').bind(id).first();
+  if (!cls) return c.json({ error: { code: 'NOT_FOUND', message: '课程不存在' } }, 404);
+
+  let body = {};
+  try {
+    body = await c.req.json();
+  } catch (e) {}
+
+  const rawFilename = body.filename || 'recording.mp4';
+  const ext = (rawFilename.lastIndexOf('.') !== -1) ? rawFilename.split('.').pop().toLowerCase() : 'mp4';
+  const contentType = body.contentType || 'video/mp4';
+  const key = `recordings/cls_${id}_${Date.now()}.${ext}`;
+
+  try {
+    const multipartUpload = await R2.createMultipartUpload(key, {
+      httpMetadata: { contentType }
+    });
+
+    return c.json(success({
+      uploadId: multipartUpload.uploadId,
+      key: multipartUpload.key,
+      partSize: 8 * 1024 * 1024 // 推荐分片大小 8MB (R2 规定每片需 >= 5MB)
+    }));
+  } catch (err) {
+    console.error('Failed to create multipart upload:', err);
+    return c.json({ error: { code: 'INIT_FAILED', message: err.message } }, 500);
+  }
+});
+
+// POST /recording-upload-part/:id — 上传单个分片
+classes.post('/recording-upload-part/:id', async (c) => {
+  const R2 = c.env.TEXTBOOKS_R2;
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 存储未配置' } }, 500);
+
+  const uploadId = c.req.query('uploadId') || c.req.header('x-upload-id');
+  const key = c.req.query('key') || c.req.header('x-upload-key');
+  const partNumberStr = c.req.query('partNumber') || c.req.header('x-part-number');
+  const partNumber = parseInt(partNumberStr, 10);
+
+  if (!uploadId || !key || !partNumber || isNaN(partNumber)) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '缺少 uploadId, key 或 partNumber 参数' } }, 400);
+  }
+
+  try {
+    const buf = await c.req.arrayBuffer();
+    if (!buf || buf.byteLength === 0) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: '分片数据为空' } }, 400);
+    }
+
+    const multipartUpload = R2.resumeMultipartUpload(key, uploadId);
+    const uploadedPart = await multipartUpload.uploadPart(partNumber, buf);
+
+    return c.json(success({
+      partNumber: uploadedPart.partNumber,
+      etag: uploadedPart.etag
+    }));
+  } catch (err) {
+    console.error('Failed to upload part:', err);
+    return c.json({ error: { code: 'UPLOAD_PART_FAILED', message: err.message } }, 500);
+  }
+});
+
+// POST /recording-upload-complete/:id — 完成合并分片
+classes.post('/recording-upload-complete/:id', async (c) => {
+  const DB = c.env.DB;
+  const R2 = c.env.TEXTBOOKS_R2;
+  const id = c.req.param('id');
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 存储未配置' } }, 500);
+
+  const { uploadId, key, parts, size } = await c.req.json();
+  if (!uploadId || !key || !Array.isArray(parts) || parts.length === 0) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '缺少必要的完成参数 (uploadId, key, parts)' } }, 400);
+  }
+
+  // 确保分片按序号排序
+  parts.sort((a, b) => a.partNumber - b.partNumber);
+
+  try {
+    const multipartUpload = R2.resumeMultipartUpload(key, uploadId);
+    const object = await multipartUpload.complete(parts);
+
+    const finalSize = size || (object && object.size) || 0;
+
+    await DB.prepare(`
+      UPDATE classes
+      SET fb_recording_r2_key = ?, fb_recording_status = 'ready', fb_recording_size = ?, updated_at = ?
+      WHERE id = ?
+    `).bind(key, finalSize, new Date().toISOString(), id).run();
+
+    return c.json(success({
+      message: '录播视频分片上传并归档成功',
+      key,
+      size: finalSize,
+      status: 'ready'
+    }));
+  } catch (err) {
+    console.error('Failed to complete multipart upload:', err);
+    return c.json({ error: { code: 'COMPLETE_FAILED', message: err.message } }, 500);
+  }
+});
+
+// POST /recording-upload-abort/:id — 中止分片上传
+classes.post('/recording-upload-abort/:id', async (c) => {
+  const R2 = c.env.TEXTBOOKS_R2;
+  if (!R2) return c.json({ error: { code: 'NOT_CONFIGURED', message: 'R2 存储未配置' } }, 500);
+
+  try {
+    const { uploadId, key } = await c.req.json();
+    if (uploadId && key) {
+      const multipartUpload = R2.resumeMultipartUpload(key, uploadId);
+      await multipartUpload.abort();
+    }
+  } catch (err) {
+    console.warn('Failed to abort multipart upload:', err);
+  }
+
+  return c.json(success({ message: '已取消上传' }));
+});
+
+// POST /upload-recording/:id — 直接上传单个视频文件 (向后兼容小文件 < 50MB)
 classes.post('/upload-recording/:id', async (c) => {
   const DB = c.env.DB;
   const R2 = c.env.TEXTBOOKS_R2;
@@ -950,30 +1080,44 @@ classes.post('/upload-recording/:id', async (c) => {
   const cls = await DB.prepare('SELECT id, student_id FROM classes WHERE id = ?').bind(id).first();
   if (!cls) return c.json({ error: { code: 'NOT_FOUND', message: '课程不存在' } }, 404);
 
-  const formData = await c.req.formData();
-  const file = formData.get('video') || formData.get('file');
-  if (!file) return c.json({ error: { code: 'BAD_REQUEST', message: '请选择要上传的视频文件' } }, 400);
+  try {
+    const formData = await c.req.formData();
+    const file = formData.get('video') || formData.get('file');
+    if (!file) return c.json({ error: { code: 'BAD_REQUEST', message: '请选择要上传的视频文件' } }, 400);
 
-  const key = `recordings/cls_${id}_${Date.now()}.mp4`;
-  const arrayBuffer = await file.arrayBuffer();
-  const size = arrayBuffer.byteLength;
+    // 大于 50MB 时提示走分片上传，避免 Worker 128MB 内存溢出
+    if (file.size > 50 * 1024 * 1024) {
+      return c.json({
+        error: {
+          code: 'FILE_TOO_LARGE',
+          message: '视频文件大于 50MB，请使用前端最新版本的分片上传功能。'
+        }
+      }, 413);
+    }
 
-  await R2.put(key, arrayBuffer, {
-    httpMetadata: { contentType: file.type || 'video/mp4' }
-  });
+    const key = `recordings/cls_${id}_${Date.now()}.mp4`;
+    const arrayBuffer = await file.arrayBuffer();
+    const size = arrayBuffer.byteLength;
 
-  await DB.prepare(`
-    UPDATE classes
-    SET fb_recording_r2_key = ?, fb_recording_status = 'ready', fb_recording_size = ?, updated_at = ?
-    WHERE id = ?
-  `).bind(key, size, new Date().toISOString(), id).run();
+    await R2.put(key, arrayBuffer, {
+      httpMetadata: { contentType: file.type || 'video/mp4' }
+    });
 
-  return c.json(success({
-    message: '录播视频上传成功',
-    key,
-    size,
-    status: 'ready'
-  }));
+    await DB.prepare(`
+      UPDATE classes
+      SET fb_recording_r2_key = ?, fb_recording_status = 'ready', fb_recording_size = ?, updated_at = ?
+      WHERE id = ?
+    `).bind(key, size, new Date().toISOString(), id).run();
+
+    return c.json(success({
+      message: '录播视频上传成功',
+      key,
+      size,
+      status: 'ready'
+    }));
+  } catch (err) {
+    return c.json({ error: { code: 'UPLOAD_ERROR', message: err.message } }, 500);
+  }
 });
 
 // POST /transfer-recording/:id — 触发自动转存任务 (从外部录播链接抓取或重试)

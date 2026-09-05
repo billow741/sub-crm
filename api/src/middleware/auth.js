@@ -1,34 +1,47 @@
 /**
  * CORS 中间件
  */
+/**
+ * CORS 中间件
+ */
 export const cors = async (c, next) => {
   // 允许的来源(生产环境应配置具体域名)
   const allowedOrigins = c.env.ALLOWED_ORIGINS ? c.env.ALLOWED_ORIGINS.split(',') : ['*'];
   const origin = c.req.header('Origin') || '';
 
-  // 检查 origin 是否在允许列表中 (默认 * 允许所有来源)
-  const isAllowed = allowedOrigins.includes('*') || allowedOrigins.includes(origin);
-  const allowHeaderValue = isAllowed ? (origin || '*') : null;
+  // 检查 origin 是否在允许列表中 (允许 *.sunnybridge.qzz.io, localhost, 或配置列表)
+  const isAllowed = allowedOrigins.includes('*') ||
+                    allowedOrigins.includes(origin) ||
+                    origin === 'https://sunnybridge.qzz.io' ||
+                    origin.endsWith('.sunnybridge.qzz.io') ||
+                    origin.startsWith('http://localhost:') ||
+                    origin.startsWith('https://localhost:') ||
+                    origin.startsWith('tauri://');
 
-  // 预先设置所有 CORS 头 (即使后续路由报错,响应也会带 CORS)
-  c.res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  c.res.headers.set('Access-Control-Allow-Headers', '*');
-  c.res.headers.set('Access-Control-Max-Age', '86400');
-  if (allowHeaderValue) {
-    c.res.headers.set('Access-Control-Allow-Origin', allowHeaderValue);
-  }
+  const allowOrigin = isAllowed ? (origin || '*') : '*';
+
+  const applyCorsHeaders = (res) => {
+    if (!res || !res.headers) return;
+    res.headers.set('Access-Control-Allow-Origin', allowOrigin);
+    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, Range, Accept, Origin, X-Requested-With, X-Upload-Id, X-Upload-Key, X-Part-Number');
+    res.headers.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges, ETag');
+    res.headers.set('Access-Control-Max-Age', '86400');
+  };
 
   // 处理预检请求
   if (c.req.method === 'OPTIONS') {
-    return c.text('', 204);
+    const res = c.text('', 204);
+    applyCorsHeaders(res);
+    return res;
   }
 
-  await next();
-
-  // 异常返回后,确保 CORS 头仍在响应上 (重要!)
-  // 因为下游路由可能直接 c.json(...) 走默认头 (覆盖 middleware 设置)
-  if (allowHeaderValue && !c.res.headers.get('Access-Control-Allow-Origin')) {
-    c.res.headers.set('Access-Control-Allow-Origin', allowHeaderValue);
+  try {
+    await next();
+  } finally {
+    if (c.res) {
+      applyCorsHeaders(c.res);
+    }
   }
 };
 
