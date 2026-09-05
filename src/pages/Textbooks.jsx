@@ -1984,6 +1984,30 @@ const DEFAULT_OUTLINES = {
     { unit_number: 16, unit_title: 'Lesson 16: Progress Test', page_from: 86, page_to: 89 },
     { unit_number: 17, unit_title: 'Word Bank', page_from: 90, page_to: 91 }
   ],
+  'OPW-1': [
+    { unit_number: 1, unit_title: 'Unit 1: Aa · Bb · Cc', page_from: 4, page_to: 11 },
+    { unit_number: 2, unit_title: 'Unit 2: Dd · Ee · Ff (Review 1)', page_from: 12, page_to: 23 },
+    { unit_number: 3, unit_title: 'Unit 3: Gg · Hh · Ii', page_from: 24, page_to: 31 },
+    { unit_number: 4, unit_title: 'Unit 4: Jj · Kk · Ll (Review 2)', page_from: 32, page_to: 43 },
+    { unit_number: 5, unit_title: 'Unit 5: Mm · Nn · Oo', page_from: 44, page_to: 51 },
+    { unit_number: 6, unit_title: 'Unit 6: Pp · Qq · Rr (Review 3)', page_from: 52, page_to: 63 },
+    { unit_number: 7, unit_title: 'Unit 7: Ss · Tt · Uu · Vv', page_from: 64, page_to: 73 },
+    { unit_number: 8, unit_title: 'Unit 8: Ww · Xx · Yy · Zz (Review 4)', page_from: 74, page_to: 87 }
+  ],
+  'OPW-1-REV': [
+    { unit_number: 1, unit_title: 'Unit 1: Aa · Bb · Cc', page_from: 4, page_to: 11 },
+    { unit_number: 2, unit_title: 'Unit 2: Dd · Ee · Ff', page_from: 12, page_to: 19 },
+    { unit_number: 3, unit_title: 'Review 1 (Units 1-2)', page_from: 20, page_to: 23 },
+    { unit_number: 4, unit_title: 'Unit 3: Gg · Hh · Ii', page_from: 24, page_to: 31 },
+    { unit_number: 5, unit_title: 'Unit 4: Jj · Kk · Ll', page_from: 32, page_to: 39 },
+    { unit_number: 6, unit_title: 'Review 2 (Units 3-4)', page_from: 40, page_to: 43 },
+    { unit_number: 7, unit_title: 'Unit 5: Mm · Nn · Oo', page_from: 44, page_to: 51 },
+    { unit_number: 8, unit_title: 'Unit 6: Pp · Qq · Rr', page_from: 52, page_to: 59 },
+    { unit_number: 9, unit_title: 'Review 3 (Units 5-6)', page_from: 60, page_to: 63 },
+    { unit_number: 10, unit_title: 'Unit 7: Ss · Tt · Uu · Vv', page_from: 64, page_to: 73 },
+    { unit_number: 11, unit_title: 'Unit 8: Ww · Xx · Yy · Zz', page_from: 74, page_to: 83 },
+    { unit_number: 12, unit_title: 'Review 4 (Units 7-8)', page_from: 84, page_to: 87 }
+  ],
   'DEFAULT': [
     { unit_number: 0, unit_title: 'Welcome / Starter', page_from: 2, page_to: 3 },
     { unit_number: 1, unit_title: 'Unit 1', page_from: 4, page_to: 11 },
@@ -2001,17 +2025,17 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
   const [pdfDoc, setPdfDoc] = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   
-  // 页码偏移量 (PDF 真实页码 = 课本印刷页码 + pageOffset)
-  // 若课本第 6 页在 PDF 中就是第 6 页，则 offset = 0
-  const isLessonStructure = bookSchema?.structure_type === 'lesson' || (!bookSchema?.structure_type && bookCode?.startsWith('WE-P'));
-  const isPhonics = bookCode?.startsWith('WE-P') || bookSchema?.type === 'phonics';
-  const [pageOffset, setPageOffset] = useState(bookCode?.startsWith('WE') ? 0 : 2);
+  // Oxford Phonics World 及其他按 Unit 划分的教材
+  const isOxfordPhonics = bookCode?.startsWith('OPW') || bookName?.toLowerCase().includes('oxford phonics');
+  const isLessonStructure = !isOxfordPhonics && (bookSchema?.structure_type === 'lesson' || (!bookSchema?.structure_type && bookCode?.startsWith('WE-P')));
+  const isPhonics = bookCode?.startsWith('WE-P') || bookSchema?.type === 'phonics' || isOxfordPhonics;
+  const [pageOffset, setPageOffset] = useState(bookCode?.startsWith('WE') ? 0 : (isOxfordPhonics ? 0 : 2));
   const [previewThumbnail, setPreviewThumbnail] = useState(null);
-  const [previewingPdfPage, setPreviewingPdfPage] = useState(bookCode?.startsWith('WE') ? 6 : 4);
+  const [previewingPdfPage, setPreviewingPdfPage] = useState(bookCode?.startsWith('WE') ? 6 : (isOxfordPhonics ? 4 : 4));
 
-  // 单元目录大纲列表
+  // 单元目录大纲列表 (如果匹配到内置精准大纲则优先应用)
   const [outline, setOutline] = useState(() => {
-    const preset = DEFAULT_OUTLINES[bookCode] || DEFAULT_OUTLINES['DEFAULT'];
+    const preset = DEFAULT_OUTLINES[bookCode] || (isOxfordPhonics ? DEFAULT_OUTLINES['OPW-1'] : DEFAULT_OUTLINES['DEFAULT']);
     return preset.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extraCount: 0, extractedData: null }));
   });
 
@@ -2025,8 +2049,9 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
   const [currentProcessingUnit, setCurrentProcessingUnit] = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
   const [showTocPicker, setShowTocPicker] = useState(false);
-  const [tocStartPage, setTocStartPage] = useState(6);
-  const [tocEndPage, setTocEndPage] = useState(8);
+  // 目录页码：Oxford Phonics 在第 2-4 页，鲸鱼英语在第 6-8 页
+  const [tocStartPage, setTocStartPage] = useState(bookCode?.startsWith('WE') ? 6 : 2);
+  const [tocEndPage, setTocEndPage] = useState(bookCode?.startsWith('WE') ? 8 : 4);
   const [tocSampleThumb, setTocSampleThumb] = useState(null);
   const [extractionMode, setExtractionMode] = useState('deep'); // 'deep' 深度全量提取 (推荐) | 'fast' 极速概览模式
 
@@ -2289,6 +2314,8 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
         body: JSON.stringify({
           text: tocText,
           images: singleCollageBase64 ? [singleCollageBase64] : [],
+          structure_type: isOxfordPhonics ? 'unit' : (bookSchema?.structure_type || (bookCode?.startsWith('WE') ? 'lesson' : 'unit')),
+          book_name: bookName,
           llm_base_url: llmConfig?.baseUrl,
           llm_api_key: llmConfig?.apiKey,
           llm_model: llmConfig?.model
@@ -2297,10 +2324,18 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
       const json = await resp.json();
 
       if (json.data?.units && json.data.units.length > 0) {
-        const structType = bookSchema?.structure_type || (json.data.units.some(x => (x.unit_title || '').toLowerCase().includes('lesson')) ? 'lesson' : 'unit');
+        const structType = isOxfordPhonics ? 'unit' : (bookSchema?.structure_type || (json.data.units.some(x => (x.unit_title || '').toLowerCase().includes('lesson')) ? 'lesson' : 'unit'));
         const defaultPrefix = structType === 'lesson' ? 'Lesson ' : (structType === 'chapter' ? 'Chapter ' : (structType === 'story' ? 'Story ' : 'Unit '));
         const detected = json.data.units.map((u, i) => {
-          const rawTitle = u.unit_title || '';
+          let rawTitle = (u.unit_title || '').trim();
+          if (structType === 'unit') {
+            rawTitle = rawTitle.replace(/^Lesson\s*\d+\s*[:：.]\s*\*?Unit\s*/i, 'Unit ');
+            rawTitle = rawTitle.replace(/^Lesson\s*\d+\s*[:：.]\s*/i, 'Unit ');
+            rawTitle = rawTitle.replace(/^Lesson\s*$/i, `Unit ${u.unit_number || i + 1}`);
+            if (rawTitle.toLowerCase().startsWith('lesson')) {
+              rawTitle = rawTitle.replace(/^lesson/i, 'Unit');
+            }
+          }
           return {
             unit_number: u.unit_number !== undefined ? u.unit_number : i + 1,
             unit_title: rawTitle || `${defaultPrefix}${u.unit_number !== undefined ? u.unit_number : i + 1}`,
@@ -3243,26 +3278,26 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                   <button
                     type="button"
                     onClick={() => {
-                      const p = DEFAULT_OUTLINES['WE-P'];
-                      setOutline(p.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extraCount: 0, extractedData: null })));
-                      setPageOffset(0);
-                      if (pdfDoc) renderOffsetSample(pdfDoc, p[1].page_from);
-                    }}
-                    className="px-2.5 py-1 bg-white hover:bg-primary-50 text-primary-700 border border-gray-200 rounded-lg font-medium transition-colors shadow-sm"
-                  >
-                    Phonics 1 (单字母 Aa-Zz)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const p = DEFAULT_OUTLINES['WE_P3'];
+                      const p = DEFAULT_OUTLINES['OPW-1'];
                       setOutline(p.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extraCount: 0, extractedData: null })));
                       setPageOffset(0);
                       if (pdfDoc) renderOffsetSample(pdfDoc, p[0].page_from);
                     }}
-                    className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 rounded-lg font-bold transition-colors shadow-sm"
+                    className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg font-bold transition-colors shadow-sm"
                   >
-                    Phonics 3 (辅音连缀 bl·cl·fl)
+                    ✨ Oxford Phonics 1 (8单元标准)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = DEFAULT_OUTLINES['OPW-1-REV'];
+                      setOutline(p.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extraCount: 0, extractedData: null })));
+                      setPageOffset(0);
+                      if (pdfDoc) renderOffsetSample(pdfDoc, p[0].page_from);
+                    }}
+                    className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-lg font-medium transition-colors shadow-sm"
+                  >
+                    Oxford Phonics 1 (含复习)
                   </button>
                   <button
                     type="button"
@@ -3275,6 +3310,30 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                     className="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg font-medium transition-colors shadow-sm"
                   >
                     Everybody Up (8单元)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = DEFAULT_OUTLINES['WE-P'];
+                      setOutline(p.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extraCount: 0, extractedData: null })));
+                      setPageOffset(0);
+                      if (pdfDoc) renderOffsetSample(pdfDoc, p[1].page_from);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-primary-50 text-primary-700 border border-gray-200 rounded-lg font-medium transition-colors shadow-sm"
+                  >
+                    WhaleEnglish P1 (16课)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = DEFAULT_OUTLINES['WE_P3'];
+                      setOutline(p.map(u => ({ ...u, selected: true, status: 'idle', vocabCount: 0, patternCount: 0, extraCount: 0, extractedData: null })));
+                      setPageOffset(0);
+                      if (pdfDoc) renderOffsetSample(pdfDoc, p[0].page_from);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 rounded-lg font-bold transition-colors shadow-sm"
+                  >
+                    WhaleEnglish P3 (16课)
                   </button>
                 </div>
 
@@ -3301,7 +3360,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {(() => {
-                        const isLessonMode = bookSchema?.structure_type === 'lesson' || (!bookSchema?.structure_type && outline.some(it => (it.unit_title || '').toLowerCase().includes('lesson')));
+                        const isLessonMode = !isOxfordPhonics && (bookSchema?.structure_type === 'lesson' || (!bookSchema?.structure_type && outline.some(it => (it.unit_title || '').toLowerCase().includes('lesson'))));
                         return outline.map((u, idx) => {
                           const pdfFrom = u.page_from + pageOffset;
                           const pdfTo = u.page_to + pageOffset;

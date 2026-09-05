@@ -2690,28 +2690,48 @@ textbooks.post('/detect-toc/:code', async (c) => {
     return c.json({ error: { code: 'CONFIG_ERROR', message: 'LLM API key is not configured' } }, 400);
   }
 
-  const prompt = `You are an expert OCR and textbook Table of Contents reader.
-Carefully read the provided Table of Contents image.
+  const DB = c.env.DB;
+  const book = await DB.prepare('SELECT name, series, content_schema FROM textbooks WHERE code = ?').bind(code).first();
+  let structType = 'unit';
+  if (body?.structure_type) {
+    structType = body.structure_type;
+  } else if (book?.content_schema) {
+    try {
+      const cs = JSON.parse(book.content_schema);
+      if (cs.structure_type) structType = cs.structure_type;
+    } catch (_) {}
+  } else if (code.startsWith('WE-') || code.includes('WE')) {
+    structType = 'lesson';
+  }
+
+  const prefix = structType === 'lesson' ? 'Lesson' : (structType === 'chapter' ? 'Chapter' : (structType === 'story' ? 'Story' : 'Unit'));
+  const example1 = structType === 'lesson' ? 'Lesson 1: Short a' : 'Unit 1: Aa · Bb · Cc';
+  const example2 = structType === 'lesson' ? 'Lesson 2: Short e' : 'Unit 2: Dd · Ee · Ff';
+
+  const prompt = `You are an expert OCR and educational textbook Table of Contents (Contents / Syllabus) reader.
+Carefully read the provided Table of Contents image for "${book?.name || code}".
+
+This textbook is organized by ${prefix} (e.g. ${prefix} 1, ${prefix} 2, etc.).
 
 CRITICAL OCR READING INSTRUCTIONS:
 1. READ ONLY WHAT IS ACTUALLY PRINTED IN THE IMAGE.
    Do not guess, do not hallucinate, and do not copy content from other books.
 2. Read each row/entry from top to bottom (if multi-column or multi-page, read the left column/page first, then the right):
-   - On the left of the row: the badge or title (e.g. "LESSON 01", "LESSON 02", "Review 1", "Progress Test", "Word Bank", etc.).
-   - In the middle: the exact topic or title text printed on that row.
-   - On the far right: the printed starting page number for that specific row (e.g. 06, 12, 18, 22...).
+   - On the left of the row: the badge or title (e.g. "${prefix} 1", "${prefix} 2", "Review 1", "Progress Test", etc.).
+   - In the middle: the exact letters or topic title text printed on that row.
+   - On the far right: the printed starting page number for that specific row (e.g. 4, 12, 20...).
 3. Fields to extract for each row:
-   - "unit_number": The integer number of the lesson (1 for Lesson 1, 2 for Lesson 2, etc. Use 0 for an intro/starter song if present).
-   - "unit_title": The full title text (e.g. "Lesson 1: Consonant Blends: bl · cl · fl", "Lesson 2: Consonant Blends: gl · pl · sl", "Review 1", "Word Bank").
+   - "unit_number": The integer number (1 for ${prefix} 1, 2 for ${prefix} 2, etc. Use 0 for an intro/starter song if present).
+   - "unit_title": The full title text (e.g. "${example1}", "${example2}", "Review 1"). Do NOT use "Lesson" unless the book explicitly says "Lesson"!
    - "page_from": The starting page number on the right of this row.
-   - "page_to": The page number right before the next row starts. For the final row, page_from + 3.
+   - "page_to": The page number right before the next row starts. For the final row, page_from + 7.
 
-Extract ALL rows visible in the Table of Contents image (typically 10 to 25 items). Do NOT stop early.
+Extract ALL rows visible in the Table of Contents image (typically 8 to 20 items). Do NOT stop early.
 
 Return strict JSON only matching:
 {
   "units": [
-    { "unit_number": 1, "unit_title": "Lesson 1: ...", "page_from": 6, "page_to": 11 }
+    { "unit_number": 1, "unit_title": "${example1}", "page_from": 4, "page_to": 11 }
   ]
 }`;
 
@@ -2776,16 +2796,16 @@ function parseTocFromTextOrMarkdown(text) {
   }
   if (units.length > 0) return units;
 
-  // Pattern 2: - Lesson X: Title ... page Y / (Y - Z)
-  const regex2 = /(?:^|\n)[*\-•]\s*(?:Lesson\s*(\d+)[:.\s]*)?([^\n\r]+?)(?:[：:\s\-]+(?:page|p\.?|第)?\s*(\d+))/gi;
+  // Pattern 2: - Prefix X: Title ... page Y / (Y - Z)
+  const regex2 = /(?:^|\n)[*\-•]\s*(?:(Unit|Lesson|Chapter)\s*(\d+)[:.\s]*)?([^\n\r]+?)(?:[：:\s\-]+(?:page|p\.?|第)?\s*(\d+))/gi;
   while ((match = regex2.exec(text)) !== null) {
-    const num = match[1] ? parseInt(match[1], 10) : idx;
-    const title = match[2].trim();
-    const pFrom = parseInt(match[3], 10);
+    const num = match[2] ? parseInt(match[2], 10) : idx;
+    const title = match[3].trim();
+    const pFrom = parseInt(match[4], 10);
     if (pFrom && title) {
       units.push({
         unit_number: num,
-        unit_title: title.startsWith('Lesson') ? title : `Lesson ${num}: ${title}`,
+        unit_title: title.startsWith(prefix) ? title : `${prefix} ${num}: ${title}`,
         page_from: pFrom,
         page_to: pFrom + 5
       });
@@ -2803,9 +2823,18 @@ function parseTocFromTextOrMarkdown(text) {
       const pFrom = parseInt(u.page_from, 10) || 1;
       let pTo = parseInt(u.page_to, 10) || (pFrom + 7);
       if (pTo < pFrom) pTo = pFrom + 3;
+      let rawTitle = (u.unit_title || `${prefix} ${u.unit_number || i + 1}`).trim();
+      if (structType === 'unit') {
+        rawTitle = rawTitle.replace(/^Lesson\s*\d+\s*[:：.]\s*\*?Unit\s*/i, 'Unit ');
+        rawTitle = rawTitle.replace(/^Lesson\s*\d+\s*[:：.]\s*/i, 'Unit ');
+        rawTitle = rawTitle.replace(/^Lesson\s*$/i, `Unit ${u.unit_number || i + 1}`);
+        if (rawTitle.toLowerCase().startsWith('lesson')) {
+          rawTitle = rawTitle.replace(/^lesson/i, 'Unit');
+        }
+      }
       return {
         unit_number: u.unit_number !== undefined ? parseInt(u.unit_number, 10) : i + 1,
-        unit_title: (u.unit_title || `Unit ${u.unit_number || i + 1}`).trim(),
+        unit_title: rawTitle,
         page_from: pFrom,
         page_to: pTo
       };
