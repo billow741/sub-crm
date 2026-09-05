@@ -283,13 +283,77 @@ textbooks.post('/content/:code/:num', async (c) => {
   }
 
   const body = await c.req.json();
-  const { cleanedVocab, extraSentences } = cleanVocabList(body.vocab || []);
-  const cleanPatterns = cleanPatternList(body.patterns || [], extraSentences);
-  const cleanGrammar = cleanGrammarList(body.grammar || []);
+  
+  // 保留用户手动编辑或校对的完整词汇列表，仅过滤完全空白的行并保留用户属性
+  const rawVocab = Array.isArray(body.vocab) ? body.vocab : [];
+  const processedVocab = [];
+  const seenWords = new Set();
 
-  const vocab = JSON.stringify(cleanedVocab);
-  const patterns = JSON.stringify(cleanPatterns);
-  const grammar = JSON.stringify(cleanGrammar);
+  for (const item of rawVocab) {
+    const rawWord = (typeof item === 'string' ? item : (item?.word || item?.name || '')).trim();
+    const rawTrans = (typeof item === 'object' ? (item?.translation || item?.chinese || item?.meaning || '') : '').trim();
+    if (!rawWord) continue;
+
+    const lower = rawWord.toLowerCase();
+    if (seenWords.has(lower)) continue;
+    seenWords.add(lower);
+
+    const vObj = {
+      word: rawWord,
+      translation: rawTrans,
+      is_core: typeof item === 'object' && item.is_core !== undefined ? Boolean(item.is_core) : true,
+      difficulty: typeof item === 'object' && item.difficulty ? item.difficulty : 1
+    };
+    if (typeof item === 'object' && item.page !== undefined && item.page !== null && item.page !== '') {
+      vObj.page = parseInt(item.page, 10);
+    }
+    processedVocab.push(vObj);
+  }
+
+  const rawPatterns = Array.isArray(body.patterns) ? body.patterns : [];
+  const processedPatterns = [];
+  const seenPatterns = new Set();
+  for (const item of rawPatterns) {
+    const rawPattern = (typeof item === 'string' ? item : (item?.pattern || item?.sentence || '')).trim();
+    const rawTrans = (typeof item === 'object' ? (item?.translation || item?.chinese || '') : '').trim();
+    if (!rawPattern) continue;
+
+    const lower = rawPattern.toLowerCase();
+    if (seenPatterns.has(lower)) continue;
+    seenPatterns.add(lower);
+
+    const pObj = {
+      pattern: rawPattern,
+      translation: rawTrans,
+      is_core: typeof item === 'object' && item.is_core !== undefined ? Boolean(item.is_core) : true
+    };
+    if (typeof item === 'object' && item.page !== undefined && item.page !== null && item.page !== '') {
+      pObj.page = parseInt(item.page, 10);
+    }
+    processedPatterns.push(pObj);
+  }
+
+  const rawGrammar = Array.isArray(body.grammar) ? body.grammar : [];
+  const processedGrammar = [];
+  for (const item of rawGrammar) {
+    const rawPoint = (typeof item === 'string' ? item : (item?.point || item?.grammar || '')).trim();
+    if (!rawPoint) continue;
+
+    const gObj = {
+      point: rawPoint,
+      example: (typeof item === 'object' ? (item?.example || '') : '').trim(),
+      explanation: (typeof item === 'object' ? (item?.explanation || '') : '').trim(),
+      is_core: typeof item === 'object' && item.is_core !== undefined ? Boolean(item.is_core) : true
+    };
+    if (typeof item === 'object' && item.page !== undefined && item.page !== null && item.page !== '') {
+      gObj.page = parseInt(item.page, 10);
+    }
+    processedGrammar.push(gObj);
+  }
+
+  const vocab = JSON.stringify(processedVocab);
+  const patterns = JSON.stringify(processedPatterns);
+  const grammar = JSON.stringify(processedGrammar);
   const extraContent = body.extra_content ? JSON.stringify(body.extra_content) : null;
   const extractedBy = body.extracted_by || 'manual';
 
@@ -561,17 +625,17 @@ function cleanAndParseJson(rawText) {
 // 词汇与句型智能提纯清洗与去重工具函数
 // ============================================================
 const FUNCTION_WORDS = new Set([
-  'a', 'an', 'the', 'this', 'that', 'these', 'those',
+  'a', 'an', 'the',
   'is', 'are', 'am', 'was', 'were', 'be', 'been', 'being',
-  'my', 'your', 'his', 'her', 'its', 'our', 'their',
-  'me', 'him', 'them', 'us', 'it', 'and', 'or', 'but',
-  'at', 'in', 'on', 'to', 'for', 'of', 'with', 'by', 'from',
-  'up', 'about', 'into', 'over', 'after',
-  'can', 'cant', "can't", 'do', 'dont', "don't", 'does', 'did', 'not', 'no', 'yes'
+  'and', 'or', 'but'
 ]);
 
 function isCommandInstruction(s) {
-  return /^(listen|point|say|sing|ask|answer|look|read|circle|write|number|trace|color|match|talk|chant|clap|stomp|tap|show\s+and\s+tell|make\s+a)\b/i.test((s || '').trim());
+  const trimmed = (s || '').trim();
+  if (!trimmed) return false;
+  // 单个词绝不当作指令（例如 sing, read, write, color, circle, talk, clap 均为常见教材核心词汇）
+  if (!/\s/.test(trimmed)) return false;
+  return /^(listen|point|say|sing|ask|answer|look|read|circle|write|number|trace|color|match|talk|chant|clap|stomp|tap|show\s+and\s+tell|make\s+a)\b/i.test(trimmed);
 }
 
 function isSentenceOrGreeting(s) {

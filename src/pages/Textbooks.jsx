@@ -30,6 +30,8 @@ export default function Textbooks() {
   // AI 提取与保存状态
   const [extracting, setExtracting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState(null);
   const [activeTab, setActiveTab] = useState('vocab'); // 'vocab' | 'patterns' | 'phonics' | 'reading' | 'grammar'
 
   // 弹窗状态
@@ -265,6 +267,13 @@ export default function Textbooks() {
 
   // 切换选中单元
   const selectUnit = async (code, unitNum) => {
+    if (isDirty) {
+      if (!confirm('当前单元有未保存的修改，切换单元将丢失未保存的内容。是否继续？')) {
+        return;
+      }
+    }
+    setIsDirty(false);
+    setLastSavedTime(null);
     setSelectedUnitNum(unitNum);
     setLoadingDetail(true);
     setRenderedImages([]); // 清除本地临时切片
@@ -360,6 +369,7 @@ export default function Textbooks() {
 
   // 扩展维度编辑辅助函数
   const updateExtraField = (dim, idx, field, val) => {
+    setIsDirty(true);
     setUnitDetail(prev => {
       if (!prev) return prev;
       const extra = { ...(prev.extra_content || {}) };
@@ -371,6 +381,7 @@ export default function Textbooks() {
   };
 
   const removeExtraItem = (dim, idx) => {
+    setIsDirty(true);
     setUnitDetail(prev => {
       if (!prev) return prev;
       const extra = { ...(prev.extra_content || {}) };
@@ -382,6 +393,7 @@ export default function Textbooks() {
   };
 
   const addExtraItem = (dim, defaultItem) => {
+    setIsDirty(true);
     setUnitDetail(prev => {
       if (!prev) return prev;
       const extra = { ...(prev.extra_content || {}) };
@@ -472,12 +484,17 @@ export default function Textbooks() {
     if (!selectedBookCode || selectedUnitNum === null || !unitDetail) return;
     setSaving(true);
     try {
+      // 过滤空白行，保留所有有效单词、句型和语法
+      const validVocab = (unitDetail.vocab || []).filter(v => (v.word || '').trim().length > 0);
+      const validPatterns = (unitDetail.patterns || []).filter(p => (p.pattern || '').trim().length > 0);
+      const validGrammar = (unitDetail.grammar || []).filter(g => (g.point || '').trim().length > 0);
+
       const resp = await request(`/textbooks/content/${selectedBookCode}/${selectedUnitNum}`, {
         method: 'POST',
         body: JSON.stringify({
-          vocab: unitDetail.vocab || [],
-          patterns: unitDetail.patterns || [],
-          grammar: unitDetail.grammar || [],
+          vocab: validVocab,
+          patterns: validPatterns,
+          grammar: validGrammar,
           extra_content: unitDetail.extra_content || {},
           extracted_by: 'ai_workbench'
         })
@@ -485,13 +502,27 @@ export default function Textbooks() {
 
       if (resp.data) {
         if (unitDetail.unit_title) {
-          await request(`/textbooks/units-manage/${selectedBookCode}/${selectedUnitNum}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ unit_title: unitDetail.unit_title })
-          });
+          try {
+            await request(`/textbooks/units-manage/${selectedBookCode}/${selectedUnitNum}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ unit_title: unitDetail.unit_title })
+            });
+          } catch (te) {
+            console.warn('Update unit title warning:', te);
+          }
         }
 
-        alert('✅ 保存成功！教师端与家长端已同步更新');
+        setIsDirty(false);
+        const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        setLastSavedTime(timeStr);
+        setUnitDetail(prev => ({
+          ...prev,
+          vocab: validVocab,
+          patterns: validPatterns,
+          grammar: validGrammar
+        }));
+
+        alert('✅ 保存成功！词汇与教学内容已同步更新至云端数据库');
         const uResp = await request(`/textbooks/units-manage/${selectedBookCode}`);
         setBookUnits(uResp.data?.units || []);
       } else {
@@ -502,6 +533,18 @@ export default function Textbooks() {
     }
     setSaving(false);
   };
+
+  // 快捷键 Ctrl+S / Cmd+S 保存当前单元修改
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveUnitContent();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedBookCode, selectedUnitNum, unitDetail, isDirty]);
 
   // 删除单张 R2 切图 (支持按精确 key 或 pageNum 删除)
   const handleDeletePageImg = async (pageObj) => {
@@ -541,6 +584,7 @@ export default function Textbooks() {
 
   // 编辑助手函数
   const addVocabItem = () => {
+    setIsDirty(true);
     setUnitDetail(prev => ({
       ...prev,
       vocab: [...(prev.vocab || []), { word: '', translation: '', is_core: true, difficulty: 1 }]
@@ -548,6 +592,7 @@ export default function Textbooks() {
   };
 
   const updateVocabItem = (index, field, val) => {
+    setIsDirty(true);
     setUnitDetail(prev => {
       const list = [...prev.vocab];
       list[index] = { ...list[index], [field]: val };
@@ -556,6 +601,7 @@ export default function Textbooks() {
   };
 
   const removeVocabItem = (index) => {
+    setIsDirty(true);
     setUnitDetail(prev => ({
       ...prev,
       vocab: prev.vocab.filter((_, i) => i !== index)
@@ -563,6 +609,7 @@ export default function Textbooks() {
   };
 
   const addPatternItem = () => {
+    setIsDirty(true);
     setUnitDetail(prev => ({
       ...prev,
       patterns: [...(prev.patterns || []), { pattern: '', translation: '', is_core: true }]
@@ -570,6 +617,7 @@ export default function Textbooks() {
   };
 
   const updatePatternItem = (index, field, val) => {
+    setIsDirty(true);
     setUnitDetail(prev => {
       const list = [...prev.patterns];
       list[index] = { ...list[index], [field]: val };
@@ -578,6 +626,7 @@ export default function Textbooks() {
   };
 
   const removePatternItem = (index) => {
+    setIsDirty(true);
     setUnitDetail(prev => ({
       ...prev,
       patterns: prev.patterns.filter((_, i) => i !== index)
@@ -585,6 +634,7 @@ export default function Textbooks() {
   };
 
   const addGrammarItem = () => {
+    setIsDirty(true);
     setUnitDetail(prev => ({
       ...prev,
       grammar: [...(prev.grammar || []), { point: '', example: '', is_core: true, page: '' }]
@@ -592,6 +642,7 @@ export default function Textbooks() {
   };
 
   const updateGrammarItem = (index, field, val) => {
+    setIsDirty(true);
     setUnitDetail(prev => {
       const list = [...prev.grammar];
       list[index] = { ...list[index], [field]: val };
@@ -600,6 +651,7 @@ export default function Textbooks() {
   };
 
   const removeGrammarItem = (index) => {
+    setIsDirty(true);
     setUnitDetail(prev => ({
       ...prev,
       grammar: prev.grammar.filter((_, i) => i !== index)
@@ -929,13 +981,22 @@ export default function Textbooks() {
                   <input
                     type="text"
                     value={unitDetail.unit_title || ''}
-                    onChange={(e) => setUnitDetail({ ...unitDetail, unit_title: e.target.value })}
+                    onChange={(e) => {
+                      setIsDirty(true);
+                      setUnitDetail(prev => ({ ...prev, unit_title: e.target.value }));
+                    }}
                     placeholder="单元标题 (如: Art Class / Animals)"
                     className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 w-64 font-bold text-gray-900 bg-gray-50 hover:bg-white transition-colors"
                   />
                 </div>
 
                 <div className="flex items-center gap-2.5">
+                  {isDirty && (
+                    <span className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 px-2.5 py-1.5 rounded-lg animate-pulse flex items-center gap-1">
+                      ● 有未保存更改
+                    </span>
+                  )}
+
                   <Button
                     variant="outline"
                     onClick={handleAiExtract}
@@ -948,13 +1009,14 @@ export default function Textbooks() {
                   </Button>
 
                   <Button
-                    variant="success"
+                    variant={isDirty ? "success" : "secondary"}
                     onClick={handleSaveUnitContent}
                     disabled={saving}
-                    className="font-bold shadow-sm transition-all hover:shadow-md"
+                    className={`font-bold shadow-sm transition-all hover:shadow-md ${isDirty ? 'ring-2 ring-emerald-500/50' : ''}`}
+                    title="保存入库并同步 (快捷键 Ctrl+S)"
                   >
                     {saving ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                    {saving ? '保存中...' : '💾 保存入库'}
+                    {saving ? '保存中...' : isDirty ? '💾 保存入库 *' : '💾 保存入库'}
                   </Button>
                 </div>
               </div>
@@ -1109,12 +1171,12 @@ export default function Textbooks() {
                 {/* 2. 右半屏：结构化教学内容编辑 (Tabs) */}
                 <Card className="w-1/2 flex flex-col overflow-hidden border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300 bg-white">
                   {/* Tabs */}
-                  <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 px-4 pt-2 shrink-0">
-                    <div className="flex gap-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/50 px-4 py-2 shrink-0">
+                    <div className="flex gap-3 overflow-x-auto scrollbar-none py-1">
                       <button
                         type="button"
                         onClick={() => setActiveTab('vocab')}
-                        className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+                        className={`pb-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
                           activeTab === 'vocab'
                             ? 'border-primary-600 text-primary-700'
                             : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -1128,7 +1190,7 @@ export default function Textbooks() {
                       <button
                         type="button"
                         onClick={() => setActiveTab('patterns')}
-                        className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+                        className={`pb-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
                           activeTab === 'patterns'
                             ? 'border-primary-600 text-primary-700'
                             : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -1145,7 +1207,7 @@ export default function Textbooks() {
                         <button
                           type="button"
                           onClick={() => setActiveTab('phonics')}
-                          className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+                          className={`pb-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
                             activeTab === 'phonics'
                               ? 'border-primary-600 text-primary-700'
                               : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -1163,7 +1225,7 @@ export default function Textbooks() {
                         <button
                           type="button"
                           onClick={() => setActiveTab('reading')}
-                          className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+                          className={`pb-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
                             activeTab === 'reading'
                               ? 'border-primary-600 text-primary-700'
                               : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -1179,7 +1241,7 @@ export default function Textbooks() {
                       <button
                         type="button"
                         onClick={() => setActiveTab('grammar')}
-                        className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+                        className={`pb-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
                           activeTab === 'grammar'
                             ? 'border-primary-600 text-primary-700'
                             : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -1192,7 +1254,17 @@ export default function Textbooks() {
                       </button>
                     </div>
 
-                    <div className="pb-2">
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isDirty ? (
+                        <span className="text-[11px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-1 rounded-md flex items-center gap-1 animate-pulse">
+                          ● 未保存
+                        </span>
+                      ) : lastSavedTime ? (
+                        <span className="text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-md flex items-center gap-1">
+                          <Check className="w-3 h-3 text-green-600" /> 已保存 {lastSavedTime}
+                        </span>
+                      ) : null}
+
                       {activeTab === 'vocab' && (
                         <Button variant="ghost" size="sm" onClick={addVocabItem} className="h-8 text-primary-600 hover:bg-primary-50">
                           <Plus className="w-4 h-4 mr-1" /> 添加词汇
@@ -1218,6 +1290,20 @@ export default function Textbooks() {
                           <Plus className="w-4 h-4 mr-1" /> 添加语法
                         </Button>
                       )}
+
+                      <Button
+                        variant={isDirty ? "success" : "secondary"}
+                        size="sm"
+                        onClick={handleSaveUnitContent}
+                        disabled={saving}
+                        className={`h-8 font-bold shadow-sm flex items-center gap-1.5 transition-all ${
+                          isDirty ? 'ring-2 ring-emerald-500/50 hover:shadow-md' : 'opacity-90'
+                        }`}
+                        title="保存当前单元修改 (快捷键 Ctrl+S)"
+                      >
+                        {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        {saving ? '保存中...' : '💾 保存修改'}
+                      </Button>
                     </div>
                   </div>
 
@@ -1254,6 +1340,14 @@ export default function Textbooks() {
                                 type="text"
                                 value={v.translation || ''}
                                 onChange={(e) => updateVocabItem(i, 'translation', e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (i === (unitDetail.vocab || []).length - 1) {
+                                      addVocabItem();
+                                    }
+                                  }
+                                }}
                                 placeholder="中文释义"
                                 className="w-36 px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none text-gray-700 transition-colors"
                               />
@@ -1280,6 +1374,26 @@ export default function Textbooks() {
                               </button>
                             </div>
                           ))
+                        )}
+
+                        {/* 词汇列表底部快速操作条 */}
+                        {(unitDetail.vocab || []).length > 0 && (
+                          <div className="pt-2 flex items-center justify-between border-t border-gray-200/80 mt-4">
+                            <Button variant="ghost" size="sm" onClick={addVocabItem} className="h-8 text-primary-600 hover:bg-primary-50 font-bold">
+                              <Plus className="w-4 h-4 mr-1" /> 继续添加词汇
+                            </Button>
+                            <Button
+                              variant={isDirty ? "success" : "secondary"}
+                              size="sm"
+                              onClick={handleSaveUnitContent}
+                              disabled={saving}
+                              className="h-8 font-bold shadow-sm flex items-center gap-1.5"
+                              title="保存当前单元词汇 (快捷键 Ctrl+S)"
+                            >
+                              {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                              {saving ? '保存中...' : '💾 保存词汇修改 (Ctrl+S)'}
+                            </Button>
+                          </div>
                         )}
                       </div>
                     )}
@@ -1332,6 +1446,26 @@ export default function Textbooks() {
                               />
                             </div>
                           ))
+                        )}
+
+                        {/* 句型列表底部快速操作条 */}
+                        {(unitDetail.patterns || []).length > 0 && (
+                          <div className="pt-2 flex items-center justify-between border-t border-gray-200/80 mt-4">
+                            <Button variant="ghost" size="sm" onClick={addPatternItem} className="h-8 text-primary-600 hover:bg-primary-50 font-bold">
+                              <Plus className="w-4 h-4 mr-1" /> 继续添加句型
+                            </Button>
+                            <Button
+                              variant={isDirty ? "success" : "secondary"}
+                              size="sm"
+                              onClick={handleSaveUnitContent}
+                              disabled={saving}
+                              className="h-8 font-bold shadow-sm flex items-center gap-1.5"
+                              title="保存当前单元句型 (快捷键 Ctrl+S)"
+                            >
+                              {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                              {saving ? '保存中...' : '💾 保存句型修改 (Ctrl+S)'}
+                            </Button>
+                          </div>
                         )}
                       </div>
                     )}
@@ -1622,6 +1756,26 @@ export default function Textbooks() {
                               />
                             </div>
                           ))
+                        )}
+
+                        {/* 语法列表底部快速操作条 */}
+                        {(unitDetail.grammar || []).length > 0 && (
+                          <div className="pt-2 flex items-center justify-between border-t border-gray-200/80 mt-4">
+                            <Button variant="ghost" size="sm" onClick={addGrammarItem} className="h-8 text-primary-600 hover:bg-primary-50 font-bold">
+                              <Plus className="w-4 h-4 mr-1" /> 继续添加语法
+                            </Button>
+                            <Button
+                              variant={isDirty ? "success" : "secondary"}
+                              size="sm"
+                              onClick={handleSaveUnitContent}
+                              disabled={saving}
+                              className="h-8 font-bold shadow-sm flex items-center gap-1.5"
+                              title="保存当前单元语法 (快捷键 Ctrl+S)"
+                            >
+                              {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                              {saving ? '保存中...' : '💾 保存语法修改 (Ctrl+S)'}
+                            </Button>
+                          </div>
                         )}
                       </div>
                     )}
