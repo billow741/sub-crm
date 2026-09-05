@@ -24,7 +24,8 @@ export const cors = async (c, next) => {
     if (!res || !res.headers) return;
     res.headers.set('Access-Control-Allow-Origin', allowOrigin);
     res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, Range, Accept, Origin, X-Requested-With, X-Upload-Id, X-Upload-Key, X-Part-Number');
+    const reqHeaders = c.req.header('Access-Control-Request-Headers');
+    res.headers.set('Access-Control-Allow-Headers', reqHeaders ? `*, ${reqHeaders}` : '*');
     res.headers.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges, ETag');
     res.headers.set('Access-Control-Max-Age', '86400');
   };
