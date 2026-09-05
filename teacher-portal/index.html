@@ -885,7 +885,13 @@ async function loadTextbookOptions() {
   try {
     var res = await apiGet('/textbooks');
     var books = res.data || [];
-    window_textbooksCache = books;
+    // 教师端课本选择器：隐藏 workbook 练习册教材，仅保留学生用书/核心课本
+    window_textbooksCache = books.filter(function(b) {
+      var name = (b.name || '').toLowerCase();
+      var series = (b.series || '').toLowerCase();
+      var code = (b.code || '').toLowerCase();
+      return !name.includes('workbook') && !series.includes('workbook') && !code.includes('workbook') && !code.endsWith('-wb');
+    });
     renderTextbookDropdownMenu();
   } catch(e) {
     console.warn('Failed to load textbooks list:', e);
@@ -950,6 +956,12 @@ function renderTextbookDropdownMenu() {
   var seriesGroups = {};
   books.forEach(function(b) {
     var s = b.series || 'Other';
+    var sLower = s.toLowerCase();
+    var bNameLower = (b.name || '').toLowerCase();
+    var bCodeLower = (b.code || '').toLowerCase();
+    if (sLower.includes('workbook') || bNameLower.includes('workbook') || bCodeLower.includes('workbook') || bCodeLower.endsWith('-wb')) {
+      return;
+    }
     if (!seriesGroups[s]) seriesGroups[s] = [];
     seriesGroups[s].push(b);
   });
