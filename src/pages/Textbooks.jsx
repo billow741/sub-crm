@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Book, FileText, Upload, Sparkles, Loader, CheckCircle, XCircle, 
   Trash2, Plus, Edit3, Save, Eye, RefreshCw, AlertCircle, 
-  ExternalLink, Layers, ChevronRight, Check, X, ArrowRight, Play, CheckCheck, BookOpen, Camera
+  ExternalLink, Layers, ChevronLeft, ChevronRight, Check, X, ArrowRight, Play, CheckCheck, BookOpen, Camera
 } from 'lucide-react';
 import { request, API_BASE_URL, API_KEY } from '../store/api';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
@@ -39,7 +39,38 @@ export default function Textbooks() {
   const [showLlmSettingsModal, setShowLlmSettingsModal] = useState(false);
   const [previewImageModal, setPreviewImageModal] = useState(null);
 
-  // 系列目录状态
+  // 预览大图上一张/下一张切换
+  const tbModalHasPrev = Boolean(previewImageModal?.list && previewImageModal.index > 0);
+  const tbModalHasNext = Boolean(previewImageModal?.list && previewImageModal.index < previewImageModal.list.length - 1);
+
+  const handleTbModalPrev = (e) => {
+    if (e) e.stopPropagation();
+    if (previewImageModal?.list && previewImageModal.index > 0) {
+      const newIdx = previewImageModal.index - 1;
+      const item = previewImageModal.list[newIdx];
+      setPreviewImageModal({ ...previewImageModal, url: item.url, title: item.title, index: newIdx });
+    }
+  };
+
+  const handleTbModalNext = (e) => {
+    if (e) e.stopPropagation();
+    if (previewImageModal?.list && previewImageModal.index < previewImageModal.list.length - 1) {
+      const newIdx = previewImageModal.index + 1;
+      const item = previewImageModal.list[newIdx];
+      setPreviewImageModal({ ...previewImageModal, url: item.url, title: item.title, index: newIdx });
+    }
+  };
+
+  useEffect(() => {
+    if (!previewImageModal) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setPreviewImageModal(null);
+      else if (e.key === 'ArrowLeft') handleTbModalPrev();
+      else if (e.key === 'ArrowRight') handleTbModalNext();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewImageModal]);
   const [selectedSeries, setSelectedSeries] = useState('ALL');
   const [collapsedSeries, setCollapsedSeries] = useState({});
 
@@ -985,7 +1016,13 @@ export default function Textbooks() {
                           {renderedImages.map((img, i) => (
                             <div key={i} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow group flex flex-col">
                               <div
-                                onClick={() => setPreviewImageModal(img.url)}
+                                onClick={() => {
+                                  const list = renderedImages.map((item, idx) => ({
+                                    url: item.url,
+                                    title: `本地新切片 (第 ${item.pageNum || (idx + 1)} 页)`
+                                  }));
+                                  setPreviewImageModal({ url: img.url, index: i, list });
+                                }}
                                 className="relative h-32 bg-gray-50 flex items-center justify-center cursor-pointer overflow-hidden"
                               >
                                 <img src={img.url} alt={`P${i + 1}`} className="w-full h-full object-contain" />
@@ -1026,7 +1063,14 @@ export default function Textbooks() {
                         {r2Pages.map(p => (
                           <div key={p.key || p.page_num} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md hover:border-primary-300 transition-all group flex flex-col">
                             <div
-                              onClick={() => setPreviewImageModal(p.url)}
+                              onClick={() => {
+                                const list = r2Pages.map((item) => ({
+                                  url: item.url,
+                                  title: `课本切片 (第 ${item.page_num} 页)`
+                                }));
+                                const curIdx = r2Pages.findIndex(x => (x.key || x.page_num) === (p.key || p.page_num));
+                                setPreviewImageModal({ url: p.url, index: curIdx >= 0 ? curIdx : 0, list });
+                              }}
                               className="relative h-32 bg-gray-50 flex items-center justify-center cursor-pointer overflow-hidden"
                             >
                               <img src={p.url} alt={`Page ${p.page_num}`} className="w-full h-full object-contain" />
@@ -1592,22 +1636,73 @@ export default function Textbooks() {
       </div>
 
       {/* 图片放大灯箱 Modal */}
-      {previewImageModal && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setPreviewImageModal(null)}
-        >
-          <div className="relative max-w-5xl max-h-[95vh] bg-white rounded-2xl overflow-hidden p-2 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={() => setPreviewImageModal(null)}
-              className="absolute top-4 right-4 bg-black/60 text-white rounded-full p-2 hover:bg-black/90 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <img src={previewImageModal} alt="Preview" className="max-h-[90vh] w-auto mx-auto object-contain rounded-xl" />
+      {previewImageModal && (() => {
+        const currentUrl = typeof previewImageModal === 'string' ? previewImageModal : previewImageModal.url;
+        const currentTitle = typeof previewImageModal === 'object' ? previewImageModal.title : null;
+        const list = previewImageModal?.list;
+        const index = previewImageModal?.index;
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-slate-900/85 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in duration-150"
+            onClick={() => setPreviewImageModal(null)}
+          >
+            {/* 上一张按钮 */}
+            {list && list.length > 1 && (
+              <button
+                type="button"
+                onClick={handleTbModalPrev}
+                disabled={!tbModalHasPrev}
+                className={`absolute left-3 md:left-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center transition-all z-10 backdrop-blur-md border border-white/25 ${
+                  tbModalHasPrev
+                    ? 'bg-white/15 hover:bg-white/30 text-white hover:scale-105 active:scale-95 shadow-xl cursor-pointer'
+                    : 'bg-white/5 text-white/20 cursor-not-allowed border-white/10'
+                }`}
+                title="上一张 (←)"
+              >
+                <ChevronLeft className="w-7 h-7" />
+              </button>
+            )}
+
+            {/* 下一张按钮 */}
+            {list && list.length > 1 && (
+              <button
+                type="button"
+                onClick={handleTbModalNext}
+                disabled={!tbModalHasNext}
+                className={`absolute right-3 md:right-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center transition-all z-10 backdrop-blur-md border border-white/25 ${
+                  tbModalHasNext
+                    ? 'bg-white/15 hover:bg-white/30 text-white hover:scale-105 active:scale-95 shadow-xl cursor-pointer'
+                    : 'bg-white/5 text-white/20 cursor-not-allowed border-white/10'
+                }`}
+                title="下一张 (→)"
+              >
+                <ChevronRight className="w-7 h-7" />
+              </button>
+            )}
+
+            <div className="relative max-w-5xl max-h-[95vh] bg-white rounded-2xl overflow-hidden p-2 shadow-2xl flex flex-col items-center" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => setPreviewImageModal(null)}
+                className="absolute top-4 right-4 bg-black/60 text-white rounded-full p-2 hover:bg-black/90 transition-colors z-20 cursor-pointer"
+                title="关闭 (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <img src={currentUrl} alt="Preview" className="max-h-[85vh] w-auto mx-auto object-contain rounded-xl" />
+              {currentTitle && (
+                <div className="text-gray-700 text-xs font-bold mt-2 pb-1 flex items-center gap-2">
+                  <span>{currentTitle}</span>
+                  {list && list.length > 1 && (
+                    <span className="text-gray-400 font-mono">
+                      ({(index ?? 0) + 1} / {list.length})
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 整本 PDF 批量导入 Modal */}
       {showBatchBookModal && selectedBookCode && (

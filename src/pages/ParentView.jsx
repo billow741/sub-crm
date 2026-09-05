@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { User, Calendar, Package, BookOpen, AlertCircle, X, ZoomIn, Search, ChevronLeft } from 'lucide-react';
+import { User, Calendar, Package, BookOpen, AlertCircle, X, ZoomIn, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { studentOps, packageOps, classOps, loadData, API_BASE_URL } from '../store';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -121,6 +121,38 @@ function ParentStudentView() {
   const [packages, setPackages] = useState([]);
   const [classes, setClasses] = useState([]);
   const [previewImg, setPreviewImg] = useState(null);
+
+  const hasPrev = Boolean(previewImg?.list && previewImg.index > 0);
+  const hasNext = Boolean(previewImg?.list && previewImg.index < previewImg.list.length - 1);
+
+  const handlePrev = (e) => {
+    if (e) e.stopPropagation();
+    if (previewImg?.list && previewImg.index > 0) {
+      const newIdx = previewImg.index - 1;
+      const item = previewImg.list[newIdx];
+      setPreviewImg({ ...previewImg, url: item.url, title: item.title, index: newIdx });
+    }
+  };
+
+  const handleNext = (e) => {
+    if (e) e.stopPropagation();
+    if (previewImg?.list && previewImg.index < previewImg.list.length - 1) {
+      const newIdx = previewImg.index + 1;
+      const item = previewImg.list[newIdx];
+      setPreviewImg({ ...previewImg, url: item.url, title: item.title, index: newIdx });
+    }
+  };
+
+  useEffect(() => {
+    if (!previewImg) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setPreviewImg(null);
+      else if (e.key === 'ArrowLeft') handlePrev();
+      else if (e.key === 'ArrowRight') handleNext();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewImg]);
 
   useEffect(() => {
     async function load() {
@@ -485,26 +517,33 @@ function ParentStudentView() {
                         )}
 
                         {/* PDF 页面图缩略图 */}
-                        {cls.textbook_code && cls.unit_number && cls.page_from && cls.page_to && (
-                          <div className="mt-3 pt-3 border-t border-gray-50">
-                            <div className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
-                              📖 教材第 {cls.page_from}-{cls.page_to} 页:
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {Array.from({ length: Math.max(0, parseInt(cls.page_to) - parseInt(cls.page_from) + 1) }, (_, i) => {
-                                const page = parseInt(cls.page_from) + i;
-                                const imgUrl = `${API_BASE_URL}/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`;
-                                const pTitle = `${cls.textbook_code} · Unit ${cls.unit_number} (第 ${page} 页)`;
-                                return (
+                        {cls.textbook_code && cls.unit_number && cls.page_from && cls.page_to && (() => {
+                          const pStart = parseInt(cls.page_from, 10);
+                          const pEnd = parseInt(cls.page_to, 10);
+                          const count = Math.max(0, pEnd - pStart + 1);
+                          const gallery = Array.from({ length: count }, (_, i) => {
+                            const page = pStart + i;
+                            return {
+                              url: `${API_BASE_URL}/textbooks/page-img/${cls.textbook_code}/${cls.unit_number}/${page}`,
+                              title: `${cls.textbook_code} · Unit ${cls.unit_number} (第 ${page} 页)`
+                            };
+                          });
+                          return (
+                            <div className="mt-3 pt-3 border-t border-gray-50">
+                              <div className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+                                📖 教材第 {cls.page_from}-{cls.page_to} 页:
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {gallery.map((item, idx) => (
                                   <div
-                                    key={page}
-                                    onClick={() => setPreviewImg({ url: imgUrl, title: pTitle })}
+                                    key={item.url}
+                                    onClick={() => setPreviewImg({ url: item.url, title: item.title, list: gallery, index: idx })}
                                     className="group relative w-16 h-20 md:w-20 md:h-24 bg-white border border-gray-200 rounded-lg overflow-hidden cursor-pointer shadow-sm hover:shadow-md hover:border-primary-400 transition-all transform hover:-translate-y-1"
-                                    title={`点击放大查看第 ${page} 页`}
+                                    title={`点击放大查看第 ${pStart + idx} 页`}
                                   >
                                     <img
-                                      src={imgUrl}
-                                      alt={`第 ${page} 页`}
+                                      src={item.url}
+                                      alt={`第 ${pStart + idx} 页`}
                                       className="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-110"
                                       loading="lazy"
                                       onError={(e) => { e.target.closest('.group').style.display = 'none'; }}
@@ -513,14 +552,14 @@ function ParentStudentView() {
                                       <ZoomIn size={16} />
                                     </div>
                                     <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] text-center py-0.5 backdrop-blur-sm">
-                                      P{page}
+                                      P{pStart + idx}
                                     </div>
                                   </div>
-                                );
-                              })}
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -557,16 +596,50 @@ function ParentStudentView() {
       {/* 教材大图预览灯箱 Modal */}
       {previewImg && (
         <div
-          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200 select-none"
           onClick={() => setPreviewImg(null)}
         >
+          {/* 上一张按钮 */}
+          {previewImg.list && previewImg.list.length > 1 && (
+            <button
+              type="button"
+              onClick={handlePrev}
+              disabled={!hasPrev}
+              className={`absolute left-3 md:left-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center transition-all z-10 backdrop-blur-md border border-white/25 ${
+                hasPrev
+                  ? 'bg-white/15 hover:bg-white/30 text-white hover:scale-105 active:scale-95 shadow-xl cursor-pointer'
+                  : 'bg-white/5 text-white/20 cursor-not-allowed border-white/10'
+              }`}
+              title="上一张 (←)"
+            >
+              <ChevronLeft size={28} />
+            </button>
+          )}
+
+          {/* 下一张按钮 */}
+          {previewImg.list && previewImg.list.length > 1 && (
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={!hasNext}
+              className={`absolute right-3 md:right-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center transition-all z-10 backdrop-blur-md border border-white/25 ${
+                hasNext
+                  ? 'bg-white/15 hover:bg-white/30 text-white hover:scale-105 active:scale-95 shadow-xl cursor-pointer'
+                  : 'bg-white/5 text-white/20 cursor-not-allowed border-white/10'
+              }`}
+              title="下一张 (→)"
+            >
+              <ChevronRight size={28} />
+            </button>
+          )}
+
           <div
             className="relative max-w-[95vw] max-h-[95vh] flex flex-col items-center"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => setPreviewImg(null)}
-              className="absolute -top-12 right-0 md:-right-12 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors border border-white/20 backdrop-blur-md"
+              className="absolute -top-12 right-0 md:-right-12 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors border border-white/20 backdrop-blur-md cursor-pointer"
               title="关闭预览 (Esc)"
             >
               <X size={20} />
@@ -577,8 +650,13 @@ function ParentStudentView() {
               className="max-h-[85vh] max-w-full rounded-xl shadow-2xl object-contain bg-white/5 ring-1 ring-white/20"
             />
             {previewImg.title && (
-              <div className="text-white/90 text-sm font-medium mt-4 bg-black/40 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/10">
-                {previewImg.title}
+              <div className="text-white/90 text-sm font-medium mt-4 bg-black/50 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/10 flex items-center gap-2">
+                <span>{previewImg.title}</span>
+                {previewImg.list && previewImg.list.length > 1 && (
+                  <span className="text-white/60 font-mono text-xs">
+                    ({previewImg.index + 1} / {previewImg.list.length})
+                  </span>
+                )}
               </div>
             )}
           </div>

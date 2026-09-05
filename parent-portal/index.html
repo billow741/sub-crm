@@ -1210,6 +1210,61 @@
         background: rgba(255,255,255,0.5);
         transform: scale(1.1);
       }
+      /* 前进后退导航按钮 */
+      .tb-lightbox-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.22);
+        border: 1.5px solid rgba(255, 255, 255, 0.4);
+        color: #ffffff;
+        font-size: 28px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 10002;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        transition: all 0.2s ease;
+        user-select: none;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+      }
+      .tb-lightbox-nav:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.45);
+        transform: translateY(-50%) scale(1.1);
+        box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+      }
+      .tb-lightbox-nav:disabled {
+        opacity: 0.2;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+      .tb-lightbox-prev {
+        left: 24px;
+      }
+      .tb-lightbox-next {
+        right: 24px;
+      }
+      @media (max-width: 640px) {
+        .tb-lightbox-nav {
+          width: 40px;
+          height: 40px;
+          font-size: 22px;
+          background: rgba(15, 23, 42, 0.75);
+          border-color: rgba(255, 255, 255, 0.25);
+        }
+        .tb-lightbox-prev {
+          left: 10px;
+        }
+        .tb-lightbox-next {
+          right: 10px;
+        }
+      }
       @keyframes tbFadeIn {
         from { opacity: 0; transform: scale(0.97); }
         to { opacity: 1; transform: scale(1); }
@@ -1500,6 +1555,8 @@
 </div>
 <!-- 教材切图大图预览灯箱 -->
 <div id="tb-lightbox" class="tb-lightbox" onclick="if(event.target===this||event.target.classList.contains('tb-lightbox-content'))closeTbLightbox()">
+  <button id="tb-lightbox-prev" class="tb-lightbox-nav tb-lightbox-prev" type="button" onclick="event.stopPropagation();navigateTbLightbox(-1)" title="上一张 (←)">‹</button>
+  <button id="tb-lightbox-next" class="tb-lightbox-nav tb-lightbox-next" type="button" onclick="event.stopPropagation();navigateTbLightbox(1)" title="下一张 (→)">›</button>
   <div class="tb-lightbox-content">
     <button class="tb-lightbox-close" type="button" onclick="closeTbLightbox()" title="关闭 (Esc)">✕</button>
     <img id="tb-lightbox-img" class="tb-lightbox-img" src="" alt="教材原页切图">
@@ -1559,18 +1616,93 @@ var API_KEY = '***'; // 同登录页
 var STATUS_LABELS = { scheduled: 'Scheduled', completed: 'Completed', cancelled: 'Cancelled', absent: 'Absent' };
 var STATUS_CSS = { scheduled: 'status-scheduled', completed: 'status-completed', cancelled: 'status-cancelled', absent: 'status-absent' };
 
-// ===== 教材切图大图预览灯箱交互 =====
-function openTbLightbox(url, title) {
-  var lb = document.getElementById('tb-lightbox');
+// ===== 教材切图大图预览灯箱交互 (支持多图前进后退与手势滑动) =====
+var tbGalleryList = [];
+var tbGalleryIndex = 0;
+
+function updateTbLightboxUI() {
+  if (!tbGalleryList || tbGalleryList.length === 0) return;
+  var item = tbGalleryList[tbGalleryIndex];
   var img = document.getElementById('tb-lightbox-img');
   var tt = document.getElementById('tb-lightbox-title');
-  if (lb && img) {
-    img.src = url;
-    if (tt) tt.textContent = title || '教材原页切图';
-    lb.classList.add('show');
-    document.body.style.overflow = 'hidden';
+  var btnPrev = document.getElementById('tb-lightbox-prev');
+  var btnNext = document.getElementById('tb-lightbox-next');
+
+  if (img && item) img.src = item.url;
+  if (tt && item) {
+    var countSuffix = (tbGalleryList.length > 1) ? ' (' + (tbGalleryIndex + 1) + ' / ' + tbGalleryList.length + ')' : '';
+    tt.textContent = (item.title || '教材原页切图') + countSuffix;
+  }
+
+  if (btnPrev && btnNext) {
+    if (tbGalleryList.length <= 1) {
+      btnPrev.style.display = 'none';
+      btnNext.style.display = 'none';
+    } else {
+      btnPrev.style.display = 'flex';
+      btnNext.style.display = 'flex';
+      btnPrev.disabled = (tbGalleryIndex <= 0);
+      btnNext.disabled = (tbGalleryIndex >= tbGalleryList.length - 1);
+    }
   }
 }
+
+function openTbLightbox(url, title, targetEl) {
+  var lb = document.getElementById('tb-lightbox');
+  if (!lb) return;
+
+  tbGalleryList = [];
+  tbGalleryIndex = 0;
+
+  var target = targetEl || (typeof event !== 'undefined' && event ? event.currentTarget : null);
+  var grid = target && target.closest ? (target.closest('.tb-thumb-grid') || target.parentElement) : null;
+
+  if (grid) {
+    var cards = Array.from(grid.querySelectorAll('.tb-thumb-card')).filter(function(c) {
+      return c.style.display !== 'none';
+    });
+    cards.forEach(function(c) {
+      var cImg = c.querySelector('img');
+      var cUrl = c.getAttribute('data-url');
+      var cTitle = c.getAttribute('data-title');
+      if (!cUrl || !cTitle) {
+        var m = (c.getAttribute('onclick') || '').match(/openTbLightbox\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]/);
+        if (m) {
+          if (!cUrl) cUrl = m[1];
+          if (!cTitle) cTitle = m[2];
+        }
+      }
+      if (!cUrl && cImg) cUrl = cImg.src;
+      if (!cTitle) cTitle = c.getAttribute('title') || '教材原页切图';
+
+      if (cUrl) {
+        tbGalleryList.push({ url: cUrl, title: cTitle });
+        if (c === target || cUrl === url) {
+          tbGalleryIndex = tbGalleryList.length - 1;
+        }
+      }
+    });
+  }
+
+  if (tbGalleryList.length === 0) {
+    tbGalleryList = [{ url: url, title: title || '教材原页切图' }];
+    tbGalleryIndex = 0;
+  }
+
+  updateTbLightboxUI();
+  lb.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function navigateTbLightbox(delta) {
+  if (!tbGalleryList || tbGalleryList.length <= 1) return;
+  var newIdx = tbGalleryIndex + delta;
+  if (newIdx >= 0 && newIdx < tbGalleryList.length) {
+    tbGalleryIndex = newIdx;
+    updateTbLightboxUI();
+  }
+}
+
 function closeTbLightbox() {
   var lb = document.getElementById('tb-lightbox');
   if (lb) {
@@ -1578,9 +1710,39 @@ function closeTbLightbox() {
     document.body.style.overflow = '';
   }
 }
+
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeTbLightbox();
+  var lb = document.getElementById('tb-lightbox');
+  if (lb && lb.classList.contains('show')) {
+    if (e.key === 'Escape') closeTbLightbox();
+    else if (e.key === 'ArrowLeft') navigateTbLightbox(-1);
+    else if (e.key === 'ArrowRight') navigateTbLightbox(1);
+  }
 });
+
+// 手机端左右滑动手势支持
+(function() {
+  var touchStartX = 0;
+  var touchStartY = 0;
+  var lb = document.getElementById('tb-lightbox');
+  if (!lb) return;
+  lb.addEventListener('touchstart', function(e) {
+    if (e.touches && e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+  lb.addEventListener('touchend', function(e) {
+    if (e.changedTouches && e.changedTouches.length === 1) {
+      var dx = e.changedTouches[0].clientX - touchStartX;
+      var dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        if (dx > 0) navigateTbLightbox(-1);
+        else navigateTbLightbox(1);
+      }
+    }
+  }, { passive: true });
+})();
 
 // ===== Simple URL Token Encryption =====
 // Token 来源可能有两套加密参数，尝试解码
@@ -2246,7 +2408,7 @@ function showViewFeedback(idx) {
       for (var p = parseInt(cls.page_from); p <= parseInt(cls.page_to); p++) {
         var url = API_TXT + '/textbooks/page-img/' + encodeURIComponent(cls.textbook_code) + '/' + encodeURIComponent(cls.unit_number || '0') + '/' + p;
         var pTitle = esc(bName || cls.textbook_code) + (displayUnit ? ' · ' + esc(displayUnit) : '') + ' (第 ' + p + ' 页)';
-        html += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\')" title="点击放大查看第 ' + p + ' 页">';
+        html += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\', this)" title="点击放大查看第 ' + p + ' 页">';
         html += '<div class="tb-thumb-img-wrap">';
         html += '<img src="' + url + '" alt="P' + p + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
         html += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
@@ -2353,7 +2515,7 @@ function showViewFeedback(idx) {
         for (var wp = wbFrom; wp <= wbTo; wp++) {
           var url = API_TXT + '/textbooks/page-img/' + encodeURIComponent(wbCode) + '/' + encodeURIComponent(uVal || '0') + '/' + wp;
           var pTitle = wbName + (displayUnit ? ' · ' + displayUnit : '') + ' (第 ' + wp + ' 页练习)';
-          wHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\')" title="点击放大查看练习册第 ' + wp + ' 页">';
+          wHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\', this)" title="点击放大查看练习册第 ' + wp + ' 页">';
           wHtml += '<div class="tb-thumb-img-wrap">';
           wHtml += '<img src="' + url + '" alt="WB P' + wp + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
           wHtml += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
@@ -2374,7 +2536,7 @@ function showViewFeedback(idx) {
             pages.forEach(function(pg) {
               var url = pg.url || (API_TXT + '/textbooks/page-img/' + encodeURIComponent(wbCode) + '/' + encodeURIComponent(uVal) + '/' + pg.page_num);
               var pTitle = wbName + ' (第 ' + pg.page_num + ' 页练习)';
-              wHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\')" title="点击放大查看练习册第 ' + pg.page_num + ' 页">';
+              wHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + url + '\', \'' + pTitle + '\', this)" title="点击放大查看练习册第 ' + pg.page_num + ' 页">';
               wHtml += '<div class="tb-thumb-img-wrap">';
               wHtml += '<img src="' + url + '" alt="WB P' + pg.page_num + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
               wHtml += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
@@ -2494,7 +2656,7 @@ function renderHomeworkTab(pastClasses) {
     for (var wp = wbFrom; wp <= wbTo; wp++) {
       var wUrl = API_TXT + '/textbooks/page-img/' + encodeURIComponent(wbCode) + '/' + encodeURIComponent(wbUnit) + '/' + wp;
       var wTitle = escapeHtml(wbName) + ' (第 ' + wp + ' 页练习)';
-      h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + wUrl + '\', \'' + wTitle + '\')" title="点击放大第 ' + wp + ' 页练习题">';
+      h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + wUrl + '\', \'' + wTitle + '\', this)" title="点击放大第 ' + wp + ' 页练习题">';
       h += '<div class="tb-thumb-img-wrap">';
       h += '<img src="' + wUrl + '" alt="WB P' + wp + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
       h += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
@@ -2518,7 +2680,7 @@ function renderHomeworkTab(pastClasses) {
     for (var pidx = pFrom; pidx <= pTo; pidx++) {
       var purl = API_TXT + '/textbooks/page-img/' + encodeURIComponent(latest.textbook_code) + '/' + encodeURIComponent(latest.unit_number || '0') + '/' + pidx;
       var pTitle = escapeHtml(bFullName || latest.textbook_code) + ' (第 ' + pidx + ' 页)';
-      h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + purl + '\', \'' + pTitle + '\')" title="点击放大第 ' + pidx + ' 页">';
+      h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + purl + '\', \'' + pTitle + '\', this)" title="点击放大第 ' + pidx + ' 页">';
       h += '<div class="tb-thumb-img-wrap">';
       h += '<img src="' + purl + '" alt="P' + pidx + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
       h += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
@@ -2574,7 +2736,7 @@ function renderHomeworkTab(pastClasses) {
         for (var pwp = pWbFrom; pwp <= pWbTo; pwp++) {
           var pwUrl = API_TXT + '/textbooks/page-img/' + encodeURIComponent(pWbCode) + '/' + encodeURIComponent(pWbUnit) + '/' + pwp;
           var pwTitle = escapeHtml(getBookName(pWbCode) || pWbCode) + ' (第 ' + pwp + ' 页练习)';
-          h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + pwUrl + '\', \'' + pwTitle + '\')" title="点击放大第 ' + pwp + ' 页">';
+          h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + pwUrl + '\', \'' + pwTitle + '\', this)" title="点击放大第 ' + pwp + ' 页">';
           h += '<div class="tb-thumb-img-wrap"><img src="' + pwUrl + '" alt="WB P' + pwp + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'"><div class="tb-thumb-overlay"><span>🔍 放大</span></div></div>';
           h += '<div class="tb-thumb-tag" style="background:#4F46E5;color:#fff;">WB P' + pwp + '</div>';
           h += '</div>';
@@ -2591,7 +2753,7 @@ function renderHomeworkTab(pastClasses) {
         for (var ppidx = ppFrom; ppidx <= ppTo; ppidx++) {
           var ppurl = API_TXT + '/textbooks/page-img/' + encodeURIComponent(pastHw.textbook_code) + '/' + encodeURIComponent(pastHw.unit_number || '0') + '/' + ppidx;
           var ppTitle = escapeHtml(pastBName || pastHw.textbook_code) + ' (第 ' + ppidx + ' 页)';
-          h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + ppurl + '\', \'' + ppTitle + '\')" title="点击放大第 ' + ppidx + ' 页">';
+          h += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + ppurl + '\', \'' + ppTitle + '\', this)" title="点击放大第 ' + ppidx + ' 页">';
           h += '<div class="tb-thumb-img-wrap"><img src="' + ppurl + '" alt="P' + ppidx + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'"><div class="tb-thumb-overlay"><span>🔍 放大</span></div></div>';
           h += '<div class="tb-thumb-tag">P' + ppidx + '</div>';
           h += '</div>';
@@ -3230,7 +3392,7 @@ function renderStudyProfile(student, allClasses) {
             for (var pidx = tbPFrom; pidx <= tbPTo; pidx++) {
               var purl = API_TXT2 + '/textbooks/page-img/' + encodeURIComponent(c.textbook_code) + '/' + encodeURIComponent(c.unit_number || '0') + '/' + pidx;
               var pTitle = escapeHtml(bFullName || c.textbook_code) + (displayUnit ? ' · ' + escapeHtml(displayUnit) : '') + ' (第 ' + pidx + ' 页)';
-              histHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + purl + '\', \'' + pTitle + '\')" title="点击放大查看第 ' + pidx + ' 页">';
+              histHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + purl + '\', \'' + pTitle + '\', this)" title="点击放大查看第 ' + pidx + ' 页">';
               histHtml += '<div class="tb-thumb-img-wrap">';
               histHtml += '<img src="' + purl + '" alt="P' + pidx + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
               histHtml += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
@@ -3256,7 +3418,7 @@ function renderStudyProfile(student, allClasses) {
             for (var wp = wbFrom; wp <= wbTo; wp++) {
               var wUrl = API_TXT2 + '/textbooks/page-img/' + encodeURIComponent(wbCodeCard) + '/' + encodeURIComponent(wbUnitCard) + '/' + wp;
               var wTitle = escapeHtml(wbBookName) + ' (第 ' + wp + ' 页练习)';
-              histHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + wUrl + '\', \'' + wTitle + '\')" title="点击放大查看第 ' + wp + ' 页练习题">';
+              histHtml += '<div class="tb-thumb-card" onclick="openTbLightbox(\'' + wUrl + '\', \'' + wTitle + '\', this)" title="点击放大查看第 ' + wp + ' 页练习题">';
               histHtml += '<div class="tb-thumb-img-wrap">';
               histHtml += '<img src="' + wUrl + '" alt="WB P' + wp + '" class="tb-thumb-img" loading="lazy" onerror="this.closest(\'.tb-thumb-card\').style.display=\'none\'">';
               histHtml += '<div class="tb-thumb-overlay"><span>🔍 放大</span></div>';
