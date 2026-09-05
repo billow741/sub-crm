@@ -1820,14 +1820,18 @@ function renderPreviewAndNudge(data) {
   if (prevSec && prev && prev.has_preview && ((prev.vocab_preview && prev.vocab_preview.length > 0) || (prev.patterns_preview && prev.patterns_preview.length > 0) || prev.teacher_preview_note)) {
     var tagEl = document.getElementById('preview-unit-tag');
     if (tagEl) {
-      var shortTag = prev.unit_title ? prev.unit_title.split(/[:：]/)[0].trim() : ('Unit ' + prev.unit_number);
-      tagEl.textContent = shortTag;
+      var shortTag = (prev.unit_number ? ('Unit ' + prev.unit_number) : '') + (prev.unit_title ? (' · ' + prev.unit_title.split(/[:：]/)[0].trim()) : '');
+      tagEl.textContent = shortTag || ('Unit ' + (prev.unit_number || ''));
     }
 
     var titleEl = document.getElementById('preview-title');
     if (titleEl) {
-      var unitText = prev.unit_title || ('Unit ' + prev.unit_number);
-      titleEl.textContent = (prev.textbook_name || prev.textbook_code) + ' · ' + unitText;
+      var rawTitle = prev.unit_title || '';
+      var unitText = rawTitle;
+      if (prev.unit_number && !rawTitle.toLowerCase().startsWith('unit') && !rawTitle.toLowerCase().startsWith('lesson')) {
+        unitText = 'Unit ' + prev.unit_number + (rawTitle ? ': ' + rawTitle : '');
+      }
+      titleEl.textContent = (prev.textbook_name || prev.textbook_code) + ' · ' + (unitText || ('Unit ' + prev.unit_number));
     }
 
     var subEl = document.getElementById('preview-sub');

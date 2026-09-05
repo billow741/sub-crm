@@ -1121,9 +1121,24 @@ function refreshNextLessonPreviewOptions(preselectedNextUnit) {
 
   if (nextTbCodeInput) nextTbCodeInput.value = tbCode;
 
+  // Default to advance to next unit (curUnit + 1) if not explicitly set
   var chosenUnit = preselectedNextUnit !== undefined && preselectedNextUnit !== null && preselectedNextUnit !== ''
     ? parseInt(preselectedNextUnit, 10)
-    : (nextUnitNumInput && nextUnitNumInput.value !== '' ? parseInt(nextUnitNumInput.value, 10) : null);
+    : (nextUnitNumInput && nextUnitNumInput.value !== '' ? parseInt(nextUnitNumInput.value, 10) : (curUnit ? curUnit + 1 : 1));
+
+  if (nextUnitNumInput && !nextUnitNumInput.value && chosenUnit !== null) {
+    nextUnitNumInput.value = chosenUnit;
+  }
+
+  // Pre-fill note with default template if empty
+  var noteArea = document.getElementById('fb-next');
+  if (noteArea && (!noteArea.value || noteArea.value.startsWith('Continue ') || noteArea.value.startsWith('Next ') || noteArea.value.startsWith('Lesson ') || noteArea.value.startsWith('Unit '))) {
+    if (chosenUnit === curUnit) {
+      noteArea.value = 'Continue ' + prefix + ' ' + chosenUnit + ': Review core vocabulary and reinforce speaking practice.';
+    } else {
+      noteArea.value = prefix + ' ' + chosenUnit + ': Learn new vocabulary and practice sentence patterns.';
+    }
+  }
 
   var units = (tbCode && window_textbookUnitsMap[tbCode]) ? window_textbookUnitsMap[tbCode] : [];
 
@@ -1154,7 +1169,7 @@ function refreshNextLessonPreviewOptions(preselectedNextUnit) {
     }
   }
 
-  // Populate quick buttons
+  // Populate quick buttons: Advance (Next) is primary and placed FIRST!
   if (quickBtnsContainer) {
     var contUnit = curUnit;
     var advUnit = curUnit + 1;
@@ -1162,13 +1177,13 @@ function refreshNextLessonPreviewOptions(preselectedNextUnit) {
     var isAdvSelected = (chosenUnit === advUnit);
 
     var btnHtml = '';
-    btnHtml += '<button type="button" onclick="setNextPreviewUnit(' + contUnit + ', \'continue\')" id="btn-next-cont" class="px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors flex items-center gap-1 ' +
-      (isContSelected ? 'bg-purple-600 text-white border-purple-600 shadow-xs' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100') + '">' +
-      '🔁 Continue ' + prefix + ' ' + contUnit + '</button>';
-
     btnHtml += '<button type="button" onclick="setNextPreviewUnit(' + advUnit + ', \'advance\')" id="btn-next-adv" class="px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors flex items-center gap-1 ' +
       (isAdvSelected ? 'bg-purple-600 text-white border-purple-600 shadow-xs' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100') + '">' +
       '➡️ Next: ' + prefix + ' ' + advUnit + '</button>';
+
+    btnHtml += '<button type="button" onclick="setNextPreviewUnit(' + contUnit + ', \'continue\')" id="btn-next-cont" class="px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors flex items-center gap-1 ' +
+      (isContSelected ? 'bg-purple-600 text-white border-purple-600 shadow-xs' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100') + '">' +
+      '🔁 Continue ' + prefix + ' ' + contUnit + '</button>';
 
     quickBtnsContainer.innerHTML = btnHtml;
   }
