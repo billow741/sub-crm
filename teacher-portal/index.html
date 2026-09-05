@@ -1211,13 +1211,12 @@ function renderVocabPills(vocabList) {
     var word = v.word;
     var isSelected = selectedVocabSet.has(word);
     var pBadge = v.page ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-200/90 text-purple-900 font-bold ml-1.5">P.' + v.page + '</span>' : '';
-    var trans = v.translation ? '<span class="text-[11px] opacity-80 font-normal ml-1">(' + escapeHtml(v.translation) + ')</span>' : '';
     var clsName = isSelected
       ? 'px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors cursor-pointer bg-purple-600 text-white border-purple-600 shadow-2xs flex items-center'
       : 'px-2.5 py-1 text-xs font-medium rounded-md border transition-colors cursor-pointer bg-white text-gray-700 border-gray-200 hover:bg-purple-50 flex items-center';
     
     html += '<button type="button" onclick="toggleVocabPill(\'' + escapeHtml(word).replace(/'/g, "\\'") + '\', this)" class="' + clsName + '">' +
-      '<span>' + escapeHtml(word) + '</span>' + pBadge + trans +
+      '<span>' + escapeHtml(word) + '</span>' + pBadge +
       '</button>';
   });
   container.innerHTML = html;
@@ -1237,13 +1236,12 @@ function renderPatternsPills(patternsList) {
     var pattern = typeof p === 'string' ? p : p.pattern;
     var isSelected = selectedPatternsSet.has(pattern);
     var pBadge = (typeof p === 'object' && p.page) ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-green-200/90 text-green-900 font-bold ml-1.5">P.' + p.page + '</span>' : '';
-    var trans = (typeof p === 'object' && p.translation) ? '<span class="text-[11px] opacity-80 font-normal ml-1">(' + escapeHtml(p.translation) + ')</span>' : '';
     var clsName = isSelected
       ? 'px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors cursor-pointer bg-green-600 text-white border-green-600 shadow-2xs flex items-center text-left'
       : 'px-2.5 py-1 text-xs font-medium rounded-md border transition-colors cursor-pointer bg-white text-gray-700 border-gray-200 hover:bg-green-50 flex items-center text-left';
     
     html += '<button type="button" onclick="togglePatternPill(\'' + escapeHtml(pattern).replace(/'/g, "\\'") + '\', this)" class="' + clsName + '">' +
-      '<span>' + escapeHtml(pattern) + '</span>' + pBadge + trans +
+      '<span>' + escapeHtml(pattern) + '</span>' + pBadge +
       '</button>';
   });
   container.innerHTML = html;
