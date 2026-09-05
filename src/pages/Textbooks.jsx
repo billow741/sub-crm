@@ -2321,7 +2321,12 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
           llm_model: llmConfig?.model
         })
       });
-      const json = await resp.json();
+      let json = {};
+      try {
+        json = await resp.json();
+      } catch (pe) {
+        throw new Error('服务器响应异常 (500)');
+      }
 
       if (json.data?.units && json.data.units.length > 0) {
         const structType = isOxfordPhonics ? 'unit' : (bookSchema?.structure_type || (json.data.units.some(x => (x.unit_title || '').toLowerCase().includes('lesson')) ? 'lesson' : 'unit'));

@@ -2648,6 +2648,7 @@ textbooks.post('/detect-toc/:code', async (c) => {
   const code = c.req.param('code');
   const contentType = c.req.header('content-type') || '';
 
+  let body = {};
   let tocText = '';
   let tocImages = [];
   let userBaseUrl = c.req.header('x-llm-base-url') || '';
@@ -2656,6 +2657,7 @@ textbooks.post('/detect-toc/:code', async (c) => {
 
   if (contentType.includes('multipart/form-data')) {
     const formData = await c.req.parseBody({ all: true });
+    body = formData || {};
     tocText = (formData.toc_text || '').toString();
     userBaseUrl = (formData.llm_base_url || userBaseUrl).toString();
     userApiKey = (formData.llm_api_key || userApiKey).toString();
@@ -2673,13 +2675,15 @@ textbooks.post('/detect-toc/:code', async (c) => {
     }
   } else {
     try {
-      const body = await c.req.json();
+      body = await c.req.json();
       tocText = body.toc_text || body.text || '';
       if (Array.isArray(body.images)) tocImages = body.images;
       userBaseUrl = body.llm_base_url || userBaseUrl;
       userApiKey = body.llm_api_key || userApiKey;
       userModel = body.llm_model || userModel;
-    } catch (e) {}
+    } catch (e) {
+      body = {};
+    }
   }
 
   const baseUrl = userBaseUrl || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
