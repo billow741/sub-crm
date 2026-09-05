@@ -382,35 +382,36 @@ function buildExtractionPrompt(schema = null) {
 
   if (type === 'phonics') {
     return `你是一位顶级的少儿英语自然拼读 (Phonics) 与语音教学专家（针对 ${targetAge} 岁儿童）。
-请仔细阅读并识别当前教材切图，提取本课/本单元实际印刷的自然拼读教学核心要素。
+请仔细阅读并识别当前教材切图，提取本课/本单元实际印刷的自然拼读教学核心要素，并精确记录所在课本印刷页码。
 
 【严格原则】：
 1. 只能提取当前图片中实际印有的字母、音素、拼读生词和短句，严禁编造！
 2. 每一个提取项必须给出地道准确的【简体中文】翻译。
-3. 必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
+3. 每一个提取项必须包含所在课本页码 "page" 属性（数字整数，如 12）。
+4. 必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
 {
   "unit_title": "图片顶端印刷的课程标题 (例如 Lesson 1 Short a)",
   "letters": [
-    { "letter": "Aa", "sound": "/æ/", "uppercase": "A", "lowercase": "a" }
+    { "letter": "Aa", "sound": "/æ/", "uppercase": "A", "lowercase": "a", "page": 1 }
   ],
   "sounds": [
-    { "sound": "/æ/", "phonics_rule": "Short a vowel sound", "example_words": ["apple", "ant", "cat"] }
+    { "sound": "/æ/", "phonics_rule": "Short a vowel sound", "example_words": ["apple", "ant", "cat"], "page": 1 }
   ],
   "blending_words": [
-    { "word": "cat", "translation": "猫", "phonemes": ["c", "a", "t"], "is_core": true }
+    { "word": "cat", "translation": "猫", "phonemes": ["c", "a", "t"], "is_core": true, "page": 1 }
   ],
   "sight_words": [
-    { "word": "the", "translation": "这/那" }
+    { "word": "the", "translation": "这/那", "page": 1 }
   ],
   "vocab": [
-    { "word": "cat", "translation": "猫", "is_core": true, "difficulty": 1 },
-    { "word": "apple", "translation": "苹果", "is_core": true, "difficulty": 1 }
+    { "word": "cat", "translation": "猫", "is_core": true, "difficulty": 1, "page": 1 },
+    { "word": "apple", "translation": "苹果", "is_core": true, "difficulty": 1, "page": 1 }
   ],
   "patterns": [
-    { "pattern": "An apple for the cat.", "translation": "给猫咪的一个苹果。", "is_core": true }
+    { "pattern": "An apple for the cat.", "translation": "给猫咪的一个苹果。", "is_core": true, "page": 1 }
   ],
   "grammar": [
-    { "point": "字母组合与拼读规律", "example": "c-a-t -> cat", "is_core": true }
+    { "point": "字母组合与拼读规律", "example": "c-a-t -> cat", "is_core": true, "page": 1 }
   ]
 }
 
@@ -422,28 +423,29 @@ function buildExtractionPrompt(schema = null) {
 
   if (type === 'graded_reader') {
     return `你是一位专业的分级阅读 (Graded Reader) 与少儿英文绘本分析专家（针对 ${targetAge} 岁读者）。
-请仔细阅读当前绘本页面切图，提取故事核心词汇、关键表达与理解要点。
+请仔细阅读当前绘本页面切图，提取故事核心词汇、关键表达与理解要点，并精确记录所在课本页码。
 
 【严格原则】：
 1. 提取当前页面印刷的故事核心内容与词句。
-2. 严格返回如下 JSON 结构（严禁 markdown 标记或任何闲聊）：
+2. 每一个提取项必须包含所在课本页码 "page" 属性（数字整数，如 12）。
+3. 严格返回如下 JSON 结构（严禁 markdown 标记或任何闲聊）：
 {
   "unit_title": "故事或章节标题",
   "key_words": [
-    { "word": "重点生词", "translation": "中文释义", "context": "故事中的具体用法", "is_core": true }
+    { "word": "重点生词", "translation": "中文释义", "context": "故事中的具体用法", "is_core": true, "page": 1 }
   ],
   "key_phrases": [
-    { "phrase": "关键短语/地道搭配", "translation": "中文释义", "is_core": true }
+    { "phrase": "关键短语/地道搭配", "translation": "中文释义", "is_core": true, "page": 1 }
   ],
   "comprehension_questions": [
-    { "question": "基于故事的理解提问 (英文)", "answer": "参考答案 (英文)", "translation": "中文提问" }
+    { "question": "基于故事的理解提问 (英文)", "answer": "参考答案 (英文)", "translation": "中文提问", "page": 1 }
   ],
   "story_summary": "本章/本篇故事的 1-2 句核心概要 (中文)",
   "vocab": [
-    { "word": "故事核心生词", "translation": "中文", "is_core": true, "difficulty": 1 }
+    { "word": "故事核心生词", "translation": "中文", "is_core": true, "difficulty": 1, "page": 1 }
   ],
   "patterns": [
-    { "pattern": "故事中重复出现的重点句型", "translation": "中文", "is_core": true }
+    { "pattern": "故事中重复出现的重点句型", "translation": "中文", "is_core": true, "page": 1 }
   ],
   "grammar": []
 }
@@ -455,49 +457,50 @@ function buildExtractionPrompt(schema = null) {
 
   if (type === 'grammar') {
     return `你是一位资深英语语法教学专家（针对 ${targetAge} 岁学生）。
-请仔细阅读当前教材页面切图，提取语法要点、规则公式与典型例句。
+请仔细阅读当前教材页面切图，提取语法要点、规则公式与典型例句，并精确记录所在课本页码。
 
 返回严格 JSON 格式：
 {
   "unit_title": "语法主题 (如 Present Continuous Tense)",
   "grammar_rules": [
-    { "rule": "语法规则名称", "formula": "结构公式 (如 be + V-ing)", "explanation": "中文语法解析", "is_core": true }
+    { "rule": "语法规则名称", "formula": "结构公式 (如 be + V-ing)", "explanation": "中文语法解析", "is_core": true, "page": 1 }
   ],
   "examples": [
-    { "sentence": "典型英文例句", "translation": "中文翻译", "is_core": true }
+    { "sentence": "典型英文例句", "translation": "中文翻译", "is_core": true, "page": 1 }
   ],
   "practice_sentences": [
-    { "sentence": "教材中的代表性练习句", "answer": "正确答案/考点解析" }
+    { "sentence": "教材中的代表性练习句", "answer": "正确答案/考点解析", "page": 1 }
   ],
   "vocab": [
-    { "word": "核心语法标记词或生词", "translation": "中文", "is_core": true, "difficulty": 1 }
+    { "word": "核心语法标记词或生词", "translation": "中文", "is_core": true, "difficulty": 1, "page": 1 }
   ],
   "patterns": [
-    { "pattern": "核心句型模版", "translation": "中文翻译", "is_core": true }
+    { "pattern": "核心句型模版", "translation": "中文翻译", "is_core": true, "page": 1 }
   ],
   "grammar": [
-    { "point": "核心语法点", "example": "英文例句", "is_core": true }
+    { "point": "核心语法点", "example": "英文例句", "is_core": true, "page": 1 }
   ]
 }`;
   }
 
   // 默认：综合英语 (General English)
-  return `你是一位顶级的少儿英语教研专家（目标年龄段：${targetAge} 岁）。请仔细阅读并识别当前提供的课本页面图片，严格按照当前图片中实际印刷的内容提取本页的核心词汇、重点句型与语法点。
+  return `你是一位顶级的少儿英语教研专家（目标年龄段：${targetAge} 岁）。请仔细阅读并识别当前提供的课本页面图片，严格按照当前图片中实际印刷的内容提取本页的核心词汇、重点句型与语法点，并精确关联到课本印刷页码。
 
 【重要原则】：
 1. 只能提取当前图片中实际印有的单词、句子和语法！绝对严禁编造或从其他单元复制！
 2. 每一个提取项必须给出准确地道的简体中文翻译。
-3. 必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
+3. 每一个提取项必须包含所在课本页码 "page" 属性（数字整数，如 12、13）。若图片角落印有真实页码请精确识别填入；若无则按照上下文或提示页码填写。
+4. 必须严格返回如下 JSON 结构（严禁包含任何多余说明或 markdown 标记）：
 {
   "unit_title": "图片顶端印刷的单元标题 (例如 Unit 2 Let's Play)",
   "vocab": [
-    { "word": "当前图片中印刷的英文目标单词", "translation": "地道简体中文翻译", "is_core": true, "difficulty": 1 }
+    { "word": "当前图片中印刷的英文目标单词", "translation": "地道简体中文翻译", "is_core": true, "difficulty": 1, "page": 1 }
   ],
   "patterns": [
-    { "pattern": "当前图片对话框或句型框中印刷的核心交际句型", "translation": "地道简体中文翻译", "is_core": true }
+    { "pattern": "当前图片对话框或句型框中印刷的核心交际句型", "translation": "地道简体中文翻译", "is_core": true, "page": 1 }
   ],
   "grammar": [
-    { "point": "当前页面的语法要点", "example": "当前页面对应的真实英文例句", "is_core": true }
+    { "point": "当前页面的语法要点", "example": "当前页面对应的真实英文例句", "is_core": true, "page": 1 }
   ]
 }
 
@@ -507,13 +510,16 @@ function buildExtractionPrompt(schema = null) {
    - 🚫 绝对严禁带不定冠词 a/an（提取 pen 而不是 a pen；提取 eraser 而不是 an eraser）！
    - 🚫 绝对严禁把句子或交际短语放入词汇（如 "Thank you.", "I'm fine.", "Hi!", "I'm OK." 绝不是词汇，严禁放入 vocab，必须归入 patterns 句型中）！
    - 🚫 单词项绝不能包含句号、问号、感叹号等标点符号！
+   - 📄 必须附带所在页码 "page": 整数！
 2. 💬 重点句型 (patterns) 严格标准：
    - 提取本课核心目标交际句型与问答模版（如 "What is it? It's a pen." 或 "How are you? I'm fine. Thank you."）！
    - 🚫 严禁整首歌谣/歌曲 (Song/Chant) 的重复歌词大段堆砌输出！必须提纯为简练的标准交际问答句！
    - 🚫 严禁把语法注释说明（如 "It's = It is"、"isn't = is not"）粘连在句型末尾！语法规则必须单独提取到 grammar 中！
    - 🚫 严格避免重复句型！相同结构的句子（如 "It's a pen." 和 "It's a book."）只提取最具代表性的 1~2 个句型，不要罗列十几个同构句！
+   - 📄 必须附带所在页码 "page": 整数！
 3. 📖 语法点 (grammar)：
    - 提取本页涉及的核心语法规则或结构解析（如 "缩写形式：It's = It is, isn't = is not"、"be动词特殊疑问句：What is it? / It's a..."）！
+   - 📄 必须附带所在页码 "page": 整数！
 4. 🚫 绝对黑名单（严禁作为句型或语法点输出）：
    - 严禁提取课堂指令词！例如：
      ${blacklistFormatted}
@@ -782,11 +788,15 @@ function cleanGrammarList(rawList) {
 
     const gFp = pt.toLowerCase().replace(/[^\w\u4e00-\u9fa5]/g, '');
     if (!grammarMap.has(gFp)) {
-      grammarMap.set(gFp, {
+      const gObj = {
         point: pt,
         example: ex || pt,
         is_core: true
-      });
+      };
+      if (g.page !== undefined && g.page !== null && !isNaN(parseInt(g.page, 10))) {
+        gObj.page = parseInt(g.page, 10);
+      }
+      grammarMap.set(gFp, gObj);
     }
   }
 
@@ -1223,8 +1233,12 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
 
   // 单元模式 vs 整本书模式
   let promptText = opts.bookMode
-    ? `You are given pages from a language textbook. Extract vocabulary, patterns, and grammar PER UNIT. Every item MUST have accurate Simplified Chinese translations. Return ONLY a JSON array of units.`
+    ? `You are given pages from a language textbook. Extract vocabulary, patterns, and grammar PER UNIT. Every item MUST have accurate Simplified Chinese translations and the exact textbook "page" number (integer). Return ONLY a JSON array of units.`
     : buildExtractionPrompt(opts.schema);
+
+  if (opts.pageHint) {
+    promptText += `\n\n【当前切片课本印刷页码】：第 ${opts.pageHint} 页。请务必将提取出的所有 vocab, patterns, grammar 中的 "page" 属性均设为 ${opts.pageHint}。`;
+  }
 
   if (opts.unitText) {
     promptText += `\n\n=== 课本文本层内容 (包含该单元各课全部单词与对话) ===\n${opts.unitText}\n======================================================`;
@@ -1253,10 +1267,10 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
   async function refineToJSON(m, rawText, schema = null) {
     const type = schema?.type || 'general_english';
     const instructions = type === 'phonics'
-      ? '提取为包含 "unit_title", "letters", "sounds", "blending_words", "sight_words", "vocab", "patterns", "grammar" 的严格 JSON。所有单词与短语必须带有准确的简体中文 "translation"。'
+      ? '提取为包含 "unit_title", "letters", "sounds", "blending_words", "sight_words", "vocab", "patterns", "grammar" 的严格 JSON。所有条目必须保留 "page" (数字页码，如未标明则设为 null)；所有单词与短语必须带有准确的简体中文 "translation"。'
       : (type === 'graded_reader'
-        ? '提取为包含 "unit_title", "key_words", "key_phrases", "comprehension_questions", "story_summary", "vocab", "patterns" 的严格 JSON。'
-        : '提取为严格的 JSON 对象，必须包含 "unit_title", "vocab" (包含 "word", "translation", is_core: true, difficulty: 1), "patterns", "grammar"。所有 item 必须包含准确地道的简体中文 "translation"。');
+        ? '提取为包含 "unit_title", "key_words", "key_phrases", "comprehension_questions", "story_summary", "vocab", "patterns" 的严格 JSON。所有条目必须保留 "page" (数字页码)。'
+        : '提取为严格的 JSON 对象，必须包含 "unit_title", "vocab" (包含 "word", "translation", is_core: true, difficulty: 1, "page": 整数页码), "patterns" (包含 "pattern", "translation", is_core: true, "page": 整数页码), "grammar" (包含 "point", "example", is_core: true, "page": 整数页码)。所有 item 必须包含准确地道的简体中文 "translation"。');
 
     try {
       const resp = await fetch(`${baseUrl}/chat/completions`, {
@@ -1353,7 +1367,8 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
 
   const images = formData.getAll ? formData.getAll('images').filter(f => f && f.name) : [];
   const aiVision = formData.get ? formData.get('ai_vision') : null;
-  let imagesToLLM = aiVision ? [aiVision] : [...images];
+  // 优先采用按页切片的单页图列表，以保证 AI 能够精确逐页提取并关联页码
+  let imagesToLLM = images.length > 0 ? [...images] : (aiVision ? [aiVision] : []);
 
   // 查询 DB 中教材配置与 unit_title
   let schema = null;
@@ -1393,8 +1408,8 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       const prefix1 = `${code}/Unit${num}/`;
       const prefix2 = `${code}/Unit${num}_`;
       const [res1, res2] = await Promise.all([
-        R2.list({ prefix: prefix1, limit: 30 }),
-        R2.list({ prefix: prefix2, limit: 30 })
+        R2.list({ prefix: prefix1, limit: 100 }),
+        R2.list({ prefix: prefix2, limit: 100 })
       ]);
       // 严格正则过滤：只保留属于精确当前 Unit${num} 的图片，杜绝 Unit1 误匹配到 Unit10/11/12
       const allObjs = [...(res1.objects || []), ...(res2.objects || [])]
@@ -1406,18 +1421,9 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
         })
         .sort((a, b) => a.key.localeCompare(b.key));
 
-      // 自适应选取关键页面（兼顾多模态请求吞吐与教材全覆盖）
+      // 按页全量提取：取出属于当前 Unit${num} 的所有切片页面（按页码自然升序排列）
       const totalPages = allObjs.length;
-      let targetIndices = [];
-      if (totalPages <= 4) {
-        targetIndices = allObjs.map((_, i) => i);
-      } else if (totalPages <= 8) {
-        targetIndices = [0, 1, 2, Math.min(3, totalPages - 1), Math.min(5, totalPages - 1)].filter((v, i, a) => a.indexOf(v) === i && v < totalPages);
-      } else {
-        const step = (totalPages - 1) / 4;
-        targetIndices = [0, Math.round(step), Math.round(step * 2), Math.round(step * 3), totalPages - 1];
-        targetIndices = Array.from(new Set(targetIndices)).filter(i => i < totalPages);
-      }
+      const targetIndices = allObjs.map((_, i) => i);
 
       for (const idx of targetIndices) {
         if (allObjs[idx]) {
@@ -1425,6 +1431,7 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
           const ext = key.split('.').pop() || 'jpeg';
           imagesToLLM.push({
             name: key.split('/').pop(),
+            key: key,
             type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
             arrayBuffer: async () => {
               const file = await R2.get(key);
@@ -1447,7 +1454,7 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
     const llmModel = formData.get('llm_model') || c.req.header('x-llm-model');
     const unitText = formData.get('unit_text') || '';
 
-    // 对选取的关键切片页面受控并发提取并聚合 (每次并发 3 页，兼顾极速吞吐与频控)
+    // 对切片页面受控并发提取并聚合 (每次并发 3 页，兼顾极速吞吐与频控)
     const groupResults = [];
     const BATCH_CONCURRENCY = 3;
     for (let i = 0; i < imagesToLLM.length; i += BATCH_CONCURRENCY) {
@@ -1455,15 +1462,19 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       const chunkPromises = chunk.map(async (imgItem, subIdx) => {
         try {
           const singlePage = [imgItem];
-          return await callLLMWithImages(c, singlePage, {
+          const pageMatch = (imgItem.name || '').match(/page[_-](\d+)/i);
+          const slicePageNum = pageMatch ? parseInt(pageMatch[1], 10) : null;
+          const pageRes = await callLLMWithImages(c, singlePage, {
             bookMode: false,
             maxPages: 1,
             baseUrl: llmBaseUrl,
             apiKey: llmApiKey,
             model: llmModel,
             unitText,
-            schema
+            schema,
+            pageHint: slicePageNum
           });
+          return { res: pageRes, fallbackPage: slicePageNum };
         } catch (err) {
           console.warn(`Page ${i + subIdx} extract warn:`, err.message);
           return null;
@@ -1506,7 +1517,10 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
 
     const isCommand = (s) => /^(listen|point|say|sing|ask|answer|look|read|circle|write|number|trace|color|match)\b/i.test((s || '').trim());
 
-    for (const res of groupResults) {
+    for (const itemResult of groupResults) {
+      if (!itemResult) continue;
+      const res = itemResult.res;
+      const fallbackPage = itemResult.fallbackPage;
       if (!res) continue;
       if (!finalUnitTitle && (res.unit_title || res.title)) finalUnitTitle = res.unit_title || res.title;
 
@@ -1515,13 +1529,26 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       for (const v of rawVocab) {
         const cleanWord = (typeof v === 'string' ? v : (v.word || v.name || '')).trim();
         const cleanTrans = (typeof v === 'object' ? (v.translation || v.chinese || v.meaning || '') : '').trim();
-        if (cleanWord && !isCommand(cleanWord) && !vocabMap.has(cleanWord.toLowerCase())) {
-          vocabMap.set(cleanWord.toLowerCase(), {
-            word: cleanWord,
-            translation: cleanTrans || cleanWord,
-            is_core: true,
-            difficulty: v.difficulty || 1
-          });
+        const itemPage = (v.page !== undefined && v.page !== null && !isNaN(parseInt(v.page, 10)))
+          ? parseInt(v.page, 10)
+          : fallbackPage;
+
+        if (cleanWord && !isCommand(cleanWord)) {
+          const key = cleanWord.toLowerCase();
+          if (!vocabMap.has(key)) {
+            vocabMap.set(key, {
+              word: cleanWord,
+              translation: cleanTrans || cleanWord,
+              is_core: true,
+              difficulty: v.difficulty || 1,
+              ...(itemPage ? { page: itemPage } : {})
+            });
+          } else {
+            const existing = vocabMap.get(key);
+            if (!existing.page && itemPage) {
+              existing.page = itemPage;
+            }
+          }
         }
       }
 
@@ -1530,12 +1557,25 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       for (const p of rawPatterns) {
         const cleanPat = (typeof p === 'string' ? p : (p.pattern || p.sentence || '')).trim();
         const cleanTrans = (typeof p === 'object' ? (p.translation || p.chinese || '') : '').trim();
-        if (cleanPat && !isCommand(cleanPat) && !patternMap.has(cleanPat.toLowerCase())) {
-          patternMap.set(cleanPat.toLowerCase(), {
-            pattern: cleanPat,
-            translation: cleanTrans || cleanPat,
-            is_core: true
-          });
+        const itemPage = (p.page !== undefined && p.page !== null && !isNaN(parseInt(p.page, 10)))
+          ? parseInt(p.page, 10)
+          : fallbackPage;
+
+        if (cleanPat && !isCommand(cleanPat)) {
+          const key = cleanPat.toLowerCase();
+          if (!patternMap.has(key)) {
+            patternMap.set(key, {
+              pattern: cleanPat,
+              translation: cleanTrans || cleanPat,
+              is_core: true,
+              ...(itemPage ? { page: itemPage } : {})
+            });
+          } else {
+            const existing = patternMap.get(key);
+            if (!existing.page && itemPage) {
+              existing.page = itemPage;
+            }
+          }
         }
       }
 
@@ -1544,12 +1584,25 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       for (const g of rawGrammar) {
         const pt = (g.point || g.topic || g.title || '').trim();
         const ex = (g.example || g.explanation || g.desc || '').trim();
-        if (pt && !isCommand(pt) && !grammarMap.has(pt.toLowerCase())) {
-          grammarMap.set(pt.toLowerCase(), {
-            point: pt,
-            example: ex || pt,
-            is_core: true
-          });
+        const itemPage = (g.page !== undefined && g.page !== null && !isNaN(parseInt(g.page, 10)))
+          ? parseInt(g.page, 10)
+          : fallbackPage;
+
+        if (pt && !isCommand(pt)) {
+          const key = pt.toLowerCase();
+          if (!grammarMap.has(key)) {
+            grammarMap.set(key, {
+              point: pt,
+              example: ex || pt,
+              is_core: true,
+              ...(itemPage ? { page: itemPage } : {})
+            });
+          } else {
+            const existing = grammarMap.get(key);
+            if (!existing.page && itemPage) {
+              existing.page = itemPage;
+            }
+          }
         }
       }
 
@@ -1557,12 +1610,14 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       const rawLetters = res.letters || [];
       for (const l of rawLetters) {
         const letter = (typeof l === 'string' ? l : (l.letter || '')).trim();
+        const itemPage = (l.page !== undefined && l.page !== null && !isNaN(parseInt(l.page, 10))) ? parseInt(l.page, 10) : fallbackPage;
         if (letter && !letterMap.has(letter.toLowerCase())) {
           letterMap.set(letter.toLowerCase(), {
             letter,
             sound: l.sound || '',
             uppercase: l.uppercase || letter.charAt(0).toUpperCase(),
-            lowercase: l.lowercase || letter.toLowerCase()
+            lowercase: l.lowercase || letter.toLowerCase(),
+            ...(itemPage ? { page: itemPage } : {})
           });
         }
       }
@@ -1571,11 +1626,13 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       const rawSounds = res.sounds || [];
       for (const s of rawSounds) {
         const snd = (typeof s === 'string' ? s : (s.sound || '')).trim();
+        const itemPage = (s.page !== undefined && s.page !== null && !isNaN(parseInt(s.page, 10))) ? parseInt(s.page, 10) : fallbackPage;
         if (snd && !soundMap.has(snd)) {
           soundMap.set(snd, {
             sound: snd,
             phonics_rule: s.phonics_rule || s.rule || '',
-            example_words: Array.isArray(s.example_words) ? s.example_words : []
+            example_words: Array.isArray(s.example_words) ? s.example_words : [],
+            ...(itemPage ? { page: itemPage } : {})
           });
         }
       }
@@ -1585,12 +1642,14 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       for (const b of rawBlending) {
         const w = (typeof b === 'string' ? b : (b.word || '')).trim();
         const trans = (typeof b === 'object' ? (b.translation || b.chinese || '') : '').trim();
+        const itemPage = (b.page !== undefined && b.page !== null && !isNaN(parseInt(b.page, 10))) ? parseInt(b.page, 10) : fallbackPage;
         if (w && !blendingMap.has(w.toLowerCase())) {
           blendingMap.set(w.toLowerCase(), {
             word: w,
             translation: trans || w,
             phonemes: Array.isArray(b.phonemes) ? b.phonemes : [],
-            is_core: true
+            is_core: true,
+            ...(itemPage ? { page: itemPage } : {})
           });
           // 自动双向同步至 vocabMap，保证排课和课评词汇库通用无缝
           if (!vocabMap.has(w.toLowerCase())) {
@@ -1598,7 +1657,8 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
               word: w,
               translation: trans || w,
               is_core: true,
-              difficulty: 1
+              difficulty: 1,
+              ...(itemPage ? { page: itemPage } : {})
             });
           }
         }
@@ -1609,8 +1669,13 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       for (const sw of rawSight) {
         const w = (typeof sw === 'string' ? sw : (sw.word || '')).trim();
         const trans = (typeof sw === 'object' ? (sw.translation || '') : '').trim();
-        if (w && !sightWordMap.has(w.toLowerCase())) {
-          sightWordMap.set(w.toLowerCase(), { word: w, translation: trans });
+        const itemPage = (sw.page !== undefined && sw.page !== null && !isNaN(parseInt(sw.page, 10))) ? parseInt(sw.page, 10) : fallbackPage;
+        if (w && !sightWordMap.has(sw.toLowerCase())) {
+          sightWordMap.set(sw.toLowerCase(), {
+            word: w,
+            translation: trans,
+            ...(itemPage ? { page: itemPage } : {})
+          });
         }
       }
 
@@ -1619,15 +1684,23 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       for (const kw of rawKeyWords) {
         const w = (typeof kw === 'string' ? kw : (kw.word || '')).trim();
         const trans = (typeof kw === 'object' ? (kw.translation || '') : '').trim();
+        const itemPage = (kw.page !== undefined && kw.page !== null && !isNaN(parseInt(kw.page, 10))) ? parseInt(kw.page, 10) : fallbackPage;
         if (w && !keyWordMap.has(w.toLowerCase())) {
           keyWordMap.set(w.toLowerCase(), {
             word: w,
             translation: trans || w,
             context: kw.context || '',
-            is_core: true
+            is_core: true,
+            ...(itemPage ? { page: itemPage } : {})
           });
           if (!vocabMap.has(w.toLowerCase())) {
-            vocabMap.set(w.toLowerCase(), { word: w, translation: trans || w, is_core: true, difficulty: 1 });
+            vocabMap.set(w.toLowerCase(), {
+              word: w,
+              translation: trans || w,
+              is_core: true,
+              difficulty: 1,
+              ...(itemPage ? { page: itemPage } : {})
+            });
           }
         }
       }
@@ -1635,9 +1708,15 @@ textbooks.post('/preview-unit/:code/:num', async (c) => {
       const rawKeyPhrases = res.key_phrases || [];
       for (const kp of rawKeyPhrases) {
         const p = (typeof kp === 'string' ? kp : (kp.phrase || '')).trim();
-        const trans = (typeof kp === 'object' ? (kp.translation || '') : '').trim();
+        const trans = (typeof kp === 'object' ? (kp.translation || kp.chinese || '') : '').trim();
+        const itemPage = (kp.page !== undefined && kp.page !== null && !isNaN(parseInt(kp.page, 10))) ? parseInt(kp.page, 10) : fallbackPage;
         if (p && !keyPhraseMap.has(p.toLowerCase())) {
-          keyPhraseMap.set(p.toLowerCase(), { phrase: p, translation: trans, is_core: true });
+          keyPhraseMap.set(p.toLowerCase(), {
+            phrase: p,
+            translation: trans,
+            is_core: true,
+            ...(itemPage ? { page: itemPage } : {})
+          });
         }
       }
 

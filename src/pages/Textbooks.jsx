@@ -361,16 +361,16 @@ export default function Textbooks() {
     });
   };
 
-  // 触发 AI 视觉识别当前单元
+  // 🤖 单 Unit AI 视觉智能提取核心函数 (按页精准提取)
   const handleAiExtract = async () => {
     if (!selectedBookCode || selectedUnitNum === null) return;
     if (renderedImages.length === 0 && r2Pages.length === 0) {
-      alert('请先上传该单元的 PDF 文件进行切片');
+      alert('请先上传课本 PDF 切片或等待切图载入');
       return;
     }
 
     setExtracting(true);
-    // 提取开始前，立即清空旧数据，防止新旧数据混淆污染
+    // 立即清空旧数据，杜绝上一单元数据残留
     setUnitDetail(prev => ({
       ...prev,
       vocab: [],
@@ -381,41 +381,12 @@ export default function Textbooks() {
 
     try {
       const fd = new FormData();
-      const loadedBlobs = [];
 
       if (renderedImages.length > 0) {
         renderedImages.forEach((img, i) => {
-          loadedBlobs.push(img.blob);
-          fd.append('images', img.blob, `page-${String(i + 1).padStart(2, '0')}.jpg`);
+          const pNum = img.pageNum || (i + 1);
+          fd.append('images', img.blob, `page-${String(pNum).padStart(2, '0')}.jpg`);
         });
-
-        // 合成超清全景拼图 (包含该单元全部 8 页课文)
-        const loadedImgs = await Promise.all(loadedBlobs.map(b => new Promise(res => {
-          const img = new Image();
-          img.onload = () => res(img);
-          img.src = URL.createObjectURL(b);
-        })));
-
-        const cols = loadedImgs.length <= 2 ? loadedImgs.length : (loadedImgs.length <= 4 ? 2 : 4);
-        const rows = Math.ceil(loadedImgs.length / cols);
-        const singleW = 800;
-        const singleH = (loadedImgs[0].naturalHeight / loadedImgs[0].naturalWidth) * singleW;
-
-        const collageCanvas = document.createElement('canvas');
-        collageCanvas.width = singleW * cols;
-        collageCanvas.height = singleH * rows;
-        const cCtx = collageCanvas.getContext('2d');
-        cCtx.fillStyle = '#ffffff';
-        cCtx.fillRect(0, 0, collageCanvas.width, collageCanvas.height);
-
-        loadedImgs.forEach((img, i) => {
-          const col = i % cols;
-          const row = Math.floor(i / cols);
-          cCtx.drawImage(img, col * singleW, row * singleH, singleW, singleH);
-        });
-
-        const collageBlob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
-        fd.append('ai_vision', collageBlob, 'ai_vision.jpg');
       }
 
       // 携带当前教材的 schema 配置
@@ -585,7 +556,7 @@ export default function Textbooks() {
   const addGrammarItem = () => {
     setUnitDetail(prev => ({
       ...prev,
-      grammar: [...(prev.grammar || []), { point: '', example: '', is_core: true }]
+      grammar: [...(prev.grammar || []), { point: '', example: '', is_core: true, page: '' }]
     }));
   };
 
@@ -1023,7 +994,20 @@ export default function Textbooks() {
                                 </div>
                               </div>
                               <div className="px-3 py-2 bg-white border-t border-gray-100 flex items-center justify-between">
-                                <span className="font-bold text-gray-700 text-xs">第 {i + 1} 页</span>
+                                <div className="flex items-center gap-1" title="修改切片对应的课本印刷页码">
+                                  <span className="font-bold text-gray-700 text-xs">P.</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="999"
+                                    value={img.pageNum || (i + 1)}
+                                    onChange={(e) => {
+                                      const val = e.target.value ? parseInt(e.target.value, 10) : '';
+                                      setRenderedImages(prev => prev.map((item, idx) => idx === i ? { ...item, pageNum: val } : item));
+                                    }}
+                                    className="w-12 text-xs font-bold border border-gray-200 rounded px-1 py-0.5 text-center focus:ring-1 focus:ring-primary-500 focus:outline-none"
+                                  />
+                                </div>
                                 <button
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); setRenderedImages(prev => prev.filter((_, idx) => idx !== i)); }}
@@ -1555,7 +1539,21 @@ export default function Textbooks() {
                           (unitDetail.grammar || []).map((g, i) => (
                             <div key={i} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow space-y-3 group relative">
                               <div className="flex items-center justify-between">
-                                <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-100 font-bold">语法点 {i + 1}</Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-100 font-bold">语法点 {i + 1}</Badge>
+                                  <div className="flex items-center gap-1 shrink-0 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200" title="课本所在页码">
+                                    <span className="text-xs font-bold text-purple-700">P.</span>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max="999"
+                                      value={g.page || ''}
+                                      onChange={(e) => updateGrammarItem(i, 'page', e.target.value ? parseInt(e.target.value, 10) : '')}
+                                      placeholder="页"
+                                      className="w-10 text-xs font-bold bg-transparent text-purple-900 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() => removeGrammarItem(i)}
@@ -2367,15 +2365,8 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
             // 🔍 深度全量提取：直接向后端发送关键课时的高清独立单页切片，与工作台单单元提取深度完全一致
             setStatusMsg(`🤖 AI 正在深度扫描 U${item.unit_number} (${item.unit_title}) 核心课文 (全量词汇/句型/语法)...`);
             
-            const totalP = thumbs.length;
-            let targetThumbs = [];
-            if (totalP <= 6) {
-              targetThumbs = thumbs;
-            } else {
-              // 典型8页单元结构：覆盖 Lesson 1 词汇、Lesson 2 词汇、Lesson 3 故事/对话、Lesson 4 拓展
-              const keyIndices = [0, 1, 2, Math.min(4, totalP - 1), Math.min(6, totalP - 1)].filter((v, i, a) => a.indexOf(v) === i && v < totalP);
-              targetThumbs = keyIndices.map(i => thumbs[i]);
-            }
+            // 按页全量提取：发送本单元/课时全部单页切片，保证每页词汇/句型/语法均被精准提取并绑定真实页码
+            const targetThumbs = thumbs;
 
             for (const t of targetThumbs) {
               let b = t.blob;

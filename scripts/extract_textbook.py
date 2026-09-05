@@ -54,23 +54,24 @@ def pdf_to_markdown(pdf_path: str) -> str:
 # ============================================================
 # 2. LLM: Markdown → 结构化 JSON
 # ============================================================
-EXTRACTION_PROMPT = """You are a textbook content extractor. Given the Markdown text of a language textbook unit, extract vocabulary, sentence patterns, and grammar points into structured JSON.
+EXTRACTION_PROMPT = """You are a textbook content extractor. Given the Markdown text of a language textbook unit, extract vocabulary, sentence patterns, and grammar points into structured JSON, with page-level precision.
 
 Return ONLY valid JSON (no markdown fences, no explanation) in this exact schema:
 
 {
   "vocab": [
-    {"word": "apple", "translation": "苹果", "is_core": true, "difficulty": 1}
+    {"word": "apple", "translation": "苹果", "is_core": true, "difficulty": 1, "page": 12}
   ],
   "patterns": [
-    {"pattern": "I like apples.", "translation": "我喜欢苹果。", "is_core": true}
+    {"pattern": "I like apples.", "translation": "我喜欢苹果。", "is_core": true, "page": 12}
   ],
   "grammar": [
-    {"point": "Present Simple", "example": "She plays tennis.", "is_core": true}
+    {"point": "Present Simple", "example": "She plays tennis.", "is_core": true, "page": 12}
   ]
 }
 
 Rules:
+- "page": The exact textbook printed page number (integer) where this item appears. Identify page headers/footers or markers (e.g. Page 12 or P.12) to assign the page number.
 - "is_core": true if the item appears prominently in the unit's main vocabulary list or is a target pattern/grammar; false if supplementary.
 - "difficulty": 1 (basic/critical), 2 (intermediate), 3 (advanced).
 - If a translation is provided in parentheses or list items, include it; otherwise leave translation as null.
