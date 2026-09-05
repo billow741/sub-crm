@@ -837,9 +837,9 @@ function showDetailFeedback(classId) {
             <p class="text-xs text-gray-500">支持在新窗口播放、全屏与倍速控制</p>
           </div>
           <div class="flex items-center gap-2">
-            <a href="${API}/classes/video/${c.id}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm">
+            <button type="button" onclick="openVideoModal('${API}/classes/video/${c.id}', 'Lesson ${c.date || ''} 录播回放')" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm cursor-pointer">
               ▶️ 播放录播视频
-            </a>
+            </button>
             <a href="${API}/classes/video/${c.id}" target="_blank" download="lesson_${c.id}.mp4" class="text-xs text-blue-600 hover:underline px-2 py-1">
               ⬇️ 下载保存
             </a>
@@ -1333,6 +1333,74 @@ async function toggleSettleItems(elId) {
     el.classList.remove('hidden');
   } catch(e) { el.innerHTML = `<p class="text-sm text-red-500">加载失败: ${e.message}</p>`; el.classList.remove('hidden'); }
 }
+
+// ── Video Lightbox Modal ──
+function openVideoModal(videoUrl, title) {
+  let modal = document.getElementById('org-video-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'org-video-modal';
+    modal.className = 'fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100] p-4';
+    modal.onclick = function(e) { if (e.target === modal) closeVideoModal(); };
+    modal.innerHTML = `
+      <div class="relative w-full max-w-4xl bg-slate-900 rounded-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between px-4 py-3 bg-slate-800/80 border-b border-white/10">
+          <div id="org-video-modal-title" class="text-sm font-bold text-white flex items-center gap-2">📹 课程录播回放</div>
+          <button type="button" onclick="closeVideoModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-sm font-bold" title="关闭 (Esc)">✕</button>
+        </div>
+        <div class="relative w-full aspect-video bg-black flex items-center justify-center max-h-[75vh]">
+          <video id="org-video-modal-player" class="w-full h-full max-h-[75vh]" controls playsinline preload="metadata"></video>
+        </div>
+        <div class="flex items-center justify-between px-4 py-2.5 bg-slate-800/90 text-xs text-slate-400 border-t border-white/10">
+          <span>💡 支持全屏与倍速调节</span>
+          <a id="org-video-modal-download" href="#" download="" target="_blank" class="text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1">⬇️ 下载 MP4</a>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  const player = document.getElementById('org-video-modal-player');
+  const tt = document.getElementById('org-video-modal-title');
+  const dl = document.getElementById('org-video-modal-download');
+  if (tt) tt.textContent = '📹 ' + (title || '课程录播回放');
+  if (dl) {
+    dl.href = videoUrl;
+    dl.download = (title ? title.replace(/[^\w\u4e00-\u9fa5-_]/g, '_') : 'lesson_recording') + '.mp4';
+  }
+  player.src = videoUrl;
+  player.load();
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  const p = player.play();
+  if (p !== undefined) p.catch(() => {});
+}
+
+function closeVideoModal() {
+  const modal = document.getElementById('org-video-modal');
+  const player = document.getElementById('org-video-modal-player');
+  if (player) {
+    try {
+      player.pause();
+      player.removeAttribute('src');
+      player.load();
+    } catch(e) {}
+  }
+  if (modal) {
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const modal = document.getElementById('org-video-modal');
+    if (modal && modal.style.display !== 'none') {
+      closeVideoModal();
+    }
+  }
+});
 
 // ── Utils ──
 function esc(s) { if(!s) return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }

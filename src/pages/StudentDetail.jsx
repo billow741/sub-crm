@@ -40,6 +40,7 @@ export default function StudentDetail() {
   const [activeTab, setActiveTab] = useState('overview');
   const [showClassModal, setShowClassModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(null);
+  const [videoModal, setVideoModal] = useState(null); // { url, title }
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -1210,14 +1211,16 @@ export default function StudentDetail() {
                     <p className="text-xs text-gray-500">支持在新窗口播放、全屏与倍速控制</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <a
-                      href={`${API_BASE_URL}/classes/video/${showFeedbackModal.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
+                    <button
+                      type="button"
+                      onClick={() => setVideoModal({
+                        url: `${API_BASE_URL}/classes/video/${showFeedbackModal.id}`,
+                        title: `Lesson ${showFeedbackModal.date || ''} 录播回放`
+                      })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
                     >
                       ▶️ 播放录播视频
-                    </a>
+                    </button>
                     <a
                       href={`${API_BASE_URL}/classes/video/${showFeedbackModal.id}`}
                       target="_blank"
@@ -1555,6 +1558,54 @@ export default function StudentDetail() {
               </div>
             </form>
           </Card>
+        </div>
+      )}
+
+      {/* 📹 视频悬浮播放模态框 (Floating Video Lightbox) */}
+      {videoModal && (
+        <div
+          className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200"
+          onClick={() => setVideoModal(null)}
+        >
+          <div
+            className="relative w-full max-w-4xl bg-slate-900 rounded-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-800/80 border-b border-white/10">
+              <div className="text-sm font-bold text-white flex items-center gap-2">
+                <span>📹</span> {videoModal.title || '课程录播回放'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setVideoModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-sm font-bold cursor-pointer"
+                title="关闭 (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="relative w-full aspect-video bg-black flex items-center justify-center max-h-[75vh]">
+              <video
+                src={videoModal.url}
+                className="w-full h-full max-h-[75vh]"
+                controls
+                autoPlay
+                playsInline
+              />
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800/90 text-xs text-slate-400 border-t border-white/10">
+              <span>💡 支持空格键暂停/播放，全屏与倍速调节</span>
+              <a
+                href={videoModal.url}
+                download={`${(videoModal.title || 'lesson_recording').replace(/[^\w\u4e00-\u9fa5-_]/g, '_')}.mp4`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
+              >
+                ⬇️ 下载原片
+              </a>
+            </div>
+          </div>
         </div>
       )}
     </div>

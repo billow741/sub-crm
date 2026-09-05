@@ -149,6 +149,23 @@
  </div>
 </div>
 
+<!-- Video Modal (Floating Lightbox) -->
+<div id="video-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md hidden items-center justify-center z-[100] p-4" onclick="if(event.target===this)closeVideoModal()">
+  <div class="relative w-full max-w-4xl bg-slate-900 rounded-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between px-4 py-3 bg-slate-800/80 border-b border-white/10">
+      <div id="video-modal-title" class="text-sm font-bold text-white flex items-center gap-2">📹 Lesson Recording</div>
+      <button type="button" onclick="closeVideoModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-sm font-bold" title="Close (Esc)">✕</button>
+    </div>
+    <div class="relative w-full aspect-video bg-black flex items-center justify-center max-h-[75vh]">
+      <video id="video-modal-player" class="w-full h-full max-h-[75vh]" controls playsinline preload="metadata"></video>
+    </div>
+    <div class="flex items-center justify-between px-4 py-2.5 bg-slate-800/90 text-xs text-slate-400 border-t border-white/10">
+      <span>💡 Fullscreen & playback speed controls supported</span>
+      <a id="video-modal-download" href="#" download="" target="_blank" class="text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1">⬇️ Download MP4</a>
+    </div>
+  </div>
+</div>
+
 <!-- Feedback Modal -->
 <div id="feedback-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
  <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
@@ -668,9 +685,9 @@ function showViewFeedback(idx) {
     html += '<p class="text-xs text-gray-500">HD cloud recording ready for playback and review</p>';
     html += '</div>';
     html += '<div class="flex items-center gap-2">';
-    html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all">';
+    html += '<button type="button" onclick="openVideoModal(\'' + API_BASE + '/classes/video/' + cls.id + '\', \'Lesson ' + (cls.date || '') + ' Recording\')" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer">';
     html += '▶️ Play Video';
-    html += '</a>';
+    html += '</button>';
     html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" download="lesson_' + cls.id + '.mp4" class="text-xs text-blue-600 hover:underline px-2 py-1">';
     html += '⬇️ Download';
     html += '</a>';
@@ -727,6 +744,58 @@ function closeViewModal() {
   document.getElementById('view-modal').classList.add('hidden');
   document.getElementById('view-modal').classList.remove('flex');
 }
+
+// ===== Video Modal (Floating Lightbox) =====
+function openVideoModal(videoUrl, title) {
+  var modal = document.getElementById('video-modal');
+  var player = document.getElementById('video-modal-player');
+  var tt = document.getElementById('video-modal-title');
+  var dl = document.getElementById('video-modal-download');
+  if (!modal || !player) return;
+
+  if (tt) tt.textContent = '📹 ' + (title || 'Lesson Recording');
+  if (dl) {
+    dl.href = videoUrl;
+    dl.download = (title ? title.replace(/[^\w\u4e00-\u9fa5-_]/g, '_') : 'lesson_recording') + '.mp4';
+  }
+
+  player.src = videoUrl;
+  player.load();
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  document.body.style.overflow = 'hidden';
+
+  var playPromise = player.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(function() {});
+  }
+}
+
+function closeVideoModal() {
+  var modal = document.getElementById('video-modal');
+  var player = document.getElementById('video-modal-player');
+  if (player) {
+    try {
+      player.pause();
+      player.removeAttribute('src');
+      player.load();
+    } catch(e) {}
+  }
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.style.overflow = '';
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var vModal = document.getElementById('video-modal');
+    if (vModal && !vModal.classList.contains('hidden')) {
+      closeVideoModal();
+    }
+  }
+});
 
 // ===== Load Teacher Data =====
 async function loadTeacherData() {
