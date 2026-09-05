@@ -1227,8 +1227,21 @@ export default function Textbooks() {
                                 value={v.translation || ''}
                                 onChange={(e) => updateVocabItem(i, 'translation', e.target.value)}
                                 placeholder="中文释义"
-                                className="w-40 px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none text-gray-700 transition-colors"
+                                className="w-36 px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none text-gray-700 transition-colors"
                               />
+
+                              <div className="flex items-center gap-1 shrink-0 bg-purple-50 px-2 py-1 rounded-lg border border-purple-200" title="课本所在页码">
+                                <span className="text-xs font-bold text-purple-700">P.</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="999"
+                                  value={v.page || ''}
+                                  onChange={(e) => updateVocabItem(i, 'page', e.target.value ? parseInt(e.target.value, 10) : '')}
+                                  placeholder="页"
+                                  className="w-10 text-xs font-bold bg-transparent text-purple-900 focus:outline-none"
+                                />
+                              </div>
 
                               <button
                                 type="button"
@@ -1252,7 +1265,21 @@ export default function Textbooks() {
                           (unitDetail.patterns || []).map((p, i) => (
                             <div key={i} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow space-y-3 group relative">
                               <div className="flex items-center justify-between">
-                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 font-bold">句型 {i + 1}</Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 font-bold">句型 {i + 1}</Badge>
+                                  <div className="flex items-center gap-1 bg-green-50 px-2 py-0.5 rounded-lg border border-green-200" title="课本所在页码">
+                                    <span className="text-xs font-bold text-green-700">P.</span>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max="999"
+                                      value={p.page || ''}
+                                      onChange={(e) => updatePatternItem(i, 'page', e.target.value ? parseInt(e.target.value, 10) : '')}
+                                      placeholder="页"
+                                      className="w-10 text-xs font-bold bg-transparent text-green-900 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() => removePatternItem(i)}

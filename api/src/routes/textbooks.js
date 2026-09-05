@@ -111,7 +111,41 @@ textbooks.get('/suggest', async (c) => {
     } catch {}
   });
 
+  const pageFromParam = c.req.query('page_from');
+  const pageToParam = c.req.query('page_to');
+  const pageFrom = pageFromParam ? parseInt(pageFromParam, 10) : null;
+  const pageTo = pageToParam ? parseInt(pageToParam, 10) : null;
+
+  // 如果指定了页码范围，且数据中带有 page 属性，优先按页码精准过滤
+  if (pageFrom !== null || pageTo !== null) {
+    const minP = pageFrom !== null ? pageFrom : -Infinity;
+    const maxP = pageTo !== null ? pageTo : Infinity;
+
+    const hasVocabPages = allVocab.some(v => v.page !== undefined && v.page !== null);
+    if (hasVocabPages) {
+      allVocab = allVocab.filter(v => {
+        if (v.page !== undefined && v.page !== null) {
+          return v.page >= minP && v.page <= maxP;
+        }
+        return false;
+      });
+    }
+
+    const hasPatternPages = allPatterns.some(p => p.page !== undefined && p.page !== null);
+    if (hasPatternPages) {
+      allPatterns = allPatterns.filter(p => {
+        if (p.page !== undefined && p.page !== null) {
+          return p.page >= minP && p.page <= maxP;
+        }
+        return false;
+      });
+    }
+  }
+
   const sortByCore = (a, b) => {
+    if (a.page !== undefined && b.page !== undefined && a.page !== b.page) {
+      return a.page - b.page;
+    }
     if (a.is_core && !b.is_core) return -1;
     if (!a.is_core && b.is_core) return 1;
     return (a.difficulty || 99) - (b.difficulty || 99);
@@ -123,6 +157,8 @@ textbooks.get('/suggest', async (c) => {
       textbook_code: code,
       unit_number: unitNumbers.length === 1 ? unitNumbers[0] : unitNumbers.join('-'),
       unit_title: titleParts.join(' & ') || null,
+      page_from: pageFrom,
+      page_to: pageTo,
       vocab: allVocab,
       patterns: allPatterns,
       grammar: allGrammar,
@@ -567,11 +603,15 @@ function cleanVocabList(rawList) {
     if (!rawWord || isCommandInstruction(rawWord)) continue;
 
     if (isSentenceOrGreeting(rawWord)) {
-      misclassifiedSentences.push({
+      const sObj = {
         pattern: rawWord,
         translation: rawTrans || rawWord,
         is_core: true
-      });
+      };
+      if (item.page !== undefined && item.page !== null) {
+        sObj.page = parseInt(item.page, 10);
+      }
+      misclassifiedSentences.push(sObj);
       continue;
     }
 
@@ -587,12 +627,16 @@ function cleanVocabList(rawList) {
 
     if (!seen.has(key)) {
       seen.add(key);
-      cleaned.push({
+      const vObj = {
         word: normWord,
         translation: rawTrans || normWord,
         is_core: true,
         difficulty: item.difficulty || 1
-      });
+      };
+      if (item.page !== undefined && item.page !== null) {
+        vObj.page = parseInt(item.page, 10);
+      }
+      cleaned.push(vObj);
     }
   }
   return { cleanedVocab: cleaned, extraSentences: misclassifiedSentences };
@@ -697,11 +741,15 @@ function cleanPatternList(rawList, extraCandidates = []) {
     }
 
     if (!isDup) {
-      patternMap.set(fp, {
+      const pObj = {
         pattern: p,
         translation: trans || p,
         is_core: true
-      });
+      };
+      if (item.page !== undefined && item.page !== null) {
+        pObj.page = parseInt(item.page, 10);
+      }
+      patternMap.set(fp, pObj);
     }
   }
 
