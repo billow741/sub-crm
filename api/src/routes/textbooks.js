@@ -2794,7 +2794,8 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
   const lastCompletedClass = await DB.prepare(`
     SELECT id, date, start_time, teacher, textbook_code, unit_number,
            fb_unit, fb_lesson, fb_lesson_level, fb_vocab, fb_patterns, fb_grammar,
-           fb_teacher_message, fb_homework, fb_next_preview, next_textbook_code, next_unit_number
+           fb_teacher_message, fb_homework, fb_next_preview, next_textbook_code, next_unit_number,
+           page_from, page_to, next_page_from, next_page_to
     FROM classes
     WHERE student_id = ? AND status = 'completed'
     ORDER BY date DESC, start_time DESC
@@ -2803,7 +2804,7 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
 
   // 2. 下一节待上课程
   const nextScheduledClass = await DB.prepare(`
-    SELECT id, date, start_time, end_time, teacher, textbook_code, unit_number, class_link
+    SELECT id, date, start_time, end_time, teacher, textbook_code, unit_number, page_from, page_to, class_link
     FROM classes
     WHERE student_id = ? AND status = 'scheduled' AND date >= date('now', '-1 day')
     ORDER BY date ASC, start_time ASC
@@ -2814,26 +2815,37 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
   let preview = null;
   let targetCode = null;
   let targetUnit = null;
+  let targetPageFrom = null;
+  let targetPageTo = null;
 
   const completedUnit = lastCompletedClass ? parseInt(lastCompletedClass.unit_number || lastCompletedClass.fb_unit || '0', 10) : 0;
   const completedCode = lastCompletedClass ? (lastCompletedClass.textbook_code || lastCompletedClass.fb_lesson_level) : null;
 
-  if (nextScheduledClass && nextScheduledClass.textbook_code && nextScheduledClass.unit_number) {
-    // 1. 排课记录中已明确指定教材和课时
+  if (nextScheduledClass && nextScheduledClass.textbook_code) {
+    // 1. 排课记录中已指定教材
     targetCode = nextScheduledClass.textbook_code;
-    targetUnit = nextScheduledClass.unit_number;
-  } else if (lastCompletedClass && (lastCompletedClass.next_unit_number || lastCompletedClass.next_textbook_code)) {
-    // 2. 老师在上一节课反馈中明确选择/指定的下节课预习单元！(支持继续当前单元或自选任意单元)
+    targetUnit = nextScheduledClass.unit_number || null;
+    targetPageFrom = nextScheduledClass.page_from || null;
+    targetPageTo = nextScheduledClass.page_to || null;
+  } else if (lastCompletedClass && (lastCompletedClass.next_unit_number || lastCompletedClass.next_textbook_code || lastCompletedClass.next_page_from)) {
+    // 2. 老师在上一节课反馈中指定的下节预习教材、单元或页码
     targetCode = lastCompletedClass.next_textbook_code || completedCode;
-    targetUnit = lastCompletedClass.next_unit_number;
+    targetUnit = lastCompletedClass.next_unit_number || null;
+    targetPageFrom = lastCompletedClass.next_page_from || null;
+    targetPageTo = lastCompletedClass.next_page_to || null;
   } else if (lastCompletedClass) {
     targetCode = completedCode;
-    // 3. 检查老师是否在自定义备注中写了 Next: Unit X 或 Unit X 或 Lesson X
+    // 3. 检查老师是否在自定义备注中写了页码或单元
+    const pageMatch = (lastCompletedClass.fb_next_preview || '').match(/(?:Pages?|P\.?)\s*(\d+)\s*[-~至到]\s*(\d+)/i);
+    if (pageMatch) {
+      targetPageFrom = parseInt(pageMatch[1], 10);
+      targetPageTo = parseInt(pageMatch[2], 10);
+    }
     const noteMatch = (lastCompletedClass.fb_next_preview || '').match(/(?:Next:?\s*(?:Unit|Lesson)\s*|Unit\s*|Lesson\s*)(\d+)/i);
     if (noteMatch) {
       targetUnit = parseInt(noteMatch[1], 10);
-    } else {
-      // 4. 默认兜底：若老师未单独指定，顺延至下一课时 (+1)
+    } else if (!targetPageFrom) {
+      // 4. 默认兜底：若老师未单独指定页码，顺延至下一单元 (+1)
       targetUnit = completedUnit > 0 ? completedUnit + 1 : 1;
     }
   } else {
@@ -2856,9 +2868,28 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
     } catch (_) {}
   }
 
-  // ⭐ 核心防重保护：预习清单（Preview）必须预习未学过的新内容！
-  // 若目标单元小于或等于刚完成的已结课单元，则必须顺延至下一单元，避免预习清单变成重复展示今天已上完的内容
-  if (completedUnit > 0 && targetCode && targetCode === completedCode && (!targetUnit || targetUnit <= completedUnit)) {
+  // 🎯 若已知精确预习起始页，优先通过页码反查其所属单元
+  if (targetPageFrom && targetCode && !targetUnit) {
+    try {
+      const uRow = await DB.prepare(`
+        SELECT tu.unit_number
+        FROM textbook_units tu
+        JOIN textbooks t ON tu.textbook_id = t.id
+        WHERE t.code = ? AND tu.page_start <= ? AND (tu.page_end IS NULL OR tu.page_end >= ?)
+        ORDER BY tu.unit_number ASC
+        LIMIT 1
+      `).bind(targetCode, targetPageFrom, targetPageFrom).first();
+      if (uRow && uRow.unit_number) {
+        targetUnit = uRow.unit_number;
+      }
+    } catch (_) {}
+  }
+  if (!targetUnit && completedUnit > 0) {
+    targetUnit = completedUnit;
+  }
+
+  // ⭐ 核心防重保护：若没有指定精确页码，且目标单元小于或等于刚完成的已结课单元，则顺延至下一单元
+  if (!targetPageFrom && completedUnit > 0 && targetCode && targetCode === completedCode && (!targetUnit || targetUnit <= completedUnit)) {
     targetUnit = completedUnit + 1;
   }
 
@@ -2896,12 +2927,35 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
       try { patternsList = JSON.parse(uc.patterns || '[]'); } catch (_) {}
     }
 
-    // 老师预告文案：如果已推进到新单元，且上一课写的是继续旧单元，自动调整为新单元预告
+    // ⭐ 按照页码范围对词汇和句型进行精准裁剪
+    let pageFilteredVocab = vocabList;
+    let pageFilteredPatterns = patternsList;
+
+    if (targetPageFrom || targetPageTo) {
+      const pFrom = targetPageFrom || 1;
+      const pTo = targetPageTo || 999;
+      const filteredV = vocabList.filter(v => {
+        if (v.page === undefined || v.page === null) return true;
+        return v.page >= pFrom && v.page <= pTo;
+      });
+      if (filteredV.length > 0) pageFilteredVocab = filteredV;
+
+      const filteredP = patternsList.filter(p => {
+        if (typeof p === 'object' && p.page !== undefined && p.page !== null) {
+          return p.page >= pFrom && p.page <= pTo;
+        }
+        return true;
+      });
+      if (filteredP.length > 0) pageFilteredPatterns = filteredP;
+    }
+
+    // 老师预告文案
     let teacherNote = lastCompletedClass ? lastCompletedClass.fb_next_preview : null;
-    if (targetUnit && (!teacherNote || (completedUnit > 0 && targetUnit > completedUnit && teacherNote.includes('Continue Unit ' + completedUnit)))) {
+    if (!teacherNote) {
       const isLesson = targetCode.includes('WE') || targetCode.includes('Phonics');
       const pfx = isLesson ? 'Lesson' : 'Unit';
-      teacherNote = `${pfx} ${targetUnit}: Learn new vocabulary and practice sentence patterns.`;
+      const pageInfo = (targetPageFrom && targetPageTo) ? `Pages ${targetPageFrom}-${targetPageTo}` : (targetPageFrom ? `Page ${targetPageFrom}` : `${pfx} ${targetUnit}`);
+      teacherNote = `${pageInfo}: Learn target vocabulary and practice sentence patterns.`;
     }
 
     preview = {
@@ -2910,11 +2964,13 @@ textbooks.get('/preview-nudge/:studentId', async (c) => {
       textbook_name: uc ? uc.textbook_name : targetCode,
       unit_number: targetUnit,
       unit_title: uc ? uc.unit_title : `Unit ${targetUnit}`,
+      page_from: targetPageFrom,
+      page_to: targetPageTo,
       next_class_date: nextScheduledClass ? nextScheduledClass.date : null,
       next_class_time: nextScheduledClass ? `${nextScheduledClass.start_time} - ${nextScheduledClass.end_time}` : null,
       teacher_preview_note: teacherNote,
-      vocab_preview: vocabList.slice(0, 5),
-      patterns_preview: patternsList.slice(0, 2),
+      vocab_preview: pageFilteredVocab.slice(0, 6),
+      patterns_preview: pageFilteredPatterns.slice(0, 3),
       tip: '不需要提前背诵，和宝贝一起混个脸熟，上课更有自信哦 😊'
     };
   }

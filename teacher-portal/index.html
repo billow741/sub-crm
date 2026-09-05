@@ -303,20 +303,26 @@
         </div>
 
         <div class="p-2.5 bg-white border border-purple-200 rounded-lg space-y-2 mb-2 shadow-2xs">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-xs text-gray-500 font-medium">Quick Select:</span>
-            <div id="fb-next-quick-btns" class="flex flex-wrap items-center gap-1.5">
-              <span class="text-xs text-gray-400 italic">Select a textbook & unit above to enable quick options</span>
+          <div class="flex items-center justify-between flex-wrap gap-1.5">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 font-medium">Target Pages:</span>
+              <span id="fb-next-badge" class="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700 font-semibold">Auto-calculated</span>
+            </div>
+            <div id="fb-next-quick-btns" class="flex flex-wrap items-center gap-1.5"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-gray-500 mb-0.5 font-medium">Page from</label>
+              <input type="number" id="fb-next-page-from" min="1" max="999" placeholder="e.g. 17" oninput="onNextLessonPagesChange()" onchange="onNextLessonPagesChange()" class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white">
+            </div>
+            <div>
+              <label class="block text-[11px] text-gray-500 mb-0.5 font-medium">Page to</label>
+              <input type="number" id="fb-next-page-to" min="1" max="999" placeholder="e.g. 18" oninput="onNextLessonPagesChange()" onchange="onNextLessonPagesChange()" class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white">
             </div>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-500 font-medium shrink-0">Or pick unit:</span>
-            <select id="fb-next-unit-select" onchange="onNextUnitSelectChange(this.value)" class="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-purple-500 text-gray-700">
-              <option value="">Select Next Unit / Lesson...</option>
-            </select>
-            <input type="hidden" id="fb-next-unit-num" value="">
-            <input type="hidden" id="fb-next-tb-code" value="">
-          </div>
+          <input type="hidden" id="fb-next-unit-num" value="">
+          <input type="hidden" id="fb-next-tb-code" value="">
+          <div id="fb-next-words-preview" class="hidden text-[11px] text-purple-800 bg-purple-50/80 border border-purple-100 px-2 py-1 rounded"></div>
         </div>
 
         <textarea id="fb-next" rows="2" placeholder="Custom preview note or instructions for student & parents..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
@@ -1099,6 +1105,7 @@ function onTextbookPageRangeChange() {
   renderPagesPreview();
   autoSyncHomeworkText();
   refreshTextbookSuggestions();
+  autoSyncNextLessonPreview();
 }
 
 // ===== 📚 Intelligent Textbook Suggestions (with Page Filtering) =====
@@ -1313,155 +1320,136 @@ async function refreshTextbookSuggestions(overrideUnit) {
   }
 }
 
-// ===== Next Lesson Preview Interactive Selector =====
-function refreshNextLessonPreviewOptions(preselectedNextUnit) {
-  var tbCode = document.getElementById('fb-textbook-code') ? document.getElementById('fb-textbook-code').value : '';
-  var unitNumInput = document.getElementById('fb-unit-num');
-  var curUnit = (unitNumInput && unitNumInput.value !== '') ? parseInt(unitNumInput.value, 10) : null;
-  if (curUnit === null) {
-    var uVal = document.getElementById('fb-unit') ? parseInt(document.getElementById('fb-unit').value, 10) : null;
-    var lVal = document.getElementById('fb-lesson') ? parseInt(document.getElementById('fb-lesson').value, 10) : null;
-    curUnit = lVal || uVal || 1;
-  }
+// ===== 🎯 Next Lesson Preview (Page-Driven & Auto-Linked) =====
+var window_unitPageRanges = {
+  'EU-S': [
+    { unit: 1, start: 4, end: 11 },
+    { unit: 2, start: 12, end: 21 },
+    { unit: 3, start: 22, end: 29 },
+    { unit: 4, start: 30, end: 39 },
+    { unit: 5, start: 40, end: 47 },
+    { unit: 6, start: 48, end: 57 },
+    { unit: 7, start: 58, end: 65 },
+    { unit: 8, start: 66, end: 75 }
+  ]
+};
 
-  var isLesson = tbCode.includes('WE') || tbCode.includes('Phonics');
-  var prefix = isLesson ? 'Lesson' : 'Unit';
-
-  var quickBtnsContainer = document.getElementById('fb-next-quick-btns');
-  var nextUnitSelect = document.getElementById('fb-next-unit-select');
-  var nextUnitNumInput = document.getElementById('fb-next-unit-num');
-  var nextTbCodeInput = document.getElementById('fb-next-tb-code');
-
-  if (nextTbCodeInput) nextTbCodeInput.value = tbCode;
-
-  // Default to advance to next unit (curUnit + 1) if not explicitly set
-  var chosenUnit = preselectedNextUnit !== undefined && preselectedNextUnit !== null && preselectedNextUnit !== ''
-    ? parseInt(preselectedNextUnit, 10)
-    : (nextUnitNumInput && nextUnitNumInput.value !== '' ? parseInt(nextUnitNumInput.value, 10) : (curUnit ? curUnit + 1 : 1));
-
-  if (nextUnitNumInput && !nextUnitNumInput.value && chosenUnit !== null) {
-    nextUnitNumInput.value = chosenUnit;
-  }
-
-  // Pre-fill note with default template if empty
-  var noteArea = document.getElementById('fb-next');
-  if (noteArea && (!noteArea.value || noteArea.value.startsWith('Continue ') || noteArea.value.startsWith('Next ') || noteArea.value.startsWith('Lesson ') || noteArea.value.startsWith('Unit '))) {
-    if (chosenUnit === curUnit) {
-      noteArea.value = 'Continue ' + prefix + ' ' + chosenUnit + ': Review core vocabulary and reinforce speaking practice.';
-    } else {
-      noteArea.value = prefix + ' ' + chosenUnit + ': Learn new vocabulary and practice sentence patterns.';
-    }
-  }
-
-  var units = (tbCode && window_textbookUnitsMap[tbCode]) ? window_textbookUnitsMap[tbCode] : [];
-
-  // Populate next unit dropdown
-  if (nextUnitSelect) {
-    var sHtml = '<option value="">Select Next Unit / Lesson...</option>';
-    if (units.length > 0) {
-      units.forEach(function(u) {
-        var num = u.unit_number;
-        var title = u.unit_title || '';
-        var displayTitle = title;
-        if (num === 0 && !title) displayTitle = 'Welcome';
-        else if (title && !title.toLowerCase().startsWith('unit') && !title.toLowerCase().startsWith('lesson')) {
-          displayTitle = prefix + ' ' + num + ': ' + title;
-        } else if (!title) {
-          displayTitle = prefix + ' ' + num;
-        }
-        sHtml += '<option value="' + num + '" ' + (chosenUnit === num ? 'selected' : '') + '>' + escapeHtml(displayTitle) + '</option>';
-      });
-    } else {
-      for (var k = 1; k <= 20; k++) {
-        sHtml += '<option value="' + k + '" ' + (chosenUnit === k ? 'selected' : '') + '>' + prefix + ' ' + k + '</option>';
+function lookupUnitByPage(code, pageNum) {
+  if (!pageNum) return null;
+  var units = (code && window_textbookUnitsMap[code]) ? window_textbookUnitsMap[code] : [];
+  for (var i = 0; i < units.length; i++) {
+    var u = units[i];
+    if (u.page_start && u.page_end) {
+      if (pageNum >= u.page_start && pageNum <= u.page_end) {
+        return u.unit_number;
       }
     }
-    nextUnitSelect.innerHTML = sHtml;
-    if (chosenUnit !== null) {
-      nextUnitSelect.value = chosenUnit;
+  }
+  if (window_unitPageRanges[code]) {
+    var ranges = window_unitPageRanges[code];
+    for (var j = 0; j < ranges.length; j++) {
+      if (pageNum >= ranges[j].start && pageNum <= ranges[j].end) {
+        return ranges[j].unit;
+      }
     }
   }
-
-  // Populate quick buttons: Advance (Next) is primary and placed FIRST!
-  if (quickBtnsContainer) {
-    var contUnit = curUnit;
-    var advUnit = curUnit + 1;
-    var isContSelected = (chosenUnit === contUnit);
-    var isAdvSelected = (chosenUnit === advUnit);
-
-    var btnHtml = '';
-    btnHtml += '<button type="button" onclick="setNextPreviewUnit(' + advUnit + ', \'advance\')" id="btn-next-adv" class="px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors flex items-center gap-1 ' +
-      (isAdvSelected ? 'bg-purple-600 text-white border-purple-600 shadow-xs' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100') + '">' +
-      '➡️ Next: ' + prefix + ' ' + advUnit + '</button>';
-
-    btnHtml += '<button type="button" onclick="setNextPreviewUnit(' + contUnit + ', \'continue\')" id="btn-next-cont" class="px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors flex items-center gap-1 ' +
-      (isContSelected ? 'bg-purple-600 text-white border-purple-600 shadow-xs' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100') + '">' +
-      '🔁 Continue ' + prefix + ' ' + contUnit + '</button>';
-
-    quickBtnsContainer.innerHTML = btnHtml;
-  }
+  return null;
 }
 
-function setNextPreviewUnit(unitNum, actionType) {
-  var nextUnitNumInput = document.getElementById('fb-next-unit-num');
-  var nextUnitSelect = document.getElementById('fb-next-unit-select');
-  var noteArea = document.getElementById('fb-next');
+function autoSyncNextLessonPreview() {
   var tbCode = document.getElementById('fb-textbook-code') ? document.getElementById('fb-textbook-code').value : '';
+  var pageToInput = document.getElementById('fb-page-to');
+  var curPageTo = pageToInput ? parseInt(pageToInput.value, 10) : null;
+  var nextPageFromInput = document.getElementById('fb-next-page-from');
+  var nextPageToInput = document.getElementById('fb-next-page-to');
 
-  if (nextUnitNumInput) nextUnitNumInput.value = unitNum;
-  if (nextUnitSelect) nextUnitSelect.value = unitNum;
+  if (curPageTo && !isNaN(curPageTo)) {
+    var nextFrom = curPageTo + 1;
+    var nextTo = nextFrom + 1;
+    if (nextPageFromInput) nextPageFromInput.value = nextFrom;
+    if (nextPageToInput) nextPageToInput.value = nextTo;
+  }
+
+  onNextLessonPagesChange();
+}
+
+async function onNextLessonPagesChange() {
+  var tbCode = document.getElementById('fb-textbook-code') ? document.getElementById('fb-textbook-code').value : '';
+  var nextPageFromInput = document.getElementById('fb-next-page-from');
+  var nextPageToInput = document.getElementById('fb-next-page-to');
+  var nextFrom = nextPageFromInput ? parseInt(nextPageFromInput.value, 10) : null;
+  var nextTo = nextPageToInput ? parseInt(nextPageToInput.value, 10) : null;
+
+  var nextTbCodeInput = document.getElementById('fb-next-tb-code');
+  if (nextTbCodeInput) nextTbCodeInput.value = tbCode;
+
+  var badgeEl = document.getElementById('fb-next-badge');
+  var quickBtnsContainer = document.getElementById('fb-next-quick-btns');
+  var wordsPreviewEl = document.getElementById('fb-next-words-preview');
+  var noteArea = document.getElementById('fb-next');
+
+  if (!nextFrom || isNaN(nextFrom)) {
+    if (badgeEl) badgeEl.textContent = 'Auto-calculated';
+    if (quickBtnsContainer) quickBtnsContainer.innerHTML = '';
+    if (wordsPreviewEl) wordsPreviewEl.classList.add('hidden');
+    return;
+  }
+
+  var nextUnit = lookupUnitByPage(tbCode, nextFrom) || parseInt(document.getElementById('fb-unit-num')?.value || '1', 10);
+  var nextUnitNumInput = document.getElementById('fb-next-unit-num');
+  if (nextUnitNumInput) nextUnitNumInput.value = nextUnit;
 
   var isLesson = tbCode.includes('WE') || tbCode.includes('Phonics');
-  var prefix = isLesson ? 'Lesson' : 'Unit';
+  var pfx = isLesson ? 'Lesson' : 'Unit';
 
-  // Highlight active button
-  var contBtn = document.getElementById('btn-next-cont');
-  var advBtn = document.getElementById('btn-next-adv');
-  if (contBtn) {
-    var isCont = (actionType === 'continue');
-    contBtn.className = 'px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors flex items-center gap-1 ' +
-      (isCont ? 'bg-purple-600 text-white border-purple-600 shadow-xs' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100');
-  }
-  if (advBtn) {
-    var isAdv = (actionType === 'advance');
-    advBtn.className = 'px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors flex items-center gap-1 ' +
-      (isAdv ? 'bg-purple-600 text-white border-purple-600 shadow-xs' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100');
+  var pRangeStr = (nextTo && nextTo >= nextFrom) ? ('Pages ' + nextFrom + '-' + nextTo) : ('Page ' + nextFrom);
+  if (badgeEl) {
+    badgeEl.textContent = pfx + ' ' + nextUnit + ' · ' + pRangeStr;
   }
 
-  // Pre-fill note if empty or template
-  if (noteArea && (!noteArea.value || noteArea.value.startsWith('Continue ') || noteArea.value.startsWith('Next ') || noteArea.value.startsWith('Lesson ') || noteArea.value.startsWith('Unit '))) {
-    if (actionType === 'continue') {
-      noteArea.value = 'Continue ' + prefix + ' ' + unitNum + ': Review core vocabulary and reinforce speaking practice.';
-    } else {
-      noteArea.value = prefix + ' ' + unitNum + ': Learn new vocabulary and practice sentence patterns.';
+  // Quick jump buttons
+  if (quickBtnsContainer) {
+    var b1 = nextFrom + 1;
+    var b2 = nextFrom + 3;
+    var html = '';
+    html += '<button type="button" onclick="setNextLessonPages(' + nextFrom + ', ' + b1 + ')" class="px-2 py-0.5 text-xs font-semibold rounded bg-purple-100 hover:bg-purple-200 text-purple-800 transition-colors">+2 Pgs</button>';
+    html += '<button type="button" onclick="setNextLessonPages(' + nextFrom + ', ' + b2 + ')" class="px-2 py-0.5 text-xs font-semibold rounded bg-purple-100 hover:bg-purple-200 text-purple-800 transition-colors">+4 Pgs</button>';
+    quickBtnsContainer.innerHTML = html;
+  }
+
+  // Auto-sync preview note if empty or default template
+  if (noteArea && (!noteArea.value || noteArea.value.startsWith('Pages ') || noteArea.value.startsWith('Page ') || noteArea.value.startsWith('Continue ') || noteArea.value.startsWith('Next ') || noteArea.value.startsWith('Lesson ') || noteArea.value.startsWith('Unit '))) {
+    noteArea.value = pRangeStr + ': Learn target vocabulary and practice sentence patterns.';
+  }
+
+  // Fetch words snippet for these pages to give instant teacher visual feedback
+  if (wordsPreviewEl && tbCode && nextUnit) {
+    try {
+      var url = '/textbooks/suggest?textbook_code=' + encodeURIComponent(tbCode) + '&unit_number=' + encodeURIComponent(nextUnit) + '&page_from=' + encodeURIComponent(nextFrom) + (nextTo ? ('&page_to=' + encodeURIComponent(nextTo)) : '');
+      var res = await apiGet(url);
+      var words = (res && res.data && res.data.vocab) ? res.data.vocab.map(function(v){ return v.word; }) : [];
+      if (words.length > 0) {
+        wordsPreviewEl.textContent = '✨ Target Words for Preview: ' + words.join(', ');
+        wordsPreviewEl.classList.remove('hidden');
+      } else {
+        wordsPreviewEl.classList.add('hidden');
+      }
+    } catch(e) {
+      wordsPreviewEl.classList.add('hidden');
     }
   }
 }
 
-function onNextUnitSelectChange(val) {
-  var nextUnitNumInput = document.getElementById('fb-next-unit-num');
-  var unitNum = val ? parseInt(val, 10) : null;
-  if (nextUnitNumInput) nextUnitNumInput.value = unitNum || '';
+function setNextLessonPages(from, to) {
+  var fInput = document.getElementById('fb-next-page-from');
+  var tInput = document.getElementById('fb-next-page-to');
+  if (fInput) fInput.value = from;
+  if (tInput) tInput.value = to;
+  onNextLessonPagesChange();
+}
 
-  var curUnit = parseInt(document.getElementById('fb-unit-num')?.value || '1', 10);
-  if (unitNum === curUnit) {
-    setNextPreviewUnit(unitNum, 'continue');
-  } else if (unitNum === curUnit + 1) {
-    setNextPreviewUnit(unitNum, 'advance');
-  } else if (unitNum !== null) {
-    var contBtn = document.getElementById('btn-next-cont');
-    var advBtn = document.getElementById('btn-next-adv');
-    if (contBtn) contBtn.className = 'px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors flex items-center gap-1 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100';
-    if (advBtn) advBtn.className = 'px-2.5 py-1 text-xs font-semibold rounded-md border transition-colors flex items-center gap-1 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100';
-
-    var noteArea = document.getElementById('fb-next');
-    var tbCode = document.getElementById('fb-textbook-code') ? document.getElementById('fb-textbook-code').value : '';
-    var isLesson = tbCode.includes('WE') || tbCode.includes('Phonics');
-    var prefix = isLesson ? 'Lesson' : 'Unit';
-    if (noteArea && (!noteArea.value || noteArea.value.startsWith('Continue ') || noteArea.value.startsWith('Next ') || noteArea.value.startsWith('Lesson ') || noteArea.value.startsWith('Unit '))) {
-      noteArea.value = prefix + ' ' + unitNum + ': Preview key vocabulary and practice speaking.';
-    }
-  }
+function refreshNextLessonPreviewOptions() {
+  autoSyncNextLessonPreview();
 }
 
 // ===== Render Today's Classes =====
@@ -2112,6 +2100,8 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
     fb_next_preview: document.getElementById('fb-next').value,
     next_textbook_code: (document.getElementById('fb-next-tb-code')?.value || document.getElementById('fb-textbook-code').value || '').trim() || null,
     next_unit_number: document.getElementById('fb-next-unit-num')?.value ? parseInt(document.getElementById('fb-next-unit-num').value, 10) : null,
+    next_page_from: document.getElementById('fb-next-page-from')?.value ? parseInt(document.getElementById('fb-next-page-from').value, 10) : null,
+    next_page_to: document.getElementById('fb-next-page-to')?.value ? parseInt(document.getElementById('fb-next-page-to').value, 10) : null,
     fb_recording: document.getElementById('fb-recording').value.trim() || null,
     // Textbook page reference (for R2 page-img scans, parent portal embeds PDF pages)
     textbook_code: document.getElementById('fb-textbook-code').value || null,

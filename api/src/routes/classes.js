@@ -682,12 +682,14 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
       console.warn('同步教材学习进度跳过:', e.message);
     }
 
-    // ── 自动同步下节待上课程的预习教材与单元 ──
+    // ── 自动同步下节待上课程的预习教材与单元及页码 ──
     try {
-      if (data.next_unit_number || data.next_textbook_code) {
+      if (data.next_unit_number || data.next_textbook_code || data.next_page_from) {
         const nextTbCode = data.next_textbook_code || data.textbook_code || existing.textbook_code;
-        const nextUnitNum = data.next_unit_number;
-        if (nextTbCode && nextUnitNum) {
+        const nextUnitNum = data.next_unit_number || null;
+        const nextPageFrom = data.next_page_from ? parseInt(data.next_page_from, 10) : null;
+        const nextPageTo = data.next_page_to ? parseInt(data.next_page_to, 10) : null;
+        if (nextTbCode) {
           const nextScheduled = await DB.prepare(`
             SELECT id FROM classes
             WHERE student_id = ? AND status = 'scheduled' AND date >= date('now', '-1 day') AND id != ?
@@ -697,9 +699,9 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
           if (nextScheduled) {
             await DB.prepare(`
               UPDATE classes
-              SET textbook_code = ?, unit_number = ?, updated_at = datetime('now')
+              SET textbook_code = ?, unit_number = ?, page_from = ?, page_to = ?, updated_at = datetime('now')
               WHERE id = ?
-            `).bind(nextTbCode, nextUnitNum, nextScheduled.id).run();
+            `).bind(nextTbCode, nextUnitNum, nextPageFrom, nextPageTo, nextScheduled.id).run();
           }
         }
       }
