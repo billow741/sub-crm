@@ -640,30 +640,33 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
       }
     }
 
-    // ── 里程碑自动检测 ──
+    // ── 里程碑自动检测（排除已结课/graduated状态学员）──
     let milestone = null;
     try {
       if (!isTrialUpdate && newStatus === 'completed' && oldStatus !== 'completed') {
-        const completedCount = await DB.prepare(
-          'SELECT COUNT(*) as cnt FROM classes WHERE student_id = ? AND status = ? AND is_trial = 0'
-        ).bind(existing.student_id, 'completed').first();
+        const student = await DB.prepare('SELECT id, status FROM students WHERE id = ?').bind(existing.student_id).first();
+        if (student && student.status !== 'graduated') {
+          const completedCount = await DB.prepare(
+            'SELECT COUNT(*) as cnt FROM classes WHERE student_id = ? AND status = ? AND is_trial = 0'
+          ).bind(existing.student_id, 'completed').first();
 
-        const milestones = [10, 30, 60, 100];
-        for (const m of milestones) {
-          if (completedCount?.cnt === m) {
-            milestone = { type: 'milestone', completedCount: m, reportType: `milestone_${m}` };
-            break;
+          const milestones = [10, 30, 60, 100];
+          for (const m of milestones) {
+            if (completedCount?.cnt === m) {
+              milestone = { type: 'milestone', completedCount: m, reportType: `milestone_${m}` };
+              break;
+            }
           }
-        }
 
-        if (milestone) {
-          const reportType = milestone.reportType || milestone.levelUp?.reportType;
-          if (reportType) {
-            await DB.prepare('UPDATE classes SET milestone_type = ? WHERE id = ?').bind(reportType, existing.id).run();
-            const existingReport = await DB.prepare(
-              'SELECT id FROM progress_reports WHERE student_id = ? AND report_type = ? ORDER BY created_at DESC LIMIT 1'
-            ).bind(existing.student_id, reportType).first();
-            milestone.alreadyExists = !!existingReport;
+          if (milestone) {
+            const reportType = milestone.reportType || milestone.levelUp?.reportType;
+            if (reportType) {
+              await DB.prepare('UPDATE classes SET milestone_type = ? WHERE id = ?').bind(reportType, existing.id).run();
+              const existingReport = await DB.prepare(
+                'SELECT id FROM progress_reports WHERE student_id = ? AND report_type = ? ORDER BY created_at DESC LIMIT 1'
+              ).bind(existing.student_id, reportType).first();
+              milestone.alreadyExists = !!existingReport;
+            }
           }
         }
       }

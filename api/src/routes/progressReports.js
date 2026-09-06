@@ -196,6 +196,11 @@ progressReports.post('/', validate(reportSchema), async (c) => {
   const DB = c.env.DB;
   const data = c.req.validated;
 
+  const student = await DB.prepare('SELECT id, status FROM students WHERE id = ?').bind(data.student_id).first();
+  if (student && student.status === 'graduated') {
+    return c.json(error('STUDENT_GRADUATED', 'The student has graduated. Milestone reports cannot be generated for graduated students.'), 400);
+  }
+
   const result = await DB.prepare(`
     INSERT INTO progress_reports (
       student_id, class_id, report_type, teacher_id, teacher_name,
