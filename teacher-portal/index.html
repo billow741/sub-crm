@@ -25,7 +25,11 @@
     .fb-star-rating { display: inline-flex; gap: 2px; }
     .fb-star-rating .star { font-size: 22px; color: #d1d5db; cursor: pointer; transition: color 0.15s; user-select: none; }
     .fb-star-rating .star.active { color: #F5A623; }
-    .fb-star-rating .star:hover { color: #f0b553; }
+    /* ── Milestone star rating ── */
+    .ms-star-rating { display: inline-flex; gap: 2px; }
+    .ms-star-rating .star { font-size: 20px; color: #d1d5db; cursor: pointer; transition: color 0.15s; user-select: none; }
+    .ms-star-rating .star.active { color: #F5A623; }
+    .ms-star-rating .star:hover { color: #f0b553; }
     /* ── Assessment modal scroll ── */
     #assessment-modal { max-height: 90vh; overflow-y: auto; }
   </style>
@@ -118,23 +122,159 @@
 </div>
 
 <!-- Milestone Report Modal -->
-<div id="milestone-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
- <div class="bg-white rounded-lg p-6 w-full max-w-xl mx-4 max-h-[90vh] overflow-y-auto">
-  <div id="milestone-banner" class="rounded-lg p-3 mb-4 text-center text-white"></div>
-  <div id="milestone-info" class="bg-gray-50 rounded-lg p-3 mb-4 text-sm text-gray-600"></div>
-  <form id="milestone-form" class="space-y-3">
-    <div><label class="block text-sm font-medium text-gray-700 mb-1">📝 Summary (Overall assessment)</label><textarea id="ms-summary" rows="3" placeholder="Overall assessment of this period..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea></div>
-    <div><label class="block text-sm font-medium text-gray-700 mb-1">💪 Strengths</label><textarea id="ms-strengths" rows="2" placeholder="What the student did well..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea></div>
-    <div><label class="block text-sm font-medium text-gray-700 mb-1">📈 Areas for Improvement</label><textarea id="ms-improvements" rows="2" placeholder="Areas that need work..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea></div>
-    <div><label class="block text-sm font-medium text-gray-700 mb-1">🎯 Recommendation for Next Stage</label><textarea id="ms-recommendation" rows="2" placeholder="What to focus on next..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea></div>
-    <div><label class="block text-sm font-medium text-gray-700 mb-1">💌 Teacher's Message to Parents</label><textarea id="ms-message" rows="3" placeholder="A personal message to the parents..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea></div>
-    <div class="flex gap-3 pt-4">
-      <button type="button" onclick="closeMilestoneModal()" class="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50">Later</button>
-      <button type="submit" class="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600">Submit Report</button>
+<div id="milestone-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+ <div class="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-100">
+  <!-- Milestone Banner -->
+  <div id="milestone-banner" class="rounded-xl p-4 mb-4 text-center text-white shadow-sm flex flex-col items-center justify-center">
+    <div id="ms-banner-title" class="text-lg sm:text-xl font-black tracking-wide"></div>
+    <div id="ms-banner-desc" class="text-xs opacity-90 mt-1 max-w-lg"></div>
+  </div>
+
+  <!-- Student Info & Auto-stats Card -->
+  <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 mb-4 text-sm text-slate-700">
+    <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
+      <div id="ms-student-summary" class="font-medium text-slate-900"></div>
+      <div id="ms-badge-pill" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200"></div>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2.5 text-xs">
+      <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
+        <span class="text-gray-400 block mb-0.5">📚 Completed Lessons</span>
+        <span id="ms-stat-completed" class="font-bold text-slate-800 text-sm">-</span>
+      </div>
+      <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
+        <span class="text-gray-400 block mb-0.5">🔤 Cumulative Vocab</span>
+        <span id="ms-stat-vocab" class="font-bold text-slate-800 text-sm">-</span>
+      </div>
+      <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
+        <span class="text-gray-400 block mb-0.5">🏆 Honor Badge</span>
+        <span id="ms-stat-badge" class="font-bold text-indigo-700 text-sm">-</span>
+      </div>
+    </div>
+    <!-- Sample Vocab Chips -->
+    <div id="ms-vocab-chips-box" class="hidden mt-2 pt-2 border-t border-slate-200 text-xs">
+      <span class="text-gray-500 font-medium">Recent vocabulary learned: </span>
+      <span id="ms-vocab-chips" class="text-slate-700 font-mono text-[11px]"></span>
+    </div>
+  </div>
+
+  <form id="milestone-form" class="space-y-4">
+    <!-- 4 Dimensional Ratings -->
+    <div class="border border-slate-200 rounded-xl p-3.5 bg-slate-50/50">
+      <div class="flex items-center justify-between mb-2.5">
+        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+          <span>⭐</span> Core Dimensional Ratings
+        </h3>
+        <span class="text-[11px] text-slate-400">Rate 1-5 stars</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
+        <div class="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between shadow-2xs">
+          <span class="text-slate-700 font-medium text-xs flex items-center gap-1">🎧 听力理解 (Listening)</span>
+          <div class="ms-star-rating" data-name="score_listening">
+            <span class="star active" data-val="1">★</span>
+            <span class="star active" data-val="2">★</span>
+            <span class="star active" data-val="3">★</span>
+            <span class="star active" data-val="4">★</span>
+            <span class="star active" data-val="5">★</span>
+            <input type="hidden" id="ms-score-listening" value="5">
+          </div>
+        </div>
+        <div class="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between shadow-2xs">
+          <span class="text-slate-700 font-medium text-xs flex items-center gap-1">🗣️ 口语表达 (Speaking)</span>
+          <div class="ms-star-rating" data-name="score_speaking">
+            <span class="star active" data-val="1">★</span>
+            <span class="star active" data-val="2">★</span>
+            <span class="star active" data-val="3">★</span>
+            <span class="star active" data-val="4">★</span>
+            <span class="star active" data-val="5">★</span>
+            <input type="hidden" id="ms-score-speaking" value="5">
+          </div>
+        </div>
+        <div class="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between shadow-2xs">
+          <span class="text-slate-700 font-medium text-xs flex items-center gap-1">🌟 课堂互动 (Engagement)</span>
+          <div class="ms-star-rating" data-name="score_interaction">
+            <span class="star active" data-val="1">★</span>
+            <span class="star active" data-val="2">★</span>
+            <span class="star active" data-val="3">★</span>
+            <span class="star active" data-val="4">★</span>
+            <span class="star active" data-val="5">★</span>
+            <input type="hidden" id="ms-score-interaction" value="5">
+          </div>
+        </div>
+        <div class="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between shadow-2xs">
+          <span class="text-slate-700 font-medium text-xs flex items-center gap-1">🔤 自然拼读与发音 (Phonics)</span>
+          <div class="ms-star-rating" data-name="score_pronunciation">
+            <span class="star active" data-val="1">★</span>
+            <span class="star active" data-val="2">★</span>
+            <span class="star active" data-val="3">★</span>
+            <span class="star active" data-val="4">★</span>
+            <span class="star active" data-val="5">★</span>
+            <input type="hidden" id="ms-score-pronunciation" value="5">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Snapshot Metrics: Lessons & Vocab -->
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Total Lessons Completed</label>
+        <input type="number" id="ms-total-lessons" min="1" max="999" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Cumulative Vocab Count</label>
+        <input type="number" id="ms-vocab-count" min="0" max="9999" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white">
+      </div>
+    </div>
+
+    <!-- Highlight Video URL -->
+    <div>
+      <label class="block text-xs font-semibold text-gray-700 mb-1">📹 Highlight Recording / Video URL (Optional)</label>
+      <input type="text" id="ms-highlight-url" placeholder="https://... (VOOV or Cloud video recording link to showcase student milestone)" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white">
+    </div>
+
+    <!-- Template Prompts Fill Action -->
+    <div class="flex items-center justify-between pt-1">
+      <span class="text-xs font-bold text-gray-800">📝 Detailed Evaluation & Guidance</span>
+      <button type="button" onclick="applyMilestoneTemplateTips()" class="text-xs text-purple-600 hover:text-purple-800 font-semibold flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 rounded-md border border-purple-200 transition-colors">
+        <span>✨ Insert Stage Template Suggestions</span>
+      </button>
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">📝 Overall Assessment Summary</label>
+      <textarea id="ms-summary" rows="3" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500" required></textarea>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1">💪 Strengths & Highlights</label>
+        <textarea id="ms-strengths" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1">📈 Areas for Improvement</label>
+        <textarea id="ms-improvements" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea>
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">🎯 Recommendation for Next Stage</label>
+      <textarea id="ms-recommendation" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">💌 Teacher's Personal Message to Parents</label>
+      <textarea id="ms-message" rows="3" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea>
+    </div>
+
+    <input type="hidden" id="ms-badge-name" value="">
+
+    <div class="flex gap-3 pt-3 border-t border-gray-100">
+      <button type="button" onclick="closeMilestoneModal()" class="flex-1 px-4 py-2.5 border rounded-xl hover:bg-gray-50 text-sm font-medium text-gray-700">Later</button>
+      <button type="submit" id="ms-submit-btn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-xl font-bold shadow-md hover:from-orange-600 hover:to-amber-700 transition-all text-sm">
+        🎉 Submit Milestone Report
+      </button>
     </div>
   </form>
  </div>
 </div>
+
 
 <!-- View Modal -->
 <div id="view-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" onclick="if(event.target===this)closeViewModal()">
@@ -1761,39 +1901,182 @@ var milestoneType = null;
 var milestoneData = null;
 
 var MILESTONE_INFO = {
-  milestone_10: { title: '🎉 10 Lessons Milestone!', desc: 'The student has completed 10 lessons. Write a progress report!', color: '#10B981' },
-  milestone_30: { title: '🌟 30 Lessons Milestone!', desc: 'The student has completed 30 lessons. Write a stage growth report!', color: '#6366F1' },
-  milestone_60: { title: '🏆 60 Lessons Milestone!', desc: 'The student has completed 60 lessons. Write a semester summary report!', color: '#E26B31' },
-  level_up: { title: '🎓 Level Up!', desc: 'The student has reached a new level. Write a congratulatory report!', color: '#F5A623' }
+  milestone_10: { 
+    title: '🥉 10 Lessons Milestone (Rising Star)!', 
+    desc: 'The student has completed 10 lessons! Write an introductory adaptation report focusing on learning habits, engagement, and initial phonics/sight words.', 
+    color: '#10B981',
+    badge: '🥉 启航新星 (Rising Star)',
+    lessons: 10,
+    tips: {
+      summary: 'Student has adapted smoothly to the 1-on-1 English environment, demonstrating curiosity, high enthusiasm, and responsive engagement.',
+      strengths: 'Willing to speak and imitate teacher pronunciation; remembers high-frequency vocabulary quickly; attentive in interactive activities.',
+      improvements: 'Encourage complete sentence responses rather than single words; practice attentive listening to teacher instructions.',
+      recommendation: 'Continue building letter-sound phonics and foundational sight words; reinforce with short audio and chant repetition.',
+      message: 'Congratulations on reaching 10 lessons! Your child has shown wonderful enthusiasm and adapted beautifully to English learning!'
+    }
+  },
+  milestone_30: { 
+    title: '🥈 30 Lessons Milestone (Steady Leaper)!', 
+    desc: 'The student has completed 30 lessons! Write a stage growth report focusing on vocabulary expansion, sentence structures and phonics decoding.', 
+    color: '#6366F1',
+    badge: '🥈 进阶飞跃 (Steady Leaper)',
+    lessons: 30,
+    tips: {
+      summary: 'Student has achieved significant progress in vocabulary retention and sentence building, transitioning from passive listening to active communication.',
+      strengths: 'Masters target unit sentence patterns; sounds out regular CVC words independently; eager to share thoughts during warm-up questions.',
+      improvements: 'Pay attention to grammatical details such as plural nouns and third-person singular verbs; encourage speaking in longer phrases.',
+      recommendation: 'Reinforce workbook reading exercises and short story read-alouds; expand descriptive adjectives and everyday verbs.',
+      message: '30 lessons completed! Consistency is the true key to language mastery, and your child has built fantastic, durable English study habits!'
+    }
+  },
+  milestone_60: { 
+    title: '🥇 60 Lessons Milestone (Semester Pioneer)!', 
+    desc: 'The student has completed 60 lessons! Write a comprehensive semester report evaluating overall competence, fluency and level progression.', 
+    color: '#E26B31',
+    badge: '🥇 学期先锋 (Semester Pioneer)',
+    lessons: 60,
+    tips: {
+      summary: 'Student has achieved a solid semester milestone, demonstrating comprehensive mastery across listening comprehension, phonics reading, and conversational fluency.',
+      strengths: 'High listening comprehension with minimal translation; fluent phonics decoding; natural conversational flow and confident pronunciation.',
+      improvements: 'Challenge with open-ended reasoning questions (Why/How); deepen reading comprehension and story retelling abilities.',
+      recommendation: 'Advance to the next curriculum level or supplementary graded readers; practice structured paragraph presentation and short dialogues.',
+      message: 'Reaching 60 lessons is a major educational milestone! Your child has grown into a confident, expressive English speaker. Great teamwork!'
+    }
+  },
+  milestone_100: { 
+    title: '💎 100 Lessons Milestone (Century Club Honor)!', 
+    desc: 'The student has completed 100 lessons! Celebrate Century Club membership with an authoritative milestone evaluation and future academic outlook.', 
+    color: '#8B5CF6',
+    badge: '💎 百课卓越 (Century Club)',
+    lessons: 100,
+    tips: {
+      summary: 'Century Club Honor! Student has reached 100 lessons with extraordinary persistence, forming instinctive English language intuition and self-expression.',
+      strengths: 'Spontaneous and fluent English expression; native-like rhythm and intonation; confident discussions across diverse topics; strong reading autonomy.',
+      improvements: 'Refine grammatical precision in nuanced expressions; expand academic and nonfiction reading vocabulary.',
+      recommendation: 'Prepare for Cambridge YLE / CEFR assessment milestones; engage in topic-based presentation, debate, and guided creative writing.',
+      message: 'Welcome to the SunnyBridge Century Club! Completing 100 lessons is a testament to resilience, passion, and brilliance. The sky is the limit!'
+    }
+  },
+  level_up: { 
+    title: '🎓 Level Up!', 
+    desc: 'The student has reached a new level. Write a congratulatory report highlighting achievements and next-level goals!', 
+    color: '#F5A623',
+    badge: '🎓 等级进阶 (Level Up)',
+    tips: {
+      summary: 'Successfully completed the current curriculum level and fully meets all exit competencies across speaking, listening, and phonics.',
+      strengths: 'Strong foundational mastery of all core units, high retention of target structures, and consistent enthusiasm in class.',
+      improvements: 'Prepare for expanded vocabulary density and more nuanced conversational exchanges in the upcoming level.',
+      recommendation: 'Smooth transition to the next textbook level with regular review of foundational structures; maintain daily listening immersion.',
+      message: 'Congratulations on leveling up! Keep up the brilliant momentum as we embark on this exciting new stage of English learning!'
+    }
+  }
 };
 
-function openMilestoneReport(cls, m, reportType) {
+async function openMilestoneReport(cls, m, reportType) {
   milestoneClass = cls;
   milestoneType = reportType;
   milestoneData = m;
 
-  var info = MILESTONE_INFO[reportType] || { title: 'Milestone', desc: '', color: '#6366F1' };
+  var info = MILESTONE_INFO[reportType] || { title: 'Milestone Report', desc: '', color: '#6366F1', badge: '🏅 阶段荣耀', lessons: 10, tips: {} };
   var banner = document.getElementById('milestone-banner');
-  banner.textContent = info.title;
   banner.style.background = info.color;
+  document.getElementById('ms-banner-title').textContent = info.title;
+  document.getElementById('ms-banner-desc').textContent = info.desc;
 
-  var infoHtml = '<div><b>Student:</b> ' + escapeHtml(formatStudentName(cls)) + '</div>';
-  infoHtml += '<div><b>Date:</b> ' + cls.date + '</div>';
-  infoHtml += '<div><b>Report Type:</b> ' + info.desc + '</div>';
+  var studentText = '<b>' + escapeHtml(formatStudentName(cls)) + '</b> · ' + cls.date;
   if (m.levelUp && m.levelUp.fromLevel) {
-    infoHtml += '<div><b>Level:</b> ' + escapeHtml(m.levelUp.fromLevel) + ' → ' + escapeHtml(m.levelUp.toLevel) + '</div>';
+    studentText += ' · <span class="text-purple-700 font-semibold">' + escapeHtml(m.levelUp.fromLevel) + ' ➔ ' + escapeHtml(m.levelUp.toLevel) + '</span>';
   }
-  document.getElementById('milestone-info').innerHTML = infoHtml;
+  document.getElementById('ms-student-summary').innerHTML = studentText;
+  document.getElementById('ms-badge-pill').textContent = info.badge || '🏅 里程碑';
+  document.getElementById('ms-badge-name').value = info.badge || '';
 
-  // Clear form
+  // Set default dimensional ratings to 5 stars
+  ['score_listening', 'score_speaking', 'score_interaction', 'score_pronunciation'].forEach(function(dim) {
+    var rating = document.querySelector('.ms-star-rating[data-name="' + dim + '"]');
+    if (rating) {
+      rating.querySelectorAll('.star').forEach(function(s) { s.classList.add('active'); });
+      var hidden = rating.querySelector('input[type="hidden"]');
+      if (hidden) hidden.value = '5';
+    }
+  });
+
+  // Pre-fill metrics
+  var defaultLessons = info.lessons || (m.lessonsCompleted || 10);
+  document.getElementById('ms-total-lessons').value = defaultLessons;
+  document.getElementById('ms-vocab-count').value = '';
+  document.getElementById('ms-highlight-url').value = cls.fb_recording ? (parseRecordingInfo(cls.fb_recording)?.url || '') : '';
+
+  // Set placeholders according to stage tips
+  var tips = info.tips || {};
+  document.getElementById('ms-summary').placeholder = tips.summary || 'Overall assessment of this period...';
+  document.getElementById('ms-strengths').placeholder = tips.strengths || 'What the student did well...';
+  document.getElementById('ms-improvements').placeholder = tips.improvements || 'Areas that need work...';
+  document.getElementById('ms-recommendation').placeholder = tips.recommendation || 'What to focus on next...';
+  document.getElementById('ms-message').placeholder = tips.message || 'A personal message to the parents...';
+
+  // Clear previous values
   document.getElementById('ms-summary').value = '';
   document.getElementById('ms-strengths').value = '';
   document.getElementById('ms-improvements').value = '';
   document.getElementById('ms-recommendation').value = '';
   document.getElementById('ms-message').value = '';
 
+  // Show stats card placeholder
+  document.getElementById('ms-stat-completed').textContent = defaultLessons + ' lessons';
+  document.getElementById('ms-stat-vocab').textContent = 'Loading...';
+  document.getElementById('ms-stat-badge').textContent = info.badge || '-';
+
+  var chipsBox = document.getElementById('ms-vocab-chips-box');
+  if (chipsBox) chipsBox.classList.add('hidden');
+
   document.getElementById('milestone-modal').classList.remove('hidden');
   document.getElementById('milestone-modal').classList.add('flex');
+
+  // Async fetch stats from backend to auto-populate
+  try {
+    var statsRes = await apiGet('/progress-reports/stats/' + cls.student_id);
+    var stats = statsRes.data || statsRes;
+    if (stats) {
+      if (stats.completed_count) {
+        document.getElementById('ms-stat-completed').textContent = stats.completed_count + ' lessons';
+        if (stats.completed_count >= defaultLessons) {
+          document.getElementById('ms-total-lessons').value = stats.completed_count;
+        }
+      }
+      if (stats.vocabulary_count !== undefined) {
+        document.getElementById('ms-stat-vocab').textContent = stats.vocabulary_count + ' words';
+        document.getElementById('ms-vocab-count').value = stats.vocabulary_count;
+      }
+      if (stats.sample_words && stats.sample_words.length > 0 && chipsBox) {
+        chipsBox.classList.remove('hidden');
+        document.getElementById('ms-vocab-chips').textContent = stats.sample_words.slice(0, 20).join(', ') + (stats.sample_words.length > 20 ? '...' : '');
+      }
+    }
+  } catch(e) {
+    document.getElementById('ms-stat-vocab').textContent = '~100+ words';
+  }
+}
+
+function applyMilestoneTemplateTips() {
+  if (!milestoneType) return;
+  var info = MILESTONE_INFO[milestoneType] || {};
+  var tips = info.tips || {};
+  if (!document.getElementById('ms-summary').value && tips.summary) {
+    document.getElementById('ms-summary').value = tips.summary;
+  }
+  if (!document.getElementById('ms-strengths').value && tips.strengths) {
+    document.getElementById('ms-strengths').value = tips.strengths;
+  }
+  if (!document.getElementById('ms-improvements').value && tips.improvements) {
+    document.getElementById('ms-improvements').value = tips.improvements;
+  }
+  if (!document.getElementById('ms-recommendation').value && tips.recommendation) {
+    document.getElementById('ms-recommendation').value = tips.recommendation;
+  }
+  if (!document.getElementById('ms-message').value && tips.message) {
+    document.getElementById('ms-message').value = tips.message;
+  }
 }
 
 function closeMilestoneModal() {
@@ -1801,9 +2084,27 @@ function closeMilestoneModal() {
   document.getElementById('milestone-modal').classList.remove('flex');
 }
 
+// Milestone star rating interaction (delegated)
+document.addEventListener('click', function(e) {
+  var star = e.target.closest('.ms-star-rating .star');
+  if (!star) return;
+  var rating = star.closest('.ms-star-rating');
+  var stars = rating.querySelectorAll('.star');
+  var selectedVal = parseInt(star.getAttribute('data-val'));
+  stars.forEach(function(s) {
+    if (parseInt(s.getAttribute('data-val')) <= selectedVal) s.classList.add('active');
+    else s.classList.remove('active');
+  });
+  var hidden = rating.querySelector('input[type="hidden"]');
+  if (hidden) hidden.value = selectedVal;
+});
+
 document.getElementById('milestone-form').addEventListener('submit', async function(e) {
   e.preventDefault();
   if (!milestoneClass) return;
+
+  var submitBtn = document.getElementById('ms-submit-btn');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
 
   var teacherId = getTeacherId();
   var teacherName = '';
@@ -1814,6 +2115,9 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
   } catch(e) {}
 
   var reportType = milestoneData.reportType || (milestoneData.levelUp ? milestoneData.levelUp.reportType : milestoneType);
+
+  var totalLessons = parseInt(document.getElementById('ms-total-lessons').value);
+  var vocabCount = parseInt(document.getElementById('ms-vocab-count').value);
 
   var reportData = {
     student_id: milestoneClass.student_id,
@@ -1828,6 +2132,14 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
     teacher_message: document.getElementById('ms-message').value,
     from_level: milestoneData.levelUp ? milestoneData.levelUp.fromLevel : null,
     to_level: milestoneData.levelUp ? milestoneData.levelUp.toLevel : null,
+    total_lessons_completed: isNaN(totalLessons) ? 0 : totalLessons,
+    vocabulary_count: isNaN(vocabCount) ? 0 : vocabCount,
+    score_listening: parseInt(document.getElementById('ms-score-listening').value) || 5,
+    score_speaking: parseInt(document.getElementById('ms-score-speaking').value) || 5,
+    score_interaction: parseInt(document.getElementById('ms-score-interaction').value) || 5,
+    score_pronunciation: parseInt(document.getElementById('ms-score-pronunciation').value) || 5,
+    highlight_recording_url: document.getElementById('ms-highlight-url').value.trim() || null,
+    badge_name: document.getElementById('ms-badge-name').value.trim() || null,
     organization_id: milestoneClass.organization_id || null
   };
 
@@ -1847,6 +2159,8 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
     }
   } catch(err) {
     alert('Failed to submit report: ' + err.message);
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🎉 Submit Milestone Report'; }
   }
 });
 

@@ -648,7 +648,7 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
           'SELECT COUNT(*) as cnt FROM classes WHERE student_id = ? AND status = ? AND is_trial = 0'
         ).bind(existing.student_id, 'completed').first();
 
-        const milestones = [10, 30, 60];
+        const milestones = [10, 30, 60, 100];
         for (const m of milestones) {
           if (completedCount?.cnt === m) {
             milestone = { type: 'milestone', completedCount: m, reportType: `milestone_${m}` };

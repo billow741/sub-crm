@@ -466,3 +466,40 @@ CREATE TABLE IF NOT EXISTS student_textbook_progress (
 
 CREATE INDEX IF NOT EXISTS idx_stp_student ON student_textbook_progress (student_id);
 CREATE INDEX IF NOT EXISTS idx_stp_textbook ON student_textbook_progress (textbook_code);
+
+-- ============================================
+-- 16. Progress Reports 表（阶段评估与里程碑报告）
+-- ============================================
+CREATE TABLE IF NOT EXISTS progress_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  class_id INTEGER,
+  report_type TEXT NOT NULL CHECK (report_type IN ('milestone_10', 'milestone_30', 'milestone_60', 'milestone_100', 'level_up')),
+  teacher_id INTEGER,
+  teacher_name TEXT,
+  summary TEXT,
+  strengths TEXT,
+  improvements TEXT,
+  recommendation TEXT,
+  teacher_message TEXT,
+  from_level TEXT,
+  to_level TEXT,
+  total_lessons_completed INTEGER DEFAULT 0,
+  vocabulary_count INTEGER DEFAULT 0,
+  score_listening INTEGER DEFAULT 5,
+  score_speaking INTEGER DEFAULT 5,
+  score_interaction INTEGER DEFAULT 5,
+  score_pronunciation INTEGER DEFAULT 5,
+  highlight_recording_url TEXT,
+  badge_name TEXT,
+  status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('draft', 'published')),
+  organization_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL,
+  FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_progress_reports_student ON progress_reports (student_id);
+CREATE INDEX IF NOT EXISTS idx_progress_reports_type ON progress_reports (report_type);

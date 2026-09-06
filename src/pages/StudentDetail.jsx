@@ -892,7 +892,7 @@ export default function StudentDetail() {
                 </h3>
                 <Badge variant="primary" className="bg-purple-100 text-purple-700">共 {progressReports.length} 份</Badge>
               </div>
-              <p className="text-xs text-gray-500">系统在学生完成第 10、30、60 节课或晋级升阶时自动生成的阶段能力综合评估</p>
+              <p className="text-xs text-gray-500">系统在学生完成第 10、30、60、100 节课或晋级升阶时自动生成的阶段能力综合评估</p>
             </CardHeader>
             <div className="p-6 pt-0">
               {progressReports.length > 0 ? (
@@ -902,7 +902,8 @@ export default function StudentDetail() {
                       milestone_10: { label: '🥉 10课时适应期', color: 'bg-amber-100 text-amber-800' },
                       milestone_30: { label: '🥈 30课时进阶期', color: 'bg-blue-100 text-blue-800' },
                       milestone_60: { label: '🥇 60课时大纲总结', color: 'bg-emerald-100 text-emerald-800' },
-                      level_up: { label: '🚀 等级跃迁报告', color: 'bg-purple-100 text-purple-800' }
+                      milestone_100: { label: '💎 100课时百课荣耀', color: 'bg-purple-100 text-purple-800' },
+                      level_up: { label: '🚀 等级跃迁报告', color: 'bg-indigo-100 text-indigo-800' }
                     };
                     const badge = typeMap[pr.report_type] || { label: pr.report_type || '阶段评估', color: 'bg-gray-100 text-gray-800' };
 
@@ -910,9 +911,16 @@ export default function StudentDetail() {
                       <div key={pr.id} className="border border-gray-100 rounded-xl p-5 hover:border-purple-200 hover:shadow-md transition-all bg-white cursor-pointer" onClick={() => setShowProgressReportModal(pr)}>
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex flex-col gap-2">
-                            <span className={`text-xs px-2.5 py-1 rounded-md font-bold w-fit ${badge.color}`}>
-                              {badge.label}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-xs px-2.5 py-1 rounded-md font-bold w-fit ${badge.color}`}>
+                                {badge.label}
+                              </span>
+                              {pr.badge_name && (
+                                <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                  {pr.badge_name}
+                                </span>
+                              )}
+                            </div>
                             <span className="text-sm text-gray-500 flex items-center gap-2">
                               <Calendar className="w-3.5 h-3.5" /> {pr.created_at ? pr.created_at.substring(0,10) : ''}
                             </span>
@@ -921,6 +929,12 @@ export default function StudentDetail() {
                             查看
                           </Button>
                         </div>
+                        {(pr.total_lessons_completed > 0 || pr.vocabulary_count > 0) && (
+                          <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
+                            {pr.total_lessons_completed > 0 && <span>📚 {pr.total_lessons_completed} 课时</span>}
+                            {pr.vocabulary_count > 0 && <span>🔤 {pr.vocabulary_count}+ 词</span>}
+                          </div>
+                        )}
                         {(pr.from_level || pr.to_level) && (
                           <div className="mt-3 inline-flex items-center gap-2 bg-purple-50 text-purple-700 text-xs px-3 py-1.5 rounded-lg font-medium border border-purple-100">
                             🎓 级别晋升：<span>{pr.from_level || '入学'}</span> <ArrowLeft size={12} className="rotate-180" /> <span className="font-bold text-purple-900">{pr.to_level}</span>
@@ -1318,15 +1332,69 @@ export default function StudentDetail() {
             </CardHeader>
             
             <div className="overflow-y-auto p-5">
-              <div className="bg-purple-50/50 rounded-xl p-4 mb-6 border border-purple-100 grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-gray-500">学生：</span><span className="font-semibold text-gray-800">{student.name}</span></div>
-                <div><span className="text-gray-500">教师：</span><span className="font-semibold text-gray-800">{showProgressReportModal.teacher_name || '-'}</span></div>
+              <div className="bg-purple-50/50 rounded-xl p-4 mb-6 border border-purple-100 text-sm space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div><span className="text-gray-500">学生：</span><span className="font-semibold text-gray-800">{student.name}</span></div>
+                  <div><span className="text-gray-500">教师：</span><span className="font-semibold text-gray-800">{showProgressReportModal.teacher_name || '-'}</span></div>
+                  {showProgressReportModal.badge_name && (
+                    <div><span className="text-gray-500">荣誉勋章：</span><span className="font-bold text-amber-700">{showProgressReportModal.badge_name}</span></div>
+                  )}
+                  {showProgressReportModal.total_lessons_completed > 0 && (
+                    <div><span className="text-gray-500">完成课时：</span><span className="font-semibold text-gray-800">{showProgressReportModal.total_lessons_completed} 课时</span></div>
+                  )}
+                  {showProgressReportModal.vocabulary_count > 0 && (
+                    <div><span className="text-gray-500">累计词汇：</span><span className="font-semibold text-gray-800">{showProgressReportModal.vocabulary_count}+ 词</span></div>
+                  )}
+                </div>
                 {(showProgressReportModal.from_level || showProgressReportModal.to_level) && (
-                  <div className="col-span-2 flex items-center gap-2 font-medium text-purple-700 bg-white p-2.5 rounded-lg border border-purple-100 shadow-sm">
+                  <div className="flex items-center gap-2 font-medium text-purple-700 bg-white p-2.5 rounded-lg border border-purple-100 shadow-sm">
                     🎓 能力级别跃迁：<span>{showProgressReportModal.from_level || '入学'}</span> <ArrowLeft size={14} className="rotate-180" /> <span className="font-bold text-purple-900">{showProgressReportModal.to_level}</span>
                   </div>
                 )}
               </div>
+
+              {/* 4 Dimensional Ratings */}
+              {(showProgressReportModal.score_listening || showProgressReportModal.score_speaking || showProgressReportModal.score_interaction || showProgressReportModal.score_pronunciation) && (
+                <div className="border border-purple-100 rounded-xl p-4 bg-purple-50/30 mb-5">
+                  <h4 className="font-bold text-purple-900 text-sm mb-3">⭐ 核心能力维度评级</h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex items-center justify-between">
+                      <span className="text-gray-600 text-xs">🎧 听力理解</span>
+                      <span className="text-amber-500 font-bold text-sm tracking-wider">
+                        {'★'.repeat(showProgressReportModal.score_listening || 5)}{'☆'.repeat(5 - (showProgressReportModal.score_listening || 5))}
+                      </span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex items-center justify-between">
+                      <span className="text-gray-600 text-xs">🗣️ 口语表达</span>
+                      <span className="text-amber-500 font-bold text-sm tracking-wider">
+                        {'★'.repeat(showProgressReportModal.score_speaking || 5)}{'☆'.repeat(5 - (showProgressReportModal.score_speaking || 5))}
+                      </span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex items-center justify-between">
+                      <span className="text-gray-600 text-xs">🌟 课堂互动</span>
+                      <span className="text-amber-500 font-bold text-sm tracking-wider">
+                        {'★'.repeat(showProgressReportModal.score_interaction || 5)}{'☆'.repeat(5 - (showProgressReportModal.score_interaction || 5))}
+                      </span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex items-center justify-between">
+                      <span className="text-gray-600 text-xs">🔤 自然拼读</span>
+                      <span className="text-amber-500 font-bold text-sm tracking-wider">
+                        {'★'.repeat(showProgressReportModal.score_pronunciation || 5)}{'☆'.repeat(5 - (showProgressReportModal.score_pronunciation || 5))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Highlight Recording Video */}
+              {showProgressReportModal.highlight_recording_url && (
+                <div className="border border-blue-200 rounded-xl p-3.5 bg-blue-50/60 mb-5 flex items-center justify-between">
+                  <div className="text-xs text-blue-900 font-medium">📹 阶段高光实录回放视频</div>
+                  <a href={showProgressReportModal.highlight_recording_url} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold">
+                    ▶️ 打开视频回放
+                  </a>
+                </div>
+              )}
 
               <div className="space-y-5 text-sm">
                 {showProgressReportModal.summary && (

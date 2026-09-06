@@ -3800,6 +3800,7 @@ function renderStudyProfile(student, allClasses) {
     milestone_10: { icon: '🥉', label: '第 10 课时 · 入门适应期评估', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
     milestone_30: { icon: '🥈', label: '第 30 课时 · 进阶强化期评估', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' },
     milestone_60: { icon: '🥇', label: '第 60 课时 · 学期大纲总评估', color: '#E26B31', bg: 'rgba(226,107,49,0.08)' },
+    milestone_100: { icon: '💎', label: '第 100 课时 · 百课荣耀卓越评估', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' },
     level_up: { icon: '🚀', label: '能力进阶 · 等级跃迁报告', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' }
   };
 
@@ -3812,7 +3813,7 @@ function renderStudyProfile(student, allClasses) {
   rpHtml += '</div>';
 
   if (progressReports.length === 0) {
-    rpHtml += '<div class="sp-card" style="text-align:center;padding:24px;color:var(--sb-muted);font-size:13px;background:#FAFCFF;border:1px dashed #D3E2F2;border-radius:14px;">🌱 学习进行中，完成第 10、30、60 节课或晋升等级时将自动生成阶段进阶大考报告</div>';
+    rpHtml += '<div class="sp-card" style="text-align:center;padding:24px;color:var(--sb-muted);font-size:13px;background:#FAFCFF;border:1px dashed #D3E2F2;border-radius:14px;">🌱 学习进行中，完成第 10、30、60、100 节课或晋升等级时将自动生成阶段进阶大考报告</div>';
   } else {
     var prCounter = 0;
     progressReports.forEach(function(r) {
@@ -3830,6 +3831,9 @@ function renderStudyProfile(student, allClasses) {
       rpHtml += '<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:' + typeInfo.bg + ';border-radius:20px;margin-bottom:6px;">';
       rpHtml += '<span style="font-size:15px;">' + typeInfo.icon + '</span>';
       rpHtml += '<span style="font-size:13px;font-weight:700;color:' + typeInfo.color + ';">' + typeInfo.label + '</span>';
+      if (r.badge_name) {
+        rpHtml += '<span style="font-size:11px;padding:1px 8px;background:rgba(245,166,35,0.2);color:#D97706;border-radius:10px;font-weight:700;">' + spEsc(r.badge_name) + '</span>';
+      }
       rpHtml += '</div>';
       rpHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:2px;">执教外教: <b style="color:var(--sb-dark);">' + spEsc(r.teacher_name || '-') + '</b> · 生成日期: ' + ((r.created_at || '').substring(0, 10)) + '</div>';
       if (r.from_level || r.to_level) {
@@ -3850,6 +3854,47 @@ function renderStudyProfile(student, allClasses) {
 
       // Collapsible Report Body
       rpHtml += '<div id="' + collapseId + '" class="sp-collapse-body ' + (isFirstPr ? '' : 'collapsed') + '" style="margin-top:14px;padding-top:14px;border-top:1px dashed #E2E8F0;">';
+
+      // Stats Snapshot Pills
+      if (r.total_lessons_completed || r.vocabulary_count) {
+        rpHtml += '<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">';
+        if (r.total_lessons_completed) {
+          rpHtml += '<div style="flex:1;min-width:120px;padding:8px 12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;font-size:12px;">';
+          rpHtml += '<span style="color:#64748B;display:block;">📚 累计完成课时</span><b style="font-size:14px;color:#0F172A;">' + r.total_lessons_completed + ' 节</b>';
+          rpHtml += '</div>';
+        }
+        if (r.vocabulary_count) {
+          rpHtml += '<div style="flex:1;min-width:120px;padding:8px 12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;font-size:12px;">';
+          rpHtml += '<span style="color:#64748B;display:block;">🔤 累计掌握词汇</span><b style="font-size:14px;color:#0F172A;">' + r.vocabulary_count + '+ 词</b>';
+          rpHtml += '</div>';
+        }
+        rpHtml += '</div>';
+      }
+
+      // 4 Dimensional Ratings
+      if (r.score_listening || r.score_speaking || r.score_interaction || r.score_pronunciation) {
+        var starStr = function(val) {
+          var s = '';
+          for (var i = 1; i <= 5; i++) s += '<span style="color:' + (i <= (val || 5) ? '#F5A623' : '#D1D5DB') + ';font-size:14px;">★</span>';
+          return s;
+        };
+        rpHtml += '<div style="margin-bottom:12px;padding:12px 14px;background:#FAF5FF;border:1px solid rgba(139,92,246,0.15);border-radius:10px;">';
+        rpHtml += '<div style="font-size:12px;font-weight:700;color:#6D28D9;margin-bottom:8px;">⭐ 核心能力维度评估</div>';
+        rpHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px;">';
+        rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="color:#4B5563;">🎧 听力理解</span><span>' + starStr(r.score_listening) + '</span></div>';
+        rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="color:#4B5563;">🗣️ 口语表达</span><span>' + starStr(r.score_speaking) + '</span></div>';
+        rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="color:#4B5563;">🌟 课堂互动</span><span>' + starStr(r.score_interaction) + '</span></div>';
+        rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="color:#4B5563;">🔤 自然拼读</span><span>' + starStr(r.score_pronunciation) + '</span></div>';
+        rpHtml += '</div></div>';
+      }
+
+      // Highlight Recording Video
+      if (r.highlight_recording_url) {
+        rpHtml += '<div style="margin-bottom:12px;padding:10px 14px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;display:flex;align-items:center;justify-content:space-between;">';
+        rpHtml += '<span style="font-size:12px;color:#1E40AF;font-weight:600;">📹 阶段高光实录回放</span>';
+        rpHtml += '<a href="' + escapeAttr(r.highlight_recording_url) + '" target="_blank" rel="noopener noreferrer" style="padding:4px 12px;background:#2563EB;color:#fff;border-radius:6px;font-size:12px;text-decoration:none;font-weight:600;">▶️ 点击观看</a>';
+        rpHtml += '</div>';
+      }
 
       // Summary
       if (r.summary) {
@@ -4142,10 +4187,17 @@ function viewProgressReport(reportId) {
 }
 
 function buildProgressReportHTML(r) {
+  function starHTML(val) {
+    var h = '<span class="stars-readonly">';
+    for (var i = 1; i <= 5; i++) h += '<span class="star ' + (i <= val ? 'active' : '') + '">★</span>';
+    return h + '</span>';
+  }
+
   var typeLabels = {
     milestone_10: '第 10 课时 · 入门适应期评估报告',
     milestone_30: '第 30 课时 · 进阶强化期评估报告',
     milestone_60: '第 60 课时 · 学期大纲总评估报告',
+    milestone_100: '第 100 课时 · 百课荣耀卓越评估报告',
     level_up: '能力进阶 · 等级跃迁报告'
   };
   var reportTitle = typeLabels[r.report_type] || '阶段成长评估报告';
@@ -4166,11 +4218,33 @@ function buildProgressReportHTML(r) {
   h += '<div class="info-item"><div class="info-label">执教外教 / Teacher</div><div class="info-value">' + escapeHtml(r.teacher_name || '-') + '</div></div>';
   h += '<div class="info-item"><div class="info-label">报告日期 / Date</div><div class="info-value">' + ((r.created_at || '').substring(0,10)) + '</div></div>';
   h += '<div class="info-item"><div class="info-label">当前阶段 / Level</div><div class="info-value">' + escapeHtml(r.to_level || r.from_level || '英语进阶') + '</div></div>';
+  if (r.badge_name) {
+    h += '<div class="info-item"><div class="info-label">荣誉成就 / Milestone Badge</div><div class="info-value" style="color:#D97706;font-weight:700;">' + escapeHtml(r.badge_name) + '</div></div>';
+  }
+  if (r.total_lessons_completed) {
+    h += '<div class="info-item"><div class="info-label">完成课时 / Lessons Done</div><div class="info-value">' + r.total_lessons_completed + ' 课时</div></div>';
+  }
+  if (r.vocabulary_count) {
+    h += '<div class="info-item"><div class="info-label">累计词汇 / Cumulative Vocab</div><div class="info-value">' + r.vocabulary_count + '+ 词</div></div>';
+  }
   h += '</div>';
+
+  // 4 Core Dimensional Ratings
+  if (r.score_listening || r.score_speaking || r.score_interaction || r.score_pronunciation) {
+    h += '<div class="dimensions" style="padding:20px 48px 10px;">';
+    h += '<div class="dim-card" style="margin-bottom:0;">';
+    h += '<div class="dim-header"><span class="dim-icon">⭐</span>核心能力维度评级 Core Dimensional Ratings</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 28px;">';
+    h += '<div class="dim-item"><span class="dim-label">🎧 听力理解 (Listening)</span>' + starHTML(r.score_listening || 5) + '</div>';
+    h += '<div class="dim-item"><span class="dim-label">🗣️ 口语表达 (Speaking)</span>' + starHTML(r.score_speaking || 5) + '</div>';
+    h += '<div class="dim-item"><span class="dim-label">🌟 课堂互动 (Engagement)</span>' + starHTML(r.score_interaction || 5) + '</div>';
+    h += '<div class="dim-item"><span class="dim-label">🔤 自然拼读 (Phonics)</span>' + starHTML(r.score_pronunciation || 5) + '</div>';
+    h += '</div></div></div>';
+  }
 
   // Summary
   if (r.summary) {
-    h += '<div class="overall-section">';
+    h += '<div class="overall-section" style="margin-top:14px;">';
     h += '<div class="overall-title">📋 阶段学习总评 Overall Summary</div>';
     h += '<div class="overall-text">' + escapeHtml(r.summary) + '</div>';
     h += '</div>';
@@ -4199,6 +4273,15 @@ function buildProgressReportHTML(r) {
   // Teacher Message
   if (r.teacher_message) {
     h += '<div class="message-section"><div class="message-header">💌 教师寄语 Teacher\'s Message</div><div class="message-text">' + escapeHtml(r.teacher_message) + '</div></div>';
+  }
+
+  // Highlight Recording Video
+  if (r.highlight_recording_url) {
+    h += '<div class="recording-section">';
+    h += '<div class="recording-header"><span>📹</span> 阶段高光实录回放 Milestone Video Highlight</div>';
+    h += '<div class="recording-body">';
+    h += '<a href="' + escapeAttr(r.highlight_recording_url) + '" target="_blank" class="report-rec-btn report-rec-cloud-btn"><span>▶️ 观看里程碑实录视频 (Watch Highlight)</span></a>';
+    h += '</div></div>';
   }
 
   // Footer
