@@ -167,6 +167,271 @@ progressReports.get('/:id', validateParams(idParamSchema), async (c) => {
   }));
 });
 
+// AI 自动生成里程碑评估报告 Schema
+const aiGenerateSchema = z.object({
+  student_id: z.number().int().positive(),
+  milestone_type: z.enum(['milestone_10', 'milestone_30', 'milestone_60', 'milestone_100', 'level_up']),
+  class_id: z.number().int().positive().optional().nullable(),
+  teacher_id: z.number().int().positive().optional().nullable()
+});
+
+progressReports.post('/ai-generate', validate(aiGenerateSchema), async (c) => {
+  try {
+    const DB = c.env.DB;
+    const { student_id, milestone_type, class_id, teacher_id } = c.req.validated;
+
+  const student = await DB.prepare('SELECT id, name, english_name, grade, status FROM students WHERE id = ?').bind(student_id).first();
+  if (!student) return c.json(error('NOT_FOUND', 'Student not found'), 404);
+  if (student.status === 'graduated') {
+    return c.json(error('STUDENT_GRADUATED', 'The student has graduated. Milestone reports cannot be generated for graduated students.'), 400);
+  }
+
+  // Determine target lesson count
+  let targetLessons = 10;
+  let badgeName = '🥉 Rising Star';
+  let stageLabel = '10 Lessons Adaptation & Habit Stage';
+  if (milestone_type === 'milestone_30') {
+    targetLessons = 30;
+    badgeName = '🥈 Steady Leaper';
+    stageLabel = '30 Lessons Vocabulary Expansion & Sentence Building Stage';
+  } else if (milestone_type === 'milestone_60') {
+    targetLessons = 60;
+    badgeName = '🥇 Semester Pioneer';
+    stageLabel = '60 Lessons Comprehensive Semester Fluency Stage';
+  } else if (milestone_type === 'milestone_100') {
+    targetLessons = 100;
+    badgeName = '💎 Century Club';
+    stageLabel = '100 Lessons Century Club Mastery & Autonomous Expression Stage';
+  } else if (milestone_type === 'level_up') {
+    badgeName = '🎓 Level Up';
+    stageLabel = 'Curriculum Level Up Transition Stage';
+  }
+
+  // Fetch up to targetLessons formal completed classes
+  const classesResult = await DB.prepare(`
+    SELECT id, date, start_time, textbook_code, unit_number, fb_unit, fb_lesson,
+           fb_vocab, fb_patterns, fb_grammar, fb_pronunciation_errors, fb_grammar_errors, fb_teacher_message, fb_homework
+    FROM classes
+    WHERE student_id = ? AND status = 'completed' AND is_trial = 0
+    ORDER BY date ASC, start_time ASC
+    LIMIT ?
+  `).bind(student_id, targetLessons).all();
+
+  const classList = classesResult.results || [];
+  const actualCount = classList.length;
+
+  // Extract vocabulary, frequencies, sentences, pronunciation history, teacher notes
+  const wordFreqMap = {};
+  const allVocabSet = new Set();
+  const practicedSentences = [];
+  const pronunciationHistory = [];
+  const grammarHistory = [];
+  const teacherNotes = [];
+  const textbookSet = new Set();
+
+  classList.forEach(cls => {
+    if (cls.textbook_code) textbookSet.add(cls.textbook_code);
+    if (cls.fb_vocab) {
+      const words = cls.fb_vocab.split(/[\n,，、;；/]+/)
+        .map(w => w.trim().toLowerCase())
+        .filter(w => w.length > 1 && !/^[0-9]+$/.test(w));
+      words.forEach(w => {
+        allVocabSet.add(w);
+        wordFreqMap[w] = (wordFreqMap[w] || 0) + 1;
+      });
+    }
+    const sentenceRaw = (cls.fb_patterns || '') + '\n' + (cls.fb_grammar || '');
+    if (sentenceRaw.trim()) {
+      const sents = sentenceRaw.split(/[\n;；]+/).map(s => s.trim()).filter(s => s.length > 3);
+      sents.forEach(s => {
+        if (!practicedSentences.includes(s) && practicedSentences.length < 25) {
+          practicedSentences.push(s);
+        }
+      });
+    }
+    if (cls.fb_pronunciation_errors) {
+      try {
+        const errs = JSON.parse(cls.fb_pronunciation_errors);
+        if (Array.isArray(errs)) {
+          errs.forEach(e => {
+            if (e && (e.wrong || e.right)) {
+              pronunciationHistory.push({ wrong: e.wrong || '', right: e.right || '' });
+            }
+          });
+        }
+      } catch(e) {}
+    }
+    if (cls.fb_grammar_errors) {
+      try {
+        const gErrs = JSON.parse(cls.fb_grammar_errors);
+        if (Array.isArray(gErrs)) {
+          gErrs.forEach(e => {
+            if (e && (e.wrong || e.right)) {
+              grammarHistory.push({ wrong: e.wrong || '', right: e.right || '' });
+            }
+          });
+        }
+      } catch(e) {}
+    }
+    if (cls.fb_teacher_message && cls.fb_teacher_message.trim().length > 5) {
+      teacherNotes.push({ date: cls.date, text: cls.fb_teacher_message.trim() });
+    }
+  });
+
+  const allVocab = Array.from(allVocabSet);
+  const frequentWords = Object.entries(wordFreqMap)
+    .sort((a, b) => b[1] - a[1])
+    .map(entry => entry[0]);
+
+  const displayName = student.english_name ? `${student.name} (${student.english_name})` : student.name;
+  const textbooks = Array.from(textbookSet);
+
+  // Try calling LLM
+  let generatedData = null;
+  let isFromLLM = false;
+
+  try {
+    const baseUrl = c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
+    const apiKey = c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
+    const preferredModel = c.req.header('x-llm-model') || c.env.LLM_MODEL || 'meta/llama-3.1-8b-instruct';
+
+    if (apiKey) {
+      const systemPrompt = `You are a Senior ESL Pedagogical Director and Curriculum Specialist at SunnyBridge Academy, an elite 1-on-1 online English education school.
+Your task is to review a young student's comprehensive lesson logs across a multi-lesson milestone stage (${targetLessons} lessons) and generate an authoritative, evidence-based, inspiring Milestone Stage Assessment Report in English.
+
+CRITICAL REQUIREMENTS:
+1. Ground your report strictly in the ACTUAL lesson data provided. Explicitly cite real vocabulary words, practiced sentence structures, and pronunciation correction patterns from the logs. Do NOT use generic, interchangeable boilerplate.
+2. The report must be written in professional, natural, encouraging English suitable for international teachers to review and share with parents.
+3. Return ONLY a valid JSON object with the following fields:
+- "summary": (2-3 paragraphs) A macro stage growth review analyzing the learning trajectory from Lesson 1 to Lesson ${actualCount || targetLessons}, highlighting changes in confidence, speaking pace, comprehension, and learning habits.
+- "strengths": (2-3 bullet points) Specific breakthroughs with concrete evidence (cite actual words, sentences, or phonics patterns mastered).
+- "improvements": (1-2 bullet points) Targeted areas to refine in the next stage (cite real pronunciation or grammatical patterns from logs).
+- "recommendation": (1-2 paragraphs) Clear curriculum pacing, next textbook goals, Cambridge YLE / CEFR benchmark roadmap, and daily listening routines.
+- "teacher_message": (1-2 paragraphs) An inspiring, warm closing note directly addressing the student and parents celebrating their milestone resilience and achievements.
+- "score_listening": (integer 1-5) Suggested rating based on class performance.
+- "score_speaking": (integer 1-5) Suggested rating based on speaking fluency.
+- "score_interaction": (integer 1-5) Suggested rating based on engagement.
+- "score_pronunciation": (integer 1-5) Suggested rating based on phonetic mastery.
+- "badge_name": (string) e.g. "${badgeName}"`;
+
+      const userPrompt = `Student Profile:
+- Name: ${displayName}
+- Grade/Age: ${student.grade || 'Primary'}
+- Stage: ${stageLabel}
+- Completed Lessons: ${actualCount || targetLessons} lessons
+- Textbooks Studied: ${textbooks.join(', ') || 'Core ESL Curriculum'}
+- Cumulative Unique Vocabulary (${allVocab.length} words): ${allVocab.slice(0, 35).join(', ')}
+- High-Frequency Core Words: ${frequentWords.slice(0, 15).join(', ')}
+- Practiced Sentence Structures:
+${practicedSentences.slice(0, 12).map(s => `- ${s}`).join('\n') || '- Interactive Q&A and target sentence frames'}
+- Pronunciation History & Corrections:
+${pronunciationHistory.slice(0, 8).map(p => `- Corrected "${p.wrong}" -> "${p.right}"`).join('\n') || '- Foundational phonics sounds drilled'}
+- Teacher Notes Timeline:
+${teacherNotes.slice(0, 6).map(n => `- [${n.date}] ${n.text}`).join('\n') || '- Smooth engagement in all sessions'}
+
+Generate the structured JSON report now:`;
+
+      const candidateModels = [preferredModel, 'meta/llama-3.1-8b-instruct', 'meta/llama-3.3-70b-instruct', 'meta/llama-3.2-11b-vision-instruct'];
+      for (const m of candidateModels) {
+        try {
+          const resp = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              model: m,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+              ],
+              temperature: 0.3,
+              max_tokens: 2048
+            })
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            const rawContent = data.choices?.[0]?.message?.content || '';
+            const fenceMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            const target = fenceMatch ? fenceMatch[1] : rawContent;
+            const jsonMatch = target.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (parsed.summary && parsed.strengths) {
+                generatedData = parsed;
+                isFromLLM = true;
+                break;
+              }
+            }
+          }
+        } catch(e) {
+          console.warn(`LLM model ${m} failed:`, e.message);
+        }
+      }
+    }
+  } catch(llmErr) {
+    console.warn('LLM generation error:', llmErr.message);
+  }
+
+  // Fallback heuristic generator if LLM was unreachable or invalid
+  if (!generatedData) {
+    const vocabSample = frequentWords.slice(0, 5).join(', ') || allVocab.slice(0, 5).join(', ') || 'essential everyday words';
+    const sentSample = practicedSentences.slice(0, 2).join('; ') || 'target unit conversation patterns';
+    const errSample = pronunciationHistory.length > 0
+      ? pronunciationHistory.slice(0, 3).map(e => `"${e.right}"`).join(', ')
+      : 'vowel length and consonant endings';
+
+    generatedData = {
+      summary: `Over the course of completing ${actualCount || targetLessons} formal 1-on-1 English lessons, ${displayName} has demonstrated consistent growth, expanding communicative confidence and foundational comprehension. From initial guided responses, ${displayName} now navigates interactive classroom routines with high focus, having actively acquired over ${allVocab.length} cumulative vocabulary words across ${textbooks.length ? textbooks.join(', ') : 'our core curriculum'}.`,
+      strengths: `• Demonstrates solid retention of core vocabulary, readily recognizing and producing words such as ${vocabSample}.\n• Actively applies learned sentence structures (${sentSample}) during teacher-led guided conversations.\n• Shows enthusiastic classroom engagement and receptive phonics imitation during read-aloud activities.`,
+      improvements: `• Continue refining natural pronunciation flow and clarity on target sounds (e.g., sound precision in ${errSample}).\n• Encourage answering in full, multi-word sentences rather than single-word prompts to strengthen spontaneous expressive syntax.`,
+      recommendation: `Advance to the subsequent curriculum units with structured daily 10-minute listening repetition. Reinforce sight words and target vocabulary from this stage to solidify Pre-A1/A1 conversational fluency.`,
+      teacher_message: `Congratulations on reaching your ${targetLessons}-lesson milestone! Your positive attitude, resilience, and curiosity make every lesson a joy. We celebrate how far you have come and look forward to your continued brilliance!`,
+      score_listening: 5,
+      score_speaking: 5,
+      score_interaction: 5,
+      score_pronunciation: 4,
+      badge_name: badgeName
+    };
+  }
+
+    const normalizeBulletList = (val) => {
+      if (Array.isArray(val)) {
+        return val.map(item => (typeof item === 'string' && (item.startsWith('•') || item.startsWith('-') || item.startsWith('*'))) ? item : `• ${item}`).join('\n');
+      }
+      return typeof val === 'string' ? val : '';
+    };
+    const normalizeParagraph = (val) => {
+      if (Array.isArray(val)) {
+        return val.join('\n\n');
+      }
+      return typeof val === 'string' ? val : '';
+    };
+
+    return c.json(success({
+      summary: normalizeParagraph(generatedData.summary),
+      strengths: normalizeBulletList(generatedData.strengths),
+      improvements: normalizeBulletList(generatedData.improvements),
+      recommendation: normalizeParagraph(generatedData.recommendation),
+      teacher_message: normalizeParagraph(generatedData.teacher_message),
+      score_listening: parseInt(generatedData.score_listening) || 5,
+      score_speaking: parseInt(generatedData.score_speaking) || 5,
+      score_interaction: parseInt(generatedData.score_interaction) || 5,
+      score_pronunciation: parseInt(generatedData.score_pronunciation) || 4,
+      badge_name: generatedData.badge_name || badgeName,
+      total_lessons_completed: actualCount || targetLessons,
+      vocabulary_count: allVocab.length,
+      sample_words: frequentWords.slice(0, 25),
+      is_llm: isFromLLM
+    }));
+  } catch (err) {
+    console.error('ai-generate fatal error:', err);
+    return c.json(error('AI_GENERATE_ERROR', err.message || 'Internal error in AI generation'), 500);
+  }
+});
+
 // 创建阶段报告
 const reportSchema = z.object({
   student_id: z.number().int().positive(),

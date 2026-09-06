@@ -177,8 +177,32 @@
     <div id="ms-vocab-chips-box" class="hidden mt-2 pt-2 border-t border-slate-200 text-xs">
       <span class="text-gray-500 font-medium">Recent vocabulary learned: </span>
       <span id="ms-vocab-chips" class="text-slate-700 font-mono text-[11px]"></span>
-    </div>
   </div>
+
+  <!-- AI Milestone Assistant Bar -->
+  <div class="bg-gradient-to-r from-purple-50 via-indigo-50 to-amber-50 border border-purple-200/80 rounded-xl p-3.5 mb-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div class="flex items-start gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs text-base">
+        ✨
+      </div>
+      <div>
+        <div class="font-extrabold text-sm text-purple-950 flex items-center gap-2">
+          <span>AI Milestone Report Generator</span>
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-200 text-purple-800 font-bold tracking-wide">AI Powered</span>
+        </div>
+        <p class="text-xs text-purple-800/80 mt-0.5 leading-relaxed">
+          Synthesizes all lesson logs, vocabulary mastery, sentence patterns, and pronunciation history into a comprehensive stage assessment.
+        </p>
+      </div>
+    </div>
+    <button type="button" id="ms-ai-generate-btn" onclick="generateMilestoneWithAI()" class="cursor-pointer px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 shrink-0">
+      <span id="ms-ai-btn-icon">⚡</span>
+      <span id="ms-ai-btn-text">Auto-Generate with AI</span>
+    </button>
+  </div>
+
+  <!-- AI Notice / Status Box -->
+  <div id="ms-ai-status-notice" class="hidden rounded-xl p-3 mb-4 text-xs font-medium"></div>
 
   <form id="milestone-form" class="space-y-4">
     <!-- 4 Dimensional Ratings -->
@@ -2343,6 +2367,13 @@ async function openMilestoneReport(cls, m, reportType) {
   var chipsBox = document.getElementById('ms-vocab-chips-box');
   if (chipsBox) chipsBox.classList.add('hidden');
 
+  var notice = document.getElementById('ms-ai-status-notice');
+  if (notice) { notice.classList.add('hidden'); notice.innerHTML = ''; }
+  var btnText = document.getElementById('ms-ai-btn-text');
+  if (btnText) btnText.textContent = existingReport ? '✨ Regenerate with AI' : 'Auto-Generate with AI';
+  var btn = document.getElementById('ms-ai-generate-btn');
+  if (btn) btn.disabled = false;
+
   document.getElementById('milestone-modal').classList.remove('hidden');
   document.getElementById('milestone-modal').classList.add('flex');
 
@@ -2370,6 +2401,102 @@ async function openMilestoneReport(cls, m, reportType) {
     }
   } catch(e) {
     if (!existingReport) document.getElementById('ms-stat-vocab').textContent = '~100+ words';
+  }
+}
+
+async function generateMilestoneWithAI() {
+  if (!milestoneClass) {
+    alert('Please select a class first.');
+    return;
+  }
+
+  var btn = document.getElementById('ms-ai-generate-btn');
+  var btnIcon = document.getElementById('ms-ai-btn-icon');
+  var btnText = document.getElementById('ms-ai-btn-text');
+  var notice = document.getElementById('ms-ai-status-notice');
+
+  if (btn) btn.disabled = true;
+  if (btnIcon) btnIcon.textContent = '⏳';
+  if (btnText) btnText.textContent = 'Analyzing Lessons with AI...';
+
+  if (notice) {
+    notice.className = 'rounded-xl p-3 mb-4 text-xs font-medium bg-purple-50 text-purple-800 border border-purple-200 flex items-center gap-2 animate-pulse';
+    notice.innerHTML = '<span class="animate-spin inline-block">🌀</span> AI is synthesizing historical lessons, vocabulary mastery, and pronunciation notes...';
+    notice.classList.remove('hidden');
+  }
+
+  try {
+    var res = await apiPost('/progress-reports/ai-generate', {
+      student_id: milestoneClass.student_id,
+      milestone_type: milestoneType,
+      class_id: milestoneClass.id,
+      teacher_id: currentTeacherId
+    });
+
+    var data = res.data || res;
+    if (!data || !data.summary) {
+      throw new Error(res.error?.message || 'Failed to generate report content');
+    }
+
+    // Fill form fields
+    if (data.summary) document.getElementById('ms-summary').value = data.summary;
+    if (data.strengths) document.getElementById('ms-strengths').value = data.strengths;
+    if (data.improvements) document.getElementById('ms-improvements').value = data.improvements;
+    if (data.recommendation) document.getElementById('ms-recommendation').value = data.recommendation;
+    if (data.teacher_message) document.getElementById('ms-message').value = data.teacher_message;
+
+    if (data.total_lessons_completed) {
+      document.getElementById('ms-total-lessons').value = data.total_lessons_completed;
+      document.getElementById('ms-stat-completed').textContent = data.total_lessons_completed + ' lessons';
+    }
+    if (data.vocabulary_count !== undefined) {
+      document.getElementById('ms-vocab-count').value = data.vocabulary_count;
+      document.getElementById('ms-stat-vocab').textContent = data.vocabulary_count + ' words';
+    }
+    if (data.badge_name) {
+      document.getElementById('ms-badge-name').value = data.badge_name;
+      document.getElementById('ms-badge-pill').textContent = data.badge_name;
+      document.getElementById('ms-stat-badge').textContent = data.badge_name;
+    }
+
+    // Fill 4-star ratings
+    var ratings = [
+      { name: 'score_listening', val: data.score_listening || 5 },
+      { name: 'score_speaking', val: data.score_speaking || 5 },
+      { name: 'score_interaction', val: data.score_interaction || 5 },
+      { name: 'score_pronunciation', val: data.score_pronunciation || 4 }
+    ];
+    ratings.forEach(function(item) {
+      var ratingEl = document.querySelector('.ms-star-rating[data-name="' + item.name + '"]');
+      if (ratingEl) {
+        ratingEl.querySelectorAll('.star').forEach(function(s) {
+          if (parseInt(s.getAttribute('data-val')) <= item.val) s.classList.add('active');
+          else s.classList.remove('active');
+        });
+        var hiddenInput = ratingEl.querySelector('input[type="hidden"]');
+        if (hiddenInput) hiddenInput.value = item.val;
+      }
+    });
+
+    if (notice) {
+      notice.className = 'rounded-xl p-3 mb-4 text-xs font-medium bg-green-50 text-green-800 border border-green-200 flex items-center justify-between gap-2';
+      notice.innerHTML = '<span>✨ <b>AI report generated successfully!</b> Based on ' + (data.total_lessons_completed || 10) + ' completed lessons and ' + (data.vocabulary_count || 0) + ' vocabulary items. Please review and feel free to edit.</span>' +
+        '<button type="button" onclick="this.parentElement.classList.add(\'hidden\')" class="text-green-600 hover:text-green-800 font-bold shrink-0">✕</button>';
+    }
+
+    if (btnText) btnText.textContent = '✨ Regenerate with AI';
+    if (btnIcon) btnIcon.textContent = '⚡';
+
+  } catch(err) {
+    console.error('AI generation error:', err);
+    if (notice) {
+      notice.className = 'rounded-xl p-3 mb-4 text-xs font-medium bg-red-50 text-red-800 border border-red-200';
+      notice.textContent = '❌ Generation failed: ' + err.message + '. You can still write the report manually or try again.';
+    }
+    if (btnText) btnText.textContent = 'Auto-Generate with AI';
+    if (btnIcon) btnIcon.textContent = '⚡';
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
