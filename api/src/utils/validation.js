@@ -123,6 +123,7 @@ export const assessmentSchema = z.object({
   improvements: z.string().optional().nullable().transform(v => v || null),
   recommended_level: z.string().optional().nullable().transform(v => v || null),
   teacher_message: z.string().optional().nullable().transform(v => v || null),
+  fb_recording: z.string().optional().nullable().transform(v => v || null),
   status: z.enum(['draft', 'published']).optional().default('draft'),
 });
 

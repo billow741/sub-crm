@@ -1459,6 +1459,45 @@ export default function StudentDetail() {
                         </div>
                       )}
                     </div>
+
+                    {/* 📹 体验课录播视频 */}
+                    {(a.fb_recording_r2_key || a.fb_recording_status === 'ready' || a.fb_recording) && (
+                      <div className="border border-blue-200 rounded-xl p-3.5 bg-blue-50/60">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-bold text-blue-900 text-sm flex items-center gap-1.5">
+                            <span>📹 体验课录播回放</span>
+                            {(a.fb_recording_r2_key || a.fb_recording_status === 'ready') && (
+                              <span className="text-[11px] px-2 py-0.5 bg-green-100 text-green-700 font-semibold rounded-full">✅ 已归档云端</span>
+                            )}
+                          </div>
+                        </div>
+                        {(a.fb_recording_r2_key || a.fb_recording_status === 'ready') && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <a
+                              href={`${API_BASE_URL}/classes/recording/${a.class_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
+                            >
+                              ▶️ 播放录播视频
+                            </a>
+                            <a
+                              href={`${API_BASE_URL}/classes/recording/${a.class_id}?download=1`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:underline px-2 py-1"
+                            >
+                              ⬇️ 下载保存
+                            </a>
+                          </div>
+                        )}
+                        {a.fb_recording && (
+                          <div className="text-xs text-gray-600 whitespace-pre-wrap bg-white/80 p-2.5 rounded-lg border border-blue-100 font-mono">
+                            {a.fb_recording}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -1685,6 +1724,29 @@ export default function StudentDetail() {
       html += '</div>';
     }
 
+    // 📹 Lesson Recording
+    if (a.fb_recording_r2_key || a.fb_recording) {
+      html += '<div class="recording-section">';
+      html += '<div class="recording-header"><span>📹</span> 课堂实录回放 Lesson Recording</div>';
+      html += '<div class="recording-body">';
+      if (a.fb_recording_r2_key) {
+        html += '<div style="margin-bottom:8px;">';
+        html += `<a href="${API_BASE_URL}/classes/recording/${a.class_id || ''}" target="_blank" class="report-rec-btn report-rec-cloud-btn"><span>▶️ 观看高清课堂实录视频 (Watch Video)</span></a>`;
+        html += '</div>';
+      }
+      if (a.fb_recording) {
+        const urlMatch = a.fb_recording.match(/(https?:\/\/[^\s]+)/g);
+        if (urlMatch && urlMatch[0]) {
+          html += '<div style="margin-bottom:8px;">';
+          html += `<a href="${esc(urlMatch[0])}" target="_blank" class="report-rec-btn report-rec-link-btn"><span>🔗 打开在线课堂回放链接</span></a>`;
+          html += '</div>';
+        }
+        html += `<div class="recording-text">${esc(a.fb_recording)}</div>`;
+      }
+      html += '</div>';
+      html += '</div>';
+    }
+
     html += '<div class="report-footer">';
     html += '<div class="footer-brand">SunnyBridge 少儿英语</div>';
     html += '<div class="footer-slogan">Bridging Smiles, Building Futures</div>';
@@ -1734,6 +1796,13 @@ export default function StudentDetail() {
       .message-section { margin: 0 48px 20px; padding: 22px 24px; background: linear-gradient(135deg, rgba(75,159,224,0.06), rgba(245,166,35,0.06)); border-radius: 14px; border: 1px solid rgba(75,159,224,0.15); page-break-inside: avoid; }
       .message-header { font-size: 16px; font-weight: 600; color: #1C244B; margin-bottom: 10px; }
       .message-text { font-size: 14px; color: #475569; line-height: 1.8; white-space: pre-wrap; }
+      .recording-section { margin: 0 48px 20px; padding: 20px 24px; background: #F0F7FF; border-radius: 14px; border: 1px solid #BFDBFE; page-break-inside: avoid; }
+      .recording-header { font-size: 16px; font-weight: 600; color: #1E3A8A; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+      .recording-body { display: flex; flex-direction: column; gap: 8px; }
+      .report-rec-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
+      .report-rec-cloud-btn { background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #fff; box-shadow: 0 2px 8px rgba(37,99,235,0.25); }
+      .report-rec-link-btn { background: #fff; border: 1px solid #93C5FD; color: #1D4ED8; }
+      .recording-text { font-size: 12px; color: #475569; line-height: 1.6; white-space: pre-wrap; background: #fff; padding: 10px 14px; border-radius: 8px; border: 1px solid #E2E8F0; font-family: monospace; }
       .report-footer { text-align: center; padding: 24px 48px; border-top: 1px solid #E8EDF2; margin-top: 8px; }
       .footer-brand { font-size: 13px; font-weight: 600; color: #1C244B; }
       .footer-slogan { font-size: 11px; color: #6B7F8F; margin-top: 2px; letter-spacing: 1px; }
@@ -1746,6 +1815,7 @@ export default function StudentDetail() {
         body { background: #fff; padding: 0; }
         .report-page { box-shadow: none; border-radius: 0; max-width: 100%; }
         .print-btn-area { display: none; }
+        .report-rec-btn { display: none; }
         .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .dim-card { page-break-inside: avoid; }
         .overall-section { page-break-inside: avoid; }

@@ -682,6 +682,54 @@ function Classes() {
                     {a.improvements && <div className="mb-2"><span className="text-sm font-medium text-gray-700">📈 建议重点提升</span><div className="text-sm text-gray-600 whitespace-pre-wrap mt-1">{a.improvements}</div></div>}
                     {a.teacher_message && <div className="mt-3 p-3 bg-blue-50 rounded-lg"><span className="text-sm font-medium text-gray-700">💌 老师寄语</span><div className="text-sm text-gray-600 whitespace-pre-wrap mt-1">{a.teacher_message}</div></div>}
                   </div>
+
+                  {/* 📹 体验课录播视频 */}
+                  {(() => {
+                    const recR2Key = a.fb_recording_r2_key || showFeedbackModal.fb_recording_r2_key;
+                    const recStatus = a.fb_recording_status || showFeedbackModal.fb_recording_status;
+                    const recText = a.fb_recording || showFeedbackModal.fb_recording;
+                    if (!recR2Key && !recText && recStatus !== 'ready') return null;
+                    return (
+                      <div className="border border-blue-200 rounded-lg p-3 bg-blue-50/60">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-medium text-blue-900 text-sm flex items-center gap-1.5">
+                            <span>📹 体验课录播回放</span>
+                            {(recR2Key || recStatus === 'ready') && (
+                              <span className="text-[11px] px-2 py-0.5 bg-green-100 text-green-700 font-semibold rounded-full">✅ 已归档云端</span>
+                            )}
+                          </div>
+                        </div>
+                        {(recR2Key || recStatus === 'ready') && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <button
+                              type="button"
+                              onClick={() => setVideoModal({
+                                url: `${API_BASE_URL}/classes/video/${showFeedbackModal.id}`,
+                                title: `Trial Lesson ${showFeedbackModal.date || ''} 录播回放`
+                              })}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
+                            >
+                              ▶️ 播放录播视频
+                            </button>
+                            <a
+                              href={`${API_BASE_URL}/classes/video/${showFeedbackModal.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download={`trial_lesson_${showFeedbackModal.id}.mp4`}
+                              className="text-xs text-blue-600 hover:underline px-2 py-1"
+                            >
+                              ⬇️ 下载保存
+                            </a>
+                          </div>
+                        )}
+                        {recText && (
+                          <div className="text-xs text-gray-600 whitespace-pre-wrap bg-white/80 p-2 rounded border border-blue-100 font-mono">
+                            {recText}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })() : (

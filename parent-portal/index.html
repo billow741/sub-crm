@@ -3950,6 +3950,28 @@ function renderStudyProfile(student, allClasses) {
       if (a.strengths) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💪 强项亮点</div><div class="sp-feedback-text">' + spEsc(a.strengths) + '</div></div>';
       if (a.improvements) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">📈 建议提升</div><div class="sp-feedback-text">' + spEsc(a.improvements) + '</div></div>';
       if (a.teacher_message) rpHtml += '<div class="sp-feedback-group"><div class="sp-feedback-label">💌 老师寄语</div><div class="sp-feedback-text" style="background:rgba(75,159,224,0.06);padding:8px 10px;border-radius:8px;">' + spEsc(a.teacher_message) + '</div></div>';
+      
+      var trialRecR2Key = a.fb_recording_r2_key || (cls && cls.fb_recording_r2_key);
+      var trialRecText = a.fb_recording || (cls && cls.fb_recording);
+      if (trialRecR2Key || trialRecText) {
+        rpHtml += '<div class="sp-feedback-group" style="margin-top:10px;">';
+        rpHtml += '<div class="sp-feedback-label" style="display:flex;align-items:center;justify-content:space-between;">';
+        rpHtml += '<span>📹 课堂实录回放</span>';
+        if (trialRecR2Key) rpHtml += '<span style="font-size:11px;color:#15803D;font-weight:600;">✅ 高清云录播</span>';
+        rpHtml += '</div>';
+        rpHtml += '<div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+        if (trialRecR2Key) {
+          rpHtml += '<a href="' + API_BASE + '/classes/recording/' + (a.class_id || (cls && cls.id)) + '" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#2563EB;color:#fff;font-size:12px;font-weight:600;border-radius:8px;text-decoration:none;">▶️ 观看录像</a>';
+        }
+        if (trialRecText) {
+          var uMatch = trialRecText.match(/(https?:\/\/[^\s]+)/g);
+          if (uMatch && uMatch[0]) {
+            rpHtml += '<a href="' + escapeHtml(uMatch[0]) + '" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;font-size:12px;font-weight:600;border-radius:8px;text-decoration:none;">🔗 会议回放链接</a>';
+          }
+        }
+        rpHtml += '</div>';
+        rpHtml += '</div>';
+      }
       rpHtml += '</div>'; // End sp-collapse-body
 
       rpHtml += '</div>'; // End sp-card
@@ -4269,6 +4291,29 @@ function buildReportHTML(a) {
     h += '<div class="message-section"><div class="message-header">💌 教师寄语 Teacher\'s Message</div><div class="message-text">' + escapeHtml(a.teacher_message) + '</div></div>';
   }
 
+  // 📹 Lesson Recording
+  if (a.fb_recording_r2_key || a.fb_recording) {
+    h += '<div class="recording-section">';
+    h += '<div class="recording-header"><span>📹</span> 课堂实录回放 Lesson Recording</div>';
+    h += '<div class="recording-body">';
+    if (a.fb_recording_r2_key) {
+      h += '<div style="margin-bottom:8px;">';
+      h += '<a href="' + API_BASE + '/classes/recording/' + (a.class_id || '') + '" target="_blank" class="report-rec-btn report-rec-cloud-btn"><span>▶️ 观看高清课堂实录视频 (Watch Video)</span></a>';
+      h += '</div>';
+    }
+    if (a.fb_recording) {
+      var urlMatch = a.fb_recording.match(/(https?:\/\/[^\s]+)/g);
+      if (urlMatch && urlMatch[0]) {
+        h += '<div style="margin-bottom:8px;">';
+        h += '<a href="' + escapeHtml(urlMatch[0]) + '" target="_blank" class="report-rec-btn report-rec-link-btn"><span>🔗 打开在线课堂回放链接</span></a>';
+        h += '</div>';
+      }
+      h += '<div class="recording-text">' + escapeHtml(a.fb_recording) + '</div>';
+    }
+    h += '</div>';
+    h += '</div>';
+  }
+
   // Footer
   h += '<div class="report-footer">';
   h += '<div class="footer-brand">SunnyBridge 少儿英语</div>';
@@ -4327,6 +4372,15 @@ function getReportPrintCSS() {
   css += '.message-section{margin:0 48px 20px;padding:22px 24px;background:linear-gradient(135deg,rgba(75,159,224,0.06),rgba(245,166,35,0.06));border-radius:14px;border:1px solid rgba(75,159,224,0.15);page-break-inside:avoid;}';
   css += '.message-header{font-size:16px;font-weight:600;color:#1C244B;margin-bottom:10px;}';
   css += '.message-text{font-size:14px;color:#475569;line-height:1.8;white-space:pre-wrap;}';
+  // Recording section
+  css += '.recording-section{margin:0 48px 20px;padding:20px 24px;background:#F0F7FF;border-radius:14px;border:1px solid #BFDBFE;page-break-inside:avoid;}';
+  css += '.recording-header{font-size:16px;font-weight:600;color:#1E3A8A;margin-bottom:12px;display:flex;align-items:center;gap:6px;}';
+  css += '.recording-body{display:flex;flex-direction:column;gap:8px;}';
+  css += '.report-rec-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:600;text-decoration:none;transition:all 0.2s;}';
+  css += '.report-rec-cloud-btn{background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,0.25);}';
+  css += '.report-rec-link-btn{background:#fff;border:1px solid #93C5FD;color:#1D4ED8;}';
+  css += '.recording-text{font-size:12px;color:#475569;line-height:1.6;white-space:pre-wrap;background:#fff;padding:10px 14px;border-radius:8px;border:1px solid #E2E8F0;font-family:monospace;}';
+  css += '@media print { .report-rec-btn { display: none; } }';
   // Footer
   css += '.report-footer{text-align:center;padding:24px 48px;border-top:1px solid #E8EDF2;margin-top:8px;}';
   css += '.footer-brand{font-size:13px;font-weight:600;color:#1C244B;}';

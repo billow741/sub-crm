@@ -44,7 +44,8 @@ assessments.get('/', async (c) => {
     SELECT a.*, 
            s.name as student_name, s.english_name as student_english_name,
            t.name as teacher_name,
-           c.date as class_date, c.start_time, c.end_time, c.subject, c.is_trial
+           c.date as class_date, c.start_time, c.end_time, c.subject, c.is_trial,
+           c.fb_recording, c.fb_recording_r2_key, c.fb_recording_status, c.fb_recording_duration, c.fb_recording_size
     FROM assessments a
     JOIN students s ON a.student_id = s.id
     LEFT JOIN teachers t ON a.teacher_id = t.id
@@ -66,7 +67,8 @@ assessments.get('/:id', validateParams(idParamSchema), async (c) => {
     SELECT a.*, 
            s.name as student_name, s.english_name as student_english_name, s.age, s.grade,
            t.name as teacher_name, t.subjects as teacher_subjects,
-           c.date as class_date, c.start_time, c.end_time, c.subject, c.is_trial, c.hours
+           c.date as class_date, c.start_time, c.end_time, c.subject, c.is_trial, c.hours,
+           c.fb_recording, c.fb_recording_r2_key, c.fb_recording_status, c.fb_recording_duration, c.fb_recording_size
     FROM assessments a
     JOIN students s ON a.student_id = s.id
     LEFT JOIN teachers t ON a.teacher_id = t.id
@@ -90,7 +92,8 @@ assessments.get('/class/:class_id', async (c) => {
     SELECT a.*, 
            s.name as student_name, s.english_name as student_english_name,
            t.name as teacher_name,
-           c.date as class_date, c.start_time, c.end_time, c.subject, c.is_trial
+           c.date as class_date, c.start_time, c.end_time, c.subject, c.is_trial,
+           c.fb_recording, c.fb_recording_r2_key, c.fb_recording_status, c.fb_recording_duration, c.fb_recording_size
     FROM assessments a
     JOIN students s ON a.student_id = s.id
     LEFT JOIN teachers t ON a.teacher_id = t.id
@@ -172,12 +175,21 @@ assessments.post('/', validate(assessmentSchema), async (c) => {
 
   const assessmentId = result.meta.last_row_id;
 
+  if (data.fb_recording !== undefined) {
+    try {
+      await DB.prepare('UPDATE classes SET fb_recording = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(data.fb_recording, data.class_id).run();
+    } catch (recErr) {
+      console.warn('Sync fb_recording to class failed:', recErr.message);
+    }
+  }
+
   return c.json(success({
     id: assessmentId,
     class_id: data.class_id,
     student_id: cls.student_id,
     teacher_id: cls.teacher_id,
     status: data.status || 'draft',
+    fb_recording: data.fb_recording || null,
     created_at: new Date().toISOString()
   }), 201);
   } catch(dbErr) {
@@ -197,6 +209,15 @@ assessments.patch('/:id', validateParams(idParamSchema), validate(assessmentUpda
     return c.json(error('NOT_FOUND', '评估报告不存在'), 404);
   }
 
+  if (data.fb_recording !== undefined) {
+    try {
+      await DB.prepare('UPDATE classes SET fb_recording = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(data.fb_recording, existing.class_id).run();
+    } catch (recErr) {
+      console.warn('Sync fb_recording to class failed:', recErr.message);
+    }
+    delete data.fb_recording;
+  }
+
   const fields = [];
   const values = [];
   for (const [key, value] of Object.entries(data)) {
@@ -207,9 +228,22 @@ assessments.patch('/:id', validateParams(idParamSchema), validate(assessmentUpda
   values.push(new Date().toISOString());
   values.push(id);
 
-  await DB.prepare(`UPDATE assessments SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  if (fields.length > 1) {
+    await DB.prepare(`UPDATE assessments SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
 
-  const updated = await DB.prepare('SELECT * FROM assessments WHERE id = ?').bind(id).first();
+  const updated = await DB.prepare(`
+    SELECT a.*, 
+           s.name as student_name, s.english_name as student_english_name, s.age, s.grade,
+           t.name as teacher_name, t.subjects as teacher_subjects,
+           c.date as class_date, c.start_time, c.end_time, c.subject, c.is_trial, c.hours,
+           c.fb_recording, c.fb_recording_r2_key, c.fb_recording_status, c.fb_recording_duration, c.fb_recording_size
+    FROM assessments a
+    JOIN students s ON a.student_id = s.id
+    LEFT JOIN teachers t ON a.teacher_id = t.id
+    JOIN classes c ON a.class_id = c.id
+    WHERE a.id = ?
+  `).bind(id).first();
   return c.json(success(updated));
 });
 

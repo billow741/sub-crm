@@ -2447,6 +2447,43 @@ function renderAssessmentView(cls, a) {
   if (a.improvements) html += '<div class="mb-2"><span class="text-sm font-medium text-gray-700">📈 Areas to Improve</span><div class="text-sm text-gray-600 whitespace-pre-wrap mt-1">' + escapeHtml(a.improvements) + '</div></div>';
   if (a.teacher_message) html += '<div class="mt-3 p-3 bg-blue-50 rounded-lg"><span class="text-sm font-medium text-gray-700">💌 Teacher\'s Message</span><div class="text-sm text-gray-600 whitespace-pre-wrap mt-1">' + escapeHtml(a.teacher_message) + '</div></div>';
   html += '</div>';
+
+  // 📹 Lesson Recording Display
+  var recR2Key = a.fb_recording_r2_key || cls.fb_recording_r2_key;
+  var recStatus = a.fb_recording_status || cls.fb_recording_status;
+  var recText = a.fb_recording || cls.fb_recording;
+
+  html += '<div class="border border-blue-200 rounded-lg p-3 bg-blue-50/60">';
+  html += '<div class="flex items-center justify-between mb-2">';
+  html += '<span class="font-medium text-blue-900 text-sm flex items-center gap-1.5">📹 Lesson Recording</span>';
+  if (recR2Key || recStatus === 'ready') {
+    html += '<span class="px-2 py-0.5 bg-green-100 text-green-700 font-medium rounded-full text-xs">✅ Archived to Cloud</span>';
+  } else if (recStatus === 'pending') {
+    html += '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 font-medium rounded-full text-xs">⏳ Archiving...</span>';
+  } else if (recText) {
+    html += '<span class="px-2 py-0.5 bg-blue-100 text-blue-800 font-medium rounded-full text-xs">📹 External Link</span>';
+  } else {
+    html += '<span class="text-xs text-gray-400">None</span>';
+  }
+  html += '</div>';
+
+  if (recR2Key || recStatus === 'ready') {
+    html += '<div class="flex items-center gap-2 mt-2">';
+    html += '<a href="' + API_BASE + '/classes/recording/' + cls.id + '" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm">▶️ Watch Cloud Recording</a>';
+    html += '<a href="' + API_BASE + '/classes/recording/' + cls.id + '?download=1" target="_blank" class="text-xs text-blue-600 hover:underline px-2 py-1">⬇️ Download</a>';
+    html += '</div>';
+  }
+  if (recText) {
+    var urlMatch = recText.match(/(https?:\/\/[^\s]+)/g);
+    if (urlMatch && urlMatch[0]) {
+      html += '<div class="mt-2"><a href="' + escapeHtml(urlMatch[0]) + '" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-blue-700 hover:underline font-medium">🔗 Open Recording Link: ' + escapeHtml(urlMatch[0].length > 45 ? urlMatch[0].substring(0, 42) + '...' : urlMatch[0]) + '</a></div>';
+    }
+    html += '<div class="text-xs text-gray-600 whitespace-pre-wrap mt-1.5 bg-white/80 p-2 rounded border border-blue-100 font-mono">' + escapeHtml(recText) + '</div>';
+  } else if (!recR2Key && recStatus !== 'ready') {
+    html += '<div class="text-xs text-gray-400 mt-1">No recording provided for this trial lesson.</div>';
+  }
+  html += '</div>';
+
   html += '</div>';
 
   // Buttons: Edit + Close
@@ -2522,6 +2559,23 @@ function renderAssessmentForm(cls, existingData) {
   html += '<div><label class="block text-sm font-medium text-gray-700 mb-1">📈 Areas to Improve</label><textarea name="improvements" rows="2" placeholder="Areas for improvement..." class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"></textarea></div>';
   html += '<div><label class="block text-sm font-medium text-gray-700 mb-1">💌 Teacher\'s Message to Parents</label><textarea name="teacher_message" rows="3" placeholder="Message for parents..." class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"></textarea></div>';
   html += '</div>';
+  html += '</div>';
+
+  // 📹 Lesson Recording
+  html += '<div class="border border-blue-200 rounded-lg p-4 bg-blue-50/50">';
+  html += '<div class="flex items-center justify-between mb-2">';
+  html += '<h3 class="font-semibold text-gray-800 text-sm flex items-center gap-1.5"><span>📹</span> Lesson Recording</h3>';
+  html += '<div id="trial-recording-status-tag" class="text-xs"></div>';
+  html += '</div>';
+  html += '<textarea name="fb_recording" id="trial-recording" rows="3" placeholder="Paste recording link or notification text, e.g.&#10;Recording: Started by Teacher&#10;Date: 2026-09-02 10:03:03&#10;Recording file: https://voovmeeting.com/crm/8PLKaL48eb" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500 bg-white"></textarea>';
+  html += '<div class="flex items-center justify-between mt-2 pt-1 border-t border-blue-100/60">';
+  html += '<p class="text-[11px] text-gray-500">💡 Paste VOOV / Tencent Meeting link, or upload MP4 directly</p>';
+  html += '<label class="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-medium rounded shadow-sm">';
+  html += '<span>📤 Upload MP4</span>';
+  html += '<input type="file" id="trial-recording-file" accept="video/mp4,video/webm" class="hidden" onchange="handleTrialRecordingUpload(this)">';
+  html += '</label>';
+  html += '</div>';
+  html += '<div id="trial-upload-progress" class="hidden text-xs text-blue-600 font-medium mt-1">⏳ Uploading video to cloud...</div>';
   html += '</div>';
   
   // Buttons
@@ -2602,6 +2656,12 @@ function renderAssessmentForm(cls, existingData) {
       if (sel) sel.value = existingData.recommended_level;
     }
   }
+
+  // Prefill recording if available (from existingData or cls)
+  var initialRec = (existingData && existingData.fb_recording) || cls.fb_recording || '';
+  var recInput = overlay.querySelector('#trial-recording');
+  if (recInput) recInput.value = initialRec;
+  updateTrialRecordingStatusTag(cls, existingData);
   
   // Form submit
   overlay.querySelector('#assessment-form').addEventListener('submit', async function(e) {
@@ -2619,8 +2679,11 @@ function renderAssessmentForm(cls, existingData) {
     });
     data.class_id = currentAssessmentClass.id;
     data.status = 'published';
+    if (data.fb_recording) {
+      data.fb_recording = data.fb_recording.trim();
+    }
     
-    // Also update class status to completed
+    // Also update class status to completed and sync recording
     try {
       var existing = overlay.getAttribute('data-existing-id');
       if (existing) {
@@ -2635,10 +2698,16 @@ function renderAssessmentForm(cls, existingData) {
         });
       }
       
-      // Mark class as completed (only if still scheduled)
+      // Update class: completed + sync fb_recording
+      var classUpdate = { is_trial: 1 };
       if (currentAssessmentClass.status === 'scheduled') {
-        await apiPatch('/classes/' + currentAssessmentClass.id, { status: 'completed', is_trial: 1 });
+        classUpdate.status = 'completed';
       }
+      if (data.fb_recording !== undefined) {
+        classUpdate.fb_recording = data.fb_recording || null;
+      }
+      await apiPatch('/classes/' + currentAssessmentClass.id, classUpdate);
+      currentAssessmentClass.fb_recording = data.fb_recording || null;
       
       closeAssessmentModal();
       loadTeacherData();
@@ -2653,6 +2722,159 @@ function closeAssessmentModal() {
   var overlay = document.getElementById('assessment-overlay');
   if (overlay) overlay.remove();
   currentAssessmentClass = null;
+}
+
+function updateTrialRecordingStatusTag(cls, a) {
+  var el = document.getElementById('trial-recording-status-tag');
+  if (!el) return;
+  var r2Key = (a && a.fb_recording_r2_key) || (cls && cls.fb_recording_r2_key);
+  var status = (a && a.fb_recording_status) || (cls && cls.fb_recording_status);
+  var rec = (a && a.fb_recording) || (cls && cls.fb_recording);
+  if (r2Key || status === 'ready') {
+    el.innerHTML = '<span class="px-2 py-0.5 bg-green-100 text-green-700 font-medium rounded-full">✅ Archived to Cloud</span>';
+  } else if (status === 'pending') {
+    el.innerHTML = '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 font-medium rounded-full">⏳ Archiving...</span>';
+  } else if (rec) {
+    el.innerHTML = '<span class="px-2 py-0.5 bg-blue-100 text-blue-800 font-medium rounded-full">📹 External Link</span>';
+  } else {
+    el.innerHTML = '<span class="text-gray-400">Optional</span>';
+  }
+}
+
+async function handleTrialRecordingUpload(input) {
+  var file = input.files && input.files[0];
+  if (!file || !currentAssessmentClass) return;
+  var progressEl = document.getElementById('trial-upload-progress');
+
+  var setProgress = function(text, isError, isSuccess) {
+    if (!progressEl) return;
+    progressEl.classList.remove('hidden');
+    progressEl.textContent = text;
+    if (isError) {
+      progressEl.className = 'text-xs text-red-600 font-medium mt-1';
+    } else if (isSuccess) {
+      progressEl.className = 'text-xs text-green-600 font-medium mt-1';
+    } else {
+      progressEl.className = 'text-xs text-blue-600 font-medium mt-1';
+    }
+  };
+
+  var totalSize = file.size;
+  var totalMB = (totalSize / (1024 * 1024)).toFixed(1);
+  setProgress('⏳ Preparing video upload (' + totalMB + ' MB)...');
+
+  var CHUNK_SIZE = 8 * 1024 * 1024;
+  var totalParts = Math.ceil(totalSize / CHUNK_SIZE);
+  var uploadId = null;
+  var key = null;
+
+  try {
+    var initRes = await fetch(API_BASE + '/classes/recording-upload-init/' + currentAssessmentClass.id, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY
+      },
+      body: JSON.stringify({
+        filename: file.name,
+        contentType: file.type || 'video/mp4',
+        size: totalSize
+      })
+    });
+    var initData = await initRes.json();
+    if (!initRes.ok || !initData.data) {
+      throw new Error(initData.error?.message || 'Failed to initialize upload session');
+    }
+
+    uploadId = initData.data.uploadId;
+    key = initData.data.key;
+    if (initData.data.partSize) {
+      CHUNK_SIZE = initData.data.partSize;
+      totalParts = Math.ceil(totalSize / CHUNK_SIZE);
+    }
+
+    var uploadedParts = [];
+
+    for (var partNumber = 1; partNumber <= totalParts; partNumber++) {
+      var start = (partNumber - 1) * CHUNK_SIZE;
+      var end = Math.min(start + CHUNK_SIZE, totalSize);
+      var chunk = file.slice(start, end);
+
+      var percent = Math.round((start / totalSize) * 100);
+      var uploadedMB = (start / (1024 * 1024)).toFixed(1);
+      setProgress('⏳ Uploading: ' + percent + '% (Part ' + partNumber + '/' + totalParts + ', ' + uploadedMB + '/' + totalMB + ' MB)...');
+
+      var etag = null;
+      var lastErr = null;
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        try {
+          var partUrl = API_BASE + '/classes/recording-upload-part/' + currentAssessmentClass.id +
+            '?uploadId=' + encodeURIComponent(uploadId) +
+            '&key=' + encodeURIComponent(key) +
+            '&partNumber=' + partNumber;
+
+          var partRes = await fetch(partUrl, {
+            method: 'POST',
+            headers: {
+              'X-API-Key': API_KEY,
+              'Content-Type': 'application/octet-stream'
+            },
+            body: chunk
+          });
+
+          var partJson = await partRes.json();
+          if (partRes.ok && partJson.data && partJson.data.etag) {
+            etag = partJson.data.etag;
+            break;
+          } else {
+            throw new Error(partJson.error?.message || ('Part ' + partNumber + ' failed'));
+          }
+        } catch (e) {
+          lastErr = e;
+          if (attempt < 3) {
+            await new Promise(function(r) { setTimeout(r, 1000 * attempt); });
+          }
+        }
+      }
+
+      if (!etag) {
+        throw new Error('Failed to upload part ' + partNumber + ' after 3 attempts: ' + (lastErr ? lastErr.message : 'Network error'));
+      }
+
+      uploadedParts.push({ partNumber: partNumber, etag: etag });
+    }
+
+    setProgress('⏳ Finalizing video archival to cloud...');
+    var compRes = await fetch(API_BASE + '/classes/recording-upload-complete/' + currentAssessmentClass.id, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY
+      },
+      body: JSON.stringify({
+        uploadId: uploadId,
+        key: key,
+        parts: uploadedParts,
+        size: totalSize
+      })
+    });
+    var compJson = await compRes.json();
+    if (!compRes.ok || !compJson.data) {
+      throw new Error(compJson.error?.message || 'Failed to finalize video upload');
+    }
+
+    setProgress('✅ Upload successful! Cloud playback ready (' + totalMB + ' MB).', false, true);
+    currentAssessmentClass.fb_recording_status = 'ready';
+    currentAssessmentClass.fb_recording_r2_key = compJson.data.key;
+    updateTrialRecordingStatusTag(currentAssessmentClass);
+
+  } catch (err) {
+    console.error('Trial video upload error:', err);
+    setProgress('❌ Upload failed: ' + err.message, true, false);
+    alert('Video upload failed: ' + err.message);
+  } finally {
+    input.value = '';
+  }
 }
 
 async function checkExistingAssessment(classId, callback) {
