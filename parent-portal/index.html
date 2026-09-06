@@ -2732,6 +2732,77 @@ function showViewFeedback(idx) {
   }
 }
 
+// ===== Radar Charts for Progress Reports =====
+var window_prRadarCharts = {};
+function renderProgressReportRadars(reports) {
+  if (!reports || !Array.isArray(reports) || typeof Chart === 'undefined') return;
+  reports.forEach(function(r) {
+    if (!r.radar_scores) return;
+    var canvas = document.getElementById('pr-radar-canvas-' + r.id);
+    if (!canvas) return;
+    var scores = null;
+    try {
+      scores = typeof r.radar_scores === 'string' ? JSON.parse(r.radar_scores) : r.radar_scores;
+    } catch(e) {}
+    if (!scores) return;
+
+    if (window_prRadarCharts[r.id]) {
+      try { window_prRadarCharts[r.id].destroy(); } catch(e){}
+      delete window_prRadarCharts[r.id];
+    }
+
+    try {
+      window_prRadarCharts[r.id] = new Chart(canvas.getContext('2d'), {
+        type: 'radar',
+        data: {
+          labels: ['自然拼读', '词汇留存', '自发表达', '听力理解', '课堂参与'],
+          datasets: [{
+            label: '能力评估',
+            data: [
+              scores.phonics || 0,
+              scores.vocabulary_retention || 0,
+              scores.spontaneous_speaking || 0,
+              scores.listening_comprehension || 0,
+              scores.classroom_engagement || 0
+            ],
+            backgroundColor: 'rgba(99, 102, 241, 0.25)',
+            borderColor: 'rgba(99, 102, 241, 0.95)',
+            borderWidth: 2,
+            pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+            pointBorderColor: '#fff',
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          scales: {
+            r: {
+              angleLines: { color: 'rgba(0, 0, 0, 0.08)' },
+              grid: { color: 'rgba(0, 0, 0, 0.08)' },
+              pointLabels: { font: { size: 11, weight: '600' }, color: '#4B5563' },
+              ticks: { display: false, min: 0, max: 100, stepSize: 20 },
+              suggestedMin: 0,
+              suggestedMax: 100
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) { return ctx.raw + ' 分'; }
+              }
+            }
+          }
+        }
+      });
+    } catch (err) {
+      console.warn('Radar chart init failed for report ' + r.id, err);
+    }
+  });
+}
+
 // ===== Study Profile =====
 function spSwitchTab(tab) {
   document.querySelectorAll('.sp-tab').forEach(function(t) { t.classList.remove('active'); });
@@ -2741,6 +2812,9 @@ function spSwitchTab(tab) {
   if (btns[map[tab]]) btns[map[tab]].classList.add('active');
   var content = document.getElementById('sp-tab-' + tab);
   if (content) content.classList.add('active');
+  if (tab === 'reports' && typeof renderProgressReportRadars === 'function' && window_progressReports) {
+    setTimeout(function() { renderProgressReportRadars(window_progressReports); }, 80);
+  }
 }
 
 function switchCardSubtab(clsId, tab) {
@@ -3882,8 +3956,59 @@ function renderStudyProfile(student, allClasses) {
         rpHtml += '</div>';
       }
 
-      // 4 Dimensional Ratings
-      if (r.score_listening || r.score_speaking || r.score_interaction || r.score_pronunciation) {
+      // 🌟 智能教研学情宏观洞察 (Pedagogical Growth Insights)
+      if (r.stage_growth_insights) {
+        rpHtml += '<div style="margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(147,51,234,0.05));border:1px solid rgba(99,102,241,0.2);border-radius:12px;">';
+        rpHtml += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">';
+        rpHtml += '<span style="font-size:16px;">🌟</span>';
+        rpHtml += '<span style="font-size:13px;font-weight:700;color:#4338CA;">智能教研学情宏观洞察 (Pedagogical Growth Insights)</span>';
+        rpHtml += '</div>';
+        rpHtml += '<div style="font-size:13px;color:#1E1B4B;line-height:1.7;white-space:pre-wrap;">' + spEsc(r.stage_growth_insights) + '</div>';
+        rpHtml += '</div>';
+      }
+
+      // 📊 五维核心能力雷达评估 (Capability Radar)
+      var radarData = null;
+      if (r.radar_scores) {
+        try {
+          radarData = typeof r.radar_scores === 'string' ? JSON.parse(r.radar_scores) : r.radar_scores;
+        } catch (e) {}
+      }
+      if (radarData && Object.keys(radarData).length > 0) {
+        var radarDims = [
+          { key: 'phonics', label: '自然拼读', en: 'Phonics', icon: '🔤', val: radarData.phonics || 0, color: '#8B5CF6' },
+          { key: 'vocabulary_retention', label: '词汇留存', en: 'Vocab', icon: '📚', val: radarData.vocabulary_retention || 0, color: '#3B82F6' },
+          { key: 'spontaneous_speaking', label: '自发表达', en: 'Speaking', icon: '🗣️', val: radarData.spontaneous_speaking || 0, color: '#10B981' },
+          { key: 'listening_comprehension', label: '听力理解', en: 'Listening', icon: '🎧', val: radarData.listening_comprehension || 0, color: '#F59E0B' },
+          { key: 'classroom_engagement', label: '课堂参与', en: 'Engagement', icon: '🌟', val: radarData.classroom_engagement || 0, color: '#EC4899' }
+        ];
+        rpHtml += '<div style="margin-bottom:14px;padding:14px 16px;background:#FAF5FF;border:1px solid rgba(139,92,246,0.2);border-radius:12px;">';
+        rpHtml += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+        rpHtml += '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:16px;">📊</span><span style="font-size:13px;font-weight:700;color:#6D28D9;">五维核心能力雷达评估 (Capability Radar)</span></div>';
+        rpHtml += '<span style="font-size:11px;color:#7C3AED;font-weight:600;background:rgba(124,58,237,0.1);padding:2px 8px;border-radius:10px;">100分制</span>';
+        rpHtml += '</div>';
+
+        rpHtml += '<div style="display:flex;flex-direction:column;gap:12px;align-items:center;">';
+        rpHtml += '<div style="width:100%;max-width:260px;aspect-ratio:1/1;margin:0 auto;position:relative;">';
+        rpHtml += '<canvas id="pr-radar-canvas-' + r.id + '"></canvas>';
+        rpHtml += '</div>';
+
+        rpHtml += '<div style="width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;font-size:12px;">';
+        radarDims.forEach(function(d) {
+          rpHtml += '<div style="background:#fff;padding:8px 10px;border-radius:8px;border:1px solid #EDE9FE;">';
+          rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+          rpHtml += '<span style="color:#4B5563;font-weight:600;">' + d.icon + ' ' + d.label + '</span>';
+          rpHtml += '<b style="color:' + d.color + ';font-size:13px;">' + d.val + '<span style="font-size:10px;font-weight:normal;color:#9CA3AF;">分</span></b>';
+          rpHtml += '</div>';
+          rpHtml += '<div style="height:5px;background:#F3F4F6;border-radius:3px;overflow:hidden;">';
+          rpHtml += '<div style="height:100%;width:' + Math.min(100, Math.max(0, d.val)) + '%;background:' + d.color + ';border-radius:3px;"></div>';
+          rpHtml += '</div>';
+          rpHtml += '</div>';
+        });
+        rpHtml += '</div>';
+        rpHtml += '</div>';
+        rpHtml += '</div>';
+      } else if (r.score_listening || r.score_speaking || r.score_interaction || r.score_pronunciation) {
         var starStr = function(val) {
           var s = '';
           for (var i = 1; i <= 5; i++) s += '<span style="color:' + (i <= (val || 5) ? '#F5A623' : '#D1D5DB') + ';font-size:14px;">★</span>';
@@ -3896,6 +4021,36 @@ function renderStudyProfile(student, allClasses) {
         rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="color:#4B5563;">🗣️ 口语表达</span><span>' + starStr(r.score_speaking) + '</span></div>';
         rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="color:#4B5563;">🌟 课堂互动</span><span>' + starStr(r.score_interaction) + '</span></div>';
         rpHtml += '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="color:#4B5563;">🔤 自然拼读</span><span>' + starStr(r.score_pronunciation) + '</span></div>';
+        rpHtml += '</div></div>';
+      }
+
+      // 🎯 下阶段定制教学战略 (Next Phase Strategy)
+      var stratList = null;
+      if (r.next_phase_strategy) {
+        try {
+          stratList = typeof r.next_phase_strategy === 'string' ? JSON.parse(r.next_phase_strategy) : r.next_phase_strategy;
+        } catch(e) {}
+      }
+      if (Array.isArray(stratList) && stratList.length > 0) {
+        rpHtml += '<div style="margin-bottom:14px;padding:14px 16px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:12px;">';
+        rpHtml += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">';
+        rpHtml += '<span style="font-size:16px;">🎯</span>';
+        rpHtml += '<span style="font-size:13px;font-weight:700;color:#166534;">下阶段定制教学战略 (Next Phase Strategy)</span>';
+        rpHtml += '</div>';
+        rpHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:10px;">';
+        stratList.forEach(function(st) {
+          rpHtml += '<div style="background:#fff;padding:12px;border-radius:10px;border:1px solid #DCFCE7;box-shadow:0 1px 3px rgba(0,0,0,0.03);">';
+          if (st.goal) {
+            rpHtml += '<div style="font-weight:700;color:#15803D;font-size:12.5px;margin-bottom:4px;">🎯 阶段目标: ' + spEsc(st.goal) + '</div>';
+          }
+          if (st.rationale) {
+            rpHtml += '<div style="font-size:11.5px;color:#4B5563;line-height:1.5;margin-bottom:6px;"><b>教研依据:</b> ' + spEsc(st.rationale) + '</div>';
+          }
+          if (st.action_plan) {
+            rpHtml += '<div style="font-size:11.5px;color:#166534;background:#F0FDF4;padding:6px 8px;border-radius:6px;line-height:1.4;"><b>落地动作:</b> ' + spEsc(st.action_plan) + '</div>';
+          }
+          rpHtml += '</div>';
+        });
         rpHtml += '</div></div>';
       }
 
@@ -4036,7 +4191,10 @@ function renderStudyProfile(student, allClasses) {
   rpHtml += '</div>';
 
   var repListEl = document.getElementById('sp-reports-list');
-  if (repListEl) repListEl.innerHTML = rpHtml;
+  if (repListEl) {
+    repListEl.innerHTML = rpHtml;
+    setTimeout(function() { renderProgressReportRadars(progressReports); }, 80);
+  }
 
   // === 目标里程碑进度计算（严格基于正式课，体验课不计入） ===
   var nextMilestone = 10;
@@ -4136,6 +4294,9 @@ function toggleCollapse(id) {
       else if (txt.textContent.indexOf('反馈') !== -1) txt.textContent = '收起反馈 ▲';
       else if (txt.textContent.indexOf('报告') !== -1) txt.textContent = '收起报告 ▲';
       else txt.textContent = '收起详情 ▲';
+    }
+    if (id.indexOf('pr-body-') === 0 && typeof renderProgressReportRadars === 'function' && window_progressReports) {
+      setTimeout(function() { renderProgressReportRadars(window_progressReports); }, 80);
     }
   } else {
     el.classList.add('collapsed');
@@ -4241,8 +4402,42 @@ function buildProgressReportHTML(r) {
   }
   h += '</div>';
 
-  // 4 Core Dimensional Ratings
-  if (r.score_listening || r.score_speaking || r.score_interaction || r.score_pronunciation) {
+  // 🌟 Pedagogical Growth Insights
+  if (r.stage_growth_insights) {
+    h += '<div class="overall-section" style="margin-top:14px;background:#F8FAFC;border:1px solid #E0E7FF;border-left:4px solid #6366F1;border-radius:10px;padding:14px 18px;">';
+    h += '<div class="overall-title" style="color:#4338CA;font-size:14px;display:flex;align-items:center;gap:6px;"><span>🌟</span> 智能教研学情宏观洞察 Pedagogical Growth Insights</div>';
+    h += '<div class="overall-text" style="color:#1E1B4B;line-height:1.7;font-size:13px;white-space:pre-wrap;">' + escapeHtml(r.stage_growth_insights) + '</div>';
+    h += '</div>';
+  }
+
+  // 📊 5-Dimensional Capability Ratings
+  var pRadarData = null;
+  if (r.radar_scores) {
+    try {
+      pRadarData = typeof r.radar_scores === 'string' ? JSON.parse(r.radar_scores) : r.radar_scores;
+    } catch(e) {}
+  }
+  if (pRadarData && Object.keys(pRadarData).length > 0) {
+    var pDims = [
+      { label: '自然拼读', en: 'Phonics', icon: '🔤', val: pRadarData.phonics || 0, color: '#8B5CF6' },
+      { label: '词汇留存', en: 'Vocab', icon: '📚', val: pRadarData.vocabulary_retention || 0, color: '#3B82F6' },
+      { label: '自发表达', en: 'Speaking', icon: '🗣️', val: pRadarData.spontaneous_speaking || 0, color: '#10B981' },
+      { label: '听力理解', en: 'Listening', icon: '🎧', val: pRadarData.listening_comprehension || 0, color: '#F59E0B' },
+      { label: '课堂参与', en: 'Engagement', icon: '🌟', val: pRadarData.classroom_engagement || 0, color: '#EC4899' }
+    ];
+    h += '<div class="dimensions" style="padding:16px 48px 10px;">';
+    h += '<div class="dim-card" style="margin-bottom:0;background:#FAF5FF;border:1px solid #E9D5FF;">';
+    h += '<div class="dim-header" style="color:#6D28D9;"><span class="dim-icon">📊</span>五维核心能力综合评级 5-Dimensional Capability Ratings (100分制)</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:10px;margin-top:10px;">';
+    pDims.forEach(function(d) {
+      h += '<div style="background:#fff;border:1px solid #DDD6FE;border-radius:8px;padding:10px;text-align:center;">';
+      h += '<div style="font-size:11px;color:#6B7280;margin-bottom:4px;">' + d.icon + ' ' + d.label + '</div>';
+      h += '<div style="font-size:18px;font-weight:700;color:' + d.color + ';">' + d.val + '<span style="font-size:11px;font-weight:normal;color:#9CA3AF;">分</span></div>';
+      h += '<div style="font-size:9.5px;color:#9CA3AF;margin-top:2px;">' + d.en + '</div>';
+      h += '</div>';
+    });
+    h += '</div></div></div>';
+  } else if (r.score_listening || r.score_speaking || r.score_interaction || r.score_pronunciation) {
     h += '<div class="dimensions" style="padding:20px 48px 10px;">';
     h += '<div class="dim-card" style="margin-bottom:0;">';
     h += '<div class="dim-header"><span class="dim-icon">⭐</span>核心能力维度评级 Core Dimensional Ratings</div>';
@@ -4252,6 +4447,27 @@ function buildProgressReportHTML(r) {
     h += '<div class="dim-item"><span class="dim-label">🌟 课堂互动 (Engagement)</span>' + starHTML(r.score_interaction || 5) + '</div>';
     h += '<div class="dim-item"><span class="dim-label">🔤 自然拼读 (Phonics)</span>' + starHTML(r.score_pronunciation || 5) + '</div>';
     h += '</div></div></div>';
+  }
+
+  // 🎯 Next Phase Strategy
+  var pStratList = null;
+  if (r.next_phase_strategy) {
+    try {
+      pStratList = typeof r.next_phase_strategy === 'string' ? JSON.parse(r.next_phase_strategy) : r.next_phase_strategy;
+    } catch(e) {}
+  }
+  if (Array.isArray(pStratList) && pStratList.length > 0) {
+    h += '<div class="overall-section" style="margin-top:14px;background:#F0FDF4;border:1px solid #BBF7D0;border-left:4px solid #16A34A;border-radius:10px;padding:14px 18px;">';
+    h += '<div class="overall-title" style="color:#166534;font-size:14px;display:flex;align-items:center;gap:6px;"><span>🎯</span> 下阶段定制教学战略 Next Phase Strategy</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">';
+    pStratList.forEach(function(st) {
+      h += '<div style="background:#fff;border:1px solid #DCFCE7;border-radius:8px;padding:10px;">';
+      if (st.goal) h += '<div style="font-weight:700;color:#15803D;font-size:12px;margin-bottom:4px;">🎯 阶段目标: ' + escapeHtml(st.goal) + '</div>';
+      if (st.rationale) h += '<div style="font-size:11px;color:#4B5563;line-height:1.4;margin-bottom:4px;"><b>教研依据:</b> ' + escapeHtml(st.rationale) + '</div>';
+      if (st.action_plan) h += '<div style="font-size:11px;color:#166534;background:#F0FDF4;padding:4px 6px;border-radius:4px;line-height:1.3;"><b>落地动作:</b> ' + escapeHtml(st.action_plan) + '</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
   }
 
   // Summary

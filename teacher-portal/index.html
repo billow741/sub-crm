@@ -2410,6 +2410,10 @@ async function openMilestoneReport(cls, m, reportType) {
     document.getElementById('ms-vocab-count').value = existingReport.vocabulary_count || '';
     document.getElementById('ms-highlight-url').value = existingReport.highlight_recording_url || '';
     document.getElementById('ms-summary').value = existingReport.summary || '';
+    document.getElementById('ms-stage-growth-insights').value = existingReport.stage_growth_insights || '';
+    document.getElementById('ms-next-phase-strategy').value = existingReport.next_phase_strategy || '';
+    document.getElementById('ms-radar-scores').value = existingReport.radar_scores || '{}';
+    if (typeof renderRadarChart === 'function') renderRadarChart(existingReport.radar_scores);
     document.getElementById('ms-strengths').value = existingReport.strengths || '';
     document.getElementById('ms-improvements').value = existingReport.improvements || '';
     document.getElementById('ms-recommendation').value = existingReport.recommendation || '';
