@@ -2551,6 +2551,15 @@ async function generateMilestoneWithAI() {
 
     // Fill form fields
     if (data.summary) document.getElementById('ms-summary').value = data.summary;
+    if (data.stage_growth_insights) document.getElementById('ms-stage-growth-insights').value = data.stage_growth_insights;
+    if (data.next_phase_strategy) {
+      document.getElementById('ms-next-phase-strategy').value = typeof data.next_phase_strategy === 'string' ? data.next_phase_strategy : JSON.stringify(data.next_phase_strategy, null, 2);
+    }
+    if (data.radar_scores) {
+      var rScoresStr = typeof data.radar_scores === 'string' ? data.radar_scores : JSON.stringify(data.radar_scores);
+      document.getElementById('ms-radar-scores').value = rScoresStr;
+      if (typeof renderRadarChart === 'function') renderRadarChart(rScoresStr);
+    }
     if (data.strengths) document.getElementById('ms-strengths').value = data.strengths;
     if (data.improvements) document.getElementById('ms-improvements').value = data.improvements;
     if (data.recommendation) document.getElementById('ms-recommendation').value = data.recommendation;
@@ -2678,6 +2687,9 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
     teacher_id: parseInt(teacherId),
     teacher_name: teacherName,
     summary: document.getElementById('ms-summary').value,
+    stage_growth_insights: document.getElementById('ms-stage-growth-insights') ? document.getElementById('ms-stage-growth-insights').value.trim() : null,
+    next_phase_strategy: document.getElementById('ms-next-phase-strategy') ? document.getElementById('ms-next-phase-strategy').value.trim() : null,
+    radar_scores: document.getElementById('ms-radar-scores') ? document.getElementById('ms-radar-scores').value.trim() : null,
     strengths: document.getElementById('ms-strengths').value,
     improvements: document.getElementById('ms-improvements').value,
     recommendation: document.getElementById('ms-recommendation').value,
