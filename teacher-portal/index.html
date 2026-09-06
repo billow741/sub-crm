@@ -5,67 +5,69 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SunnyBridge Teacher Portal</title>
   <link rel="icon" type="image/webp" href="sunblogo.webp">
-  <script src="https://cdn.tailwindcss.com">
-  // Radar Chart Logic
-  window.msRadarChart = null;
-  function renderRadarChart(scoresJson) {
-    const canvas = document.getElementById('ms-radar-chart');
-    const emptyMsg = document.getElementById('ms-radar-empty');
-    if(!canvas) return;
-    
-    let scores = {};
-    try { scores = typeof scoresJson === 'string' ? JSON.parse(scoresJson) : scoresJson; } catch(e){}
-    
-    if(window.msRadarChart) { window.msRadarChart.destroy(); }
-    
-    if(!scores || Object.keys(scores).length === 0) {
-      emptyMsg.style.display = 'block';
-      canvas.style.display = 'none';
-      return;
-    }
-    
-    emptyMsg.style.display = 'none';
-    canvas.style.display = 'block';
-    
-    const ctx = canvas.getContext('2d');
-    window.msRadarChart = new Chart(ctx, {
-      type: 'radar',
-      data: {
-        labels: ['Phonics', 'Vocab Retention', 'Speaking', 'Listening', 'Engagement'],
-        datasets: [{
-          label: 'Capability Score',
-          data: [
-            scores.phonics || 0,
-            scores.vocabulary_retention || 0,
-            scores.spontaneous_speaking || 0,
-            scores.listening_comprehension || 0,
-            scores.classroom_engagement || 0
-          ],
-          backgroundColor: 'rgba(99, 102, 241, 0.2)',
-          borderColor: 'rgba(99, 102, 241, 1)',
-          pointBackgroundColor: 'rgba(99, 102, 241, 1)',
-          pointBorderColor: '#fff',
-          pointHoverBackgroundColor: '#fff',
-          pointHoverBorderColor: 'rgba(99, 102, 241, 1)'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        scales: {
-          r: {
-            angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
-            grid: { color: 'rgba(0, 0, 0, 0.1)' },
-            pointLabels: { font: { size: 9 }, color: '#64748b' },
-            ticks: { display: false, min: 0, max: 100, stepSize: 20 }
-          }
-        },
-        plugins: { legend: { display: false } }
-      }
-    });
-  }
-</script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Radar Chart Logic
+    window.msRadarChart = null;
+    function renderRadarChart(scoresJson) {
+      const canvas = document.getElementById('ms-radar-chart');
+      const emptyMsg = document.getElementById('ms-radar-empty');
+      if (!canvas) return;
+      
+      let scores = {};
+      try { scores = typeof scoresJson === 'string' ? JSON.parse(scoresJson) : scoresJson; } catch(e){}
+      
+      if (window.msRadarChart) { window.msRadarChart.destroy(); }
+      
+      if (!scores || Object.keys(scores).length === 0) {
+        if (emptyMsg) emptyMsg.style.display = 'block';
+        canvas.style.display = 'none';
+        return;
+      }
+      
+      if (emptyMsg) emptyMsg.style.display = 'none';
+      canvas.style.display = 'block';
+      
+      const ctx = canvas.getContext('2d');
+      window.msRadarChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels: ['Phonics', 'Vocab Retention', 'Speaking', 'Listening', 'Engagement'],
+          datasets: [{
+            label: 'Capability Score',
+            data: [
+              scores.phonics || 0,
+              scores.vocabulary_retention || 0,
+              scores.spontaneous_speaking || 0,
+              scores.listening_comprehension || 0,
+              scores.classroom_engagement || 0
+            ],
+            backgroundColor: 'rgba(99, 102, 241, 0.2)',
+            borderColor: 'rgba(99, 102, 241, 1)',
+            pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgba(99, 102, 241, 1)'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          scales: {
+            r: {
+              angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+              grid: { color: 'rgba(0, 0, 0, 0.1)' },
+              pointLabels: { font: { size: 9 }, color: '#64748b' },
+              ticks: { display: false, min: 0, max: 100, stepSize: 20 }
+            }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+  </script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #9333ea; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
@@ -92,7 +94,6 @@
     /* ── Assessment modal scroll ── */
     #assessment-modal { max-height: 90vh; overflow-y: auto; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
 <div id="app">
@@ -237,6 +238,7 @@
     <div id="ms-vocab-chips-box" class="hidden mt-2 pt-2 border-t border-slate-200 text-xs">
       <span class="text-gray-500 font-medium">Recent vocabulary learned: </span>
       <span id="ms-vocab-chips" class="text-slate-700 font-mono text-[11px]"></span>
+    </div>
   </div>
 
   <!-- AI Milestone Assistant Bar -->
@@ -913,157 +915,171 @@ async function apiPost(endpoint, data) {
 var currentViewClass = null;
 
 function showViewFeedback(idx) {
-  var cls = window_historyClasses[idx];
-  if (!cls) return;
-  currentViewClass = cls;
-
-  var info = '<b>' + escapeHtml(formatStudentName(cls)) + '</b> - ' + cls.date + ' ' + formatTime(cls.start_time);
-  if (cls.subject) info += ' · ' + escapeHtml(cls.subject);
-  document.getElementById('view-class-info').innerHTML = info;
-
-  var esc = function(s) { return s ? escapeHtml(s) : ''; };
-  var errorsHtml = function(jsonStr, title, icon) {
-    try {
-      var errs = JSON.parse(jsonStr || '[]');
-      if (!errs.length) return '';
-      var h = '<div class="border rounded-lg p-3"><div class="font-medium text-gray-700 text-sm mb-2">' + icon + ' ' + title + '</div>';
-      errs.forEach(function(e) {
-        h += '<div class="py-1 text-sm"><span class="text-red-500">✗ ' + esc(e.wrong) + '</span> <span class="text-gray-400">→</span> <span class="text-green-600">✓ ' + esc(e.right) + '</span></div>';
-      });
-      h += '</div>';
-      return h;
-    } catch(e) { return ''; }
-  };
-
-  var html = '';
-
-  // 🏆 Milestone Reminder / Status in Feedback View
-  if (cls.milestone_type) {
-    var isDone = hasSubmittedMilestoneReport(cls);
-    var isGrad = window_studentStatusMap[cls.student_id] === 'graduated';
-    if (isDone) {
-      html += '<div class="p-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center justify-between gap-3 mb-3">' +
-        '<div><div class="font-bold text-purple-900 text-sm flex items-center gap-1.5"><span>🏅</span> ' + formatMilestoneShortLabel(cls.milestone_type) + ' Milestone Report Submitted</div><div class="text-xs text-purple-700 mt-0.5">The milestone report has been submitted and shared with parents.</div></div>' +
-        '<button type="button" onclick="closeViewModal(); openMilestoneForClassObj(currentViewClass);" class="cursor-pointer px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs">👁️ View / Edit Report</button>' +
-        '</div>';
-    } else if (!isGrad) {
-      html += '<div class="p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-center justify-between gap-3 mb-3">' +
-        '<div><div class="font-bold text-amber-900 text-sm flex items-center gap-1.5"><span>⚠️</span> This was a ' + formatMilestoneShortLabel(cls.milestone_type) + ' Milestone Lesson!</div><div class="text-xs text-amber-800 mt-0.5">A milestone report has not been submitted yet. Please write it when free.</div></div>' +
-        '<button type="button" onclick="closeViewModal(); openMilestoneForClassObj(currentViewClass);" class="cursor-pointer px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs">✍️ Write Milestone Report</button>' +
-        '</div>';
+  try {
+    var cls = (window_historyClasses || window_allPastClasses || [])[idx];
+    if (!cls) {
+      console.warn('showViewFeedback: class not found for index', idx);
+      return;
     }
-  }
+    currentViewClass = cls;
 
-  // Lesson Info
-  if (cls.fb_lesson_level || cls.fb_unit || cls.fb_lesson) {
-    html += '<div class="border rounded-lg p-3"><div class="font-medium text-gray-700 text-sm mb-2">📅 Lesson Info</div>';
-    html += '<div class="text-sm text-gray-600">Level: ' + esc(cls.fb_lesson_level) + ' · Unit ' + esc(cls.fb_unit) + ' / Lesson ' + esc(cls.fb_lesson) + '</div>';
-    html += '</div>';
-  }
+    var info = '<b>' + escapeHtml(formatStudentName(cls)) + '</b> - ' + (cls.date || '') + ' ' + formatTime(cls.start_time);
+    if (cls.subject) info += ' · ' + escapeHtml(cls.subject);
+    var infoEl = document.getElementById('view-class-info');
+    if (infoEl) infoEl.innerHTML = info;
 
-  // 📖 Textbook Pages (Embedded PDF page scans)
-  if (cls.textbook_code && (cls.unit_number || cls.fb_unit || cls.fb_lesson) && cls.page_from && cls.page_to) {
-    var isLesson = (cls.textbook_code.startsWith('WE') || (cls.fb_lesson && !cls.fb_unit));
-    var prefix = isLesson ? 'Lesson ' : 'Unit ';
-    var rawUnit = cls.fb_lesson || cls.fb_unit || cls.unit_number;
-    var displayUnit = rawUnit ? String(rawUnit) : '';
-    if (displayUnit && !displayUnit.startsWith('Lesson') && !displayUnit.startsWith('Unit')) {
-      displayUnit = prefix + displayUnit;
+    var esc = function(s) { return s ? escapeHtml(s) : ''; };
+    var errorsHtml = function(jsonStr, title, icon) {
+      try {
+        var errs = JSON.parse(jsonStr || '[]');
+        if (!errs.length) return '';
+        var h = '<div class="border rounded-lg p-3"><div class="font-medium text-gray-700 text-sm mb-2">' + icon + ' ' + title + '</div>';
+        errs.forEach(function(e) {
+          h += '<div class="py-1 text-sm"><span class="text-red-500">✗ ' + esc(e.wrong) + '</span> <span class="text-gray-400">→</span> <span class="text-green-600">✓ ' + esc(e.right) + '</span></div>';
+        });
+        h += '</div>';
+        return h;
+      } catch(e) { return ''; }
+    };
+
+    var html = '';
+
+    // 🏆 Milestone Reminder / Status in Feedback View
+    if (cls.milestone_type) {
+      var isDone = hasSubmittedMilestoneReport(cls);
+      var isGrad = window_studentStatusMap[cls.student_id] === 'graduated';
+      if (isDone) {
+        html += '<div class="p-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center justify-between gap-3 mb-3">' +
+          '<div><div class="font-bold text-purple-900 text-sm flex items-center gap-1.5"><span>🏅</span> ' + formatMilestoneShortLabel(cls.milestone_type) + ' Milestone Report Submitted</div><div class="text-xs text-purple-700 mt-0.5">The milestone report has been submitted and shared with parents.</div></div>' +
+          '<button type="button" onclick="closeViewModal(); openMilestoneForClassObj(currentViewClass);" class="cursor-pointer px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs">👁️ View / Edit Report</button>' +
+          '</div>';
+      } else if (!isGrad) {
+        html += '<div class="p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-center justify-between gap-3 mb-3">' +
+          '<div><div class="font-bold text-amber-900 text-sm flex items-center gap-1.5"><span>⚠️</span> This was a ' + formatMilestoneShortLabel(cls.milestone_type) + ' Milestone Lesson!</div><div class="text-xs text-amber-800 mt-0.5">A milestone report has not been submitted yet. Please write it when free.</div></div>' +
+          '<button type="button" onclick="closeViewModal(); openMilestoneForClassObj(currentViewClass);" class="cursor-pointer px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs">✍️ Write Milestone Report</button>' +
+          '</div>';
+      }
     }
-    html += '<div class="border rounded-lg p-3"><div class="font-medium text-gray-700 text-sm mb-2">📖 Textbook Pages (' + esc(cls.textbook_code) + (displayUnit ? ' · ' + esc(displayUnit) : '') + ' pages ' + cls.page_from + '-' + cls.page_to + ')</div>';
-    html += '<div class="grid grid-cols-3 sm:grid-cols-4 gap-1">';
-    for (var p = parseInt(cls.page_from); p <= parseInt(cls.page_to); p++) {
-      var url = API_BASE + '/textbooks/page-img/' + encodeURIComponent(cls.textbook_code) + '/' + encodeURIComponent(cls.unit_number || '0') + '/' + p;
-      html += '<a href="' + url + '" target="_blank" class="block border rounded overflow-hidden hover:shadow-md" title="Page ' + p + ' (click to enlarge)">';
-      html += '<img src="' + url + '" alt="Page ' + p + '" class="w-full h-auto" loading="lazy" onerror="this.parentElement.style.display=\'none\'">';
-      html += '<div class="text-xs text-center text-gray-500 bg-white py-0.5">P' + p + '</div>';
+
+    // Lesson Info
+    if (cls.fb_lesson_level || cls.fb_unit || cls.fb_lesson) {
+      html += '<div class="border rounded-lg p-3"><div class="font-medium text-gray-700 text-sm mb-2">📅 Lesson Info</div>';
+      html += '<div class="text-sm text-gray-600">Level: ' + esc(cls.fb_lesson_level) + ' · Unit ' + esc(cls.fb_unit) + ' / Lesson ' + esc(cls.fb_lesson) + '</div>';
+      html += '</div>';
+    }
+
+    // 📖 Textbook Pages (Embedded PDF page scans)
+    if (cls.textbook_code && (cls.unit_number || cls.fb_unit || cls.fb_lesson) && cls.page_from && cls.page_to) {
+      var isLesson = (cls.textbook_code.startsWith('WE') || (cls.fb_lesson && !cls.fb_unit));
+      var prefix = isLesson ? 'Lesson ' : 'Unit ';
+      var rawUnit = cls.fb_lesson || cls.fb_unit || cls.unit_number;
+      var displayUnit = rawUnit ? String(rawUnit) : '';
+      if (displayUnit && !displayUnit.startsWith('Lesson') && !displayUnit.startsWith('Unit')) {
+        displayUnit = prefix + displayUnit;
+      }
+      html += '<div class="border rounded-lg p-3"><div class="font-medium text-gray-700 text-sm mb-2">📖 Textbook Pages (' + esc(cls.textbook_code) + (displayUnit ? ' · ' + esc(displayUnit) : '') + ' pages ' + cls.page_from + '-' + cls.page_to + ')</div>';
+      html += '<div class="grid grid-cols-3 sm:grid-cols-4 gap-1">';
+      for (var p = parseInt(cls.page_from); p <= parseInt(cls.page_to); p++) {
+        var url = API_BASE + '/textbooks/page-img/' + encodeURIComponent(cls.textbook_code) + '/' + encodeURIComponent(cls.unit_number || '0') + '/' + p;
+        html += '<a href="' + url + '" target="_blank" class="block border rounded overflow-hidden hover:shadow-md" title="Page ' + p + ' (click to enlarge)">';
+        html += '<img src="' + url + '" alt="Page ' + p + '" class="w-full h-auto" loading="lazy" onerror="this.parentElement.style.display=\'none\'">';
+        html += '<div class="text-xs text-center text-gray-500 bg-white py-0.5">P' + p + '</div>';
+        html += '</a>';
+      }
+      html += '</div></div>';
+    }
+
+    // Today's Learning
+    if (cls.fb_vocab || cls.fb_patterns || cls.fb_grammar) {
+      html += '<div class="border rounded-lg p-3"><div class="font-medium text-gray-700 text-sm mb-2">📚 Today\'s Learning</div>';
+      if (cls.fb_vocab) html += '<div class="mb-1 text-sm"><b>Vocabulary:</b> ' + esc(cls.fb_vocab) + '</div>';
+      if (cls.fb_patterns) html += '<div class="mb-1 text-sm"><b>Patterns:</b> ' + esc(cls.fb_patterns) + '</div>';
+      if (cls.fb_grammar) html += '<div class="mb-1 text-sm"><b>Grammar:</b> ' + esc(cls.fb_grammar) + '</div>';
+      html += '</div>';
+    }
+
+    // Pronunciation Corrections
+    html += errorsHtml(cls.fb_pronunciation_errors, 'Pronunciation Corrections', '🗣️');
+
+    // Grammar Corrections
+    html += errorsHtml(cls.fb_grammar_errors, 'Grammar Corrections', '📝');
+
+    // Summary
+    if (cls.fb_teacher_message || cls.fb_homework || cls.fb_next_preview) {
+      html += '<div class="border rounded-lg p-3 bg-purple-50"><div class="font-medium text-gray-700 text-sm mb-2">📋 Summary</div>';
+      if (cls.fb_teacher_message) html += '<div class="mb-2 text-sm"><b>💌 Teacher\'s Feedback:</b><div class="text-gray-600 mt-1 whitespace-pre-wrap">' + esc(cls.fb_teacher_message) + '</div></div>';
+      if (cls.fb_homework) html += '<div class="mb-2 text-sm"><b>📝 Homework:</b><div class="text-gray-600 mt-1">' + esc(cls.fb_homework) + '</div></div>';
+      if (cls.fb_next_preview) html += '<div class="mb-2 text-sm"><b>🎯 Next Lesson:</b><div class="text-gray-600 mt-1">' + esc(cls.fb_next_preview) + '</div></div>';
+      html += '</div>';
+    }
+
+    // 📹 Lesson Recording
+    if (cls.fb_recording_r2_key || cls.fb_recording_status === 'ready') {
+      html += '<div class="border border-blue-200 rounded-lg p-3 bg-blue-50/60 flex items-center justify-between flex-wrap gap-2">';
+      html += '<div>';
+      html += '<div class="font-medium text-blue-900 text-sm flex items-center gap-1.5 mb-0.5">';
+      html += '<span class="flex items-center gap-1.5"><span>📹</span> Lesson Recording (Cloud HD)</span>';
+      html += '<span class="text-[11px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">✅ Archived to Cloud</span>';
+      html += '</div>';
+      html += '<p class="text-xs text-gray-500">HD cloud recording ready for playback and review</p>';
+      html += '</div>';
+      html += '<div class="flex items-center gap-2">';
+      html += '<button type="button" onclick="openVideoModal(\'' + API_BASE + '/classes/video/' + cls.id + '\', \'Lesson ' + (cls.date || '') + ' Recording\')" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer">';
+      html += '▶️ Play Video';
+      html += '</button>';
+      html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" download="lesson_' + cls.id + '.mp4" class="text-xs text-blue-600 hover:underline px-2 py-1">';
+      html += '⬇️ Download';
       html += '</a>';
-    }
-    html += '</div></div>';
-  }
-
-  // Today's Learning
-  if (cls.fb_vocab || cls.fb_patterns || cls.fb_grammar) {
-    html += '<div class="border rounded-lg p-3"><div class="font-medium text-gray-700 text-sm mb-2">📚 Today\'s Learning</div>';
-    if (cls.fb_vocab) html += '<div class="mb-1 text-sm"><b>Vocabulary:</b> ' + esc(cls.fb_vocab) + '</div>';
-    if (cls.fb_patterns) html += '<div class="mb-1 text-sm"><b>Patterns:</b> ' + esc(cls.fb_patterns) + '</div>';
-    if (cls.fb_grammar) html += '<div class="mb-1 text-sm"><b>Grammar:</b> ' + esc(cls.fb_grammar) + '</div>';
-    html += '</div>';
-  }
-
-  // Pronunciation Corrections
-  html += errorsHtml(cls.fb_pronunciation_errors, 'Pronunciation Corrections', '🗣️');
-
-  // Grammar Corrections
-  html += errorsHtml(cls.fb_grammar_errors, 'Grammar Corrections', '📝');
-
-  // Summary
-  if (cls.fb_teacher_message || cls.fb_homework || cls.fb_next_preview) {
-    html += '<div class="border rounded-lg p-3 bg-purple-50"><div class="font-medium text-gray-700 text-sm mb-2">📋 Summary</div>';
-    if (cls.fb_teacher_message) html += '<div class="mb-2 text-sm"><b>💌 Teacher\'s Feedback:</b><div class="text-gray-600 mt-1 whitespace-pre-wrap">' + esc(cls.fb_teacher_message) + '</div></div>';
-    if (cls.fb_homework) html += '<div class="mb-2 text-sm"><b>📝 Homework:</b><div class="text-gray-600 mt-1">' + esc(cls.fb_homework) + '</div></div>';
-    if (cls.fb_next_preview) html += '<div class="mb-2 text-sm"><b>🎯 Next Lesson:</b><div class="text-gray-600 mt-1">' + esc(cls.fb_next_preview) + '</div></div>';
-    html += '</div>';
-  }
-
-  // 📹 Lesson Recording
-  if (cls.fb_recording_r2_key || cls.fb_recording_status === 'ready') {
-    html += '<div class="border border-blue-200 rounded-lg p-3 bg-blue-50/60 flex items-center justify-between flex-wrap gap-2">';
-    html += '<div>';
-    html += '<div class="font-medium text-blue-900 text-sm flex items-center gap-1.5 mb-0.5">';
-    html += '<span class="flex items-center gap-1.5"><span>📹</span> Lesson Recording (Cloud HD)</span>';
-    html += '<span class="text-[11px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">✅ Archived to Cloud</span>';
-    html += '</div>';
-    html += '<p class="text-xs text-gray-500">HD cloud recording ready for playback and review</p>';
-    html += '</div>';
-    html += '<div class="flex items-center gap-2">';
-    html += '<button type="button" onclick="openVideoModal(\'' + API_BASE + '/classes/video/' + cls.id + '\', \'Lesson ' + (cls.date || '') + ' Recording\')" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer">';
-    html += '▶️ Play Video';
-    html += '</button>';
-    html += '<a href="' + API_BASE + '/classes/video/' + cls.id + '" target="_blank" download="lesson_' + cls.id + '.mp4" class="text-xs text-blue-600 hover:underline px-2 py-1">';
-    html += '⬇️ Download';
-    html += '</a>';
-    html += '</div>';
-    html += '</div>';
-  } else if (cls.fb_recording) {
-    var rec = parseRecordingInfo(cls.fb_recording);
-    if (rec) {
-      html += '<div class="border border-blue-200 rounded-lg p-3 bg-blue-50/60">';
-      html += '<div class="font-medium text-blue-900 text-sm mb-2 flex items-center justify-between">';
-      html += '<span class="flex items-center gap-1.5"><span>📹</span> Lesson Recording</span>';
-      if (cls.fb_recording_status === 'pending') {
-        html += '<span class="text-[11px] px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full font-medium">⏳ Archiving...</span>';
-      }
       html += '</div>';
-      if (rec.url) {
-        html += '<div class="mb-2"><a href="' + escapeAttr(rec.url) + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all">▶️ Play Recording</a></div>';
-      }
-      if (rec.startedBy || rec.date) {
-        html += '<div class="text-xs text-gray-600 space-y-0.5">';
-        if (rec.startedBy) html += '<div><b>Started by:</b> ' + esc(rec.startedBy) + '</div>';
-        if (rec.date) html += '<div><b>Date:</b> ' + esc(rec.date) + '</div>';
+      html += '</div>';
+    } else if (cls.fb_recording) {
+      var rec = parseRecordingInfo(cls.fb_recording);
+      if (rec) {
+        html += '<div class="border border-blue-200 rounded-lg p-3 bg-blue-50/60">';
+        html += '<div class="font-medium text-blue-900 text-sm mb-2 flex items-center justify-between">';
+        html += '<span class="flex items-center gap-1.5"><span>📹</span> Lesson Recording</span>';
+        if (cls.fb_recording_status === 'pending') {
+          html += '<span class="text-[11px] px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full font-medium">⏳ Archiving...</span>';
+        }
         html += '</div>';
-      } else if (rec.raw && !rec.url) {
-        html += '<div class="text-xs text-gray-600 whitespace-pre-wrap">' + esc(rec.raw) + '</div>';
+        if (rec.url) {
+          html += '<div class="mb-2"><a href="' + escapeAttr(rec.url) + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all">▶️ Play Recording</a></div>';
+        }
+        if (rec.startedBy || rec.date) {
+          html += '<div class="text-xs text-gray-600 space-y-0.5">';
+          if (rec.startedBy) html += '<div><b>Started by:</b> ' + esc(rec.startedBy) + '</div>';
+          if (rec.date) html += '<div><b>Date:</b> ' + esc(rec.date) + '</div>';
+          html += '</div>';
+        } else if (rec.raw && !rec.url) {
+          html += '<div class="text-xs text-gray-600 whitespace-pre-wrap">' + esc(rec.raw) + '</div>';
+        }
+        html += '</div>';
       }
+    }
+
+    // Old format fallback (content / homework / notes fields)
+    if (!html && (cls.content || cls.homework || cls.notes)) {
+      html += '<div class="border rounded-lg p-3"><div class="font-medium text-gray-700 text-sm mb-2">📋 Class Content</div>';
+      if (cls.content) html += '<div class="mb-2 text-sm"><b>📚 Content:</b><div class="text-gray-600 mt-1 whitespace-pre-wrap">' + esc(cls.content) + '</div></div>';
+      if (cls.homework) html += '<div class="mb-2 text-sm"><b>📝 Homework:</b><div class="text-gray-600 mt-1 whitespace-pre-wrap">' + esc(cls.homework) + '</div></div>';
+      if (cls.notes) html += '<div class="mt-2 p-2 bg-blue-50 rounded text-sm"><b>💌 Teacher\'s Notes:</b><div class="text-gray-600 mt-1 whitespace-pre-wrap">' + esc(cls.notes) + '</div></div>';
       html += '</div>';
     }
+
+    if (!html) html = '<div class="text-center text-gray-400 py-4">No feedback submitted yet</div>';
+
+    var cEl = document.getElementById('view-feedback-content');
+    if (cEl) cEl.innerHTML = html;
+    var vModal = document.getElementById('view-modal');
+    if (vModal) {
+      vModal.classList.remove('hidden');
+      vModal.classList.add('flex');
+      vModal.style.display = 'flex';
+    }
+  } catch(err) {
+    console.error('showViewFeedback error:', err);
+    alert('Failed to show feedback: ' + err.message);
   }
-
-  // Old format fallback (content / homework / notes fields)
-  if (!html && (cls.content || cls.homework || cls.notes)) {
-    html += '<div class="border rounded-lg p-3"><div class="font-medium text-gray-700 text-sm mb-2">📋 Class Content</div>';
-    if (cls.content) html += '<div class="mb-2 text-sm"><b>📚 Content:</b><div class="text-gray-600 mt-1 whitespace-pre-wrap">' + esc(cls.content) + '</div></div>';
-    if (cls.homework) html += '<div class="mb-2 text-sm"><b>📝 Homework:</b><div class="text-gray-600 mt-1 whitespace-pre-wrap">' + esc(cls.homework) + '</div></div>';
-    if (cls.notes) html += '<div class="mt-2 p-2 bg-blue-50 rounded text-sm"><b>💌 Teacher\'s Notes:</b><div class="text-gray-600 mt-1 whitespace-pre-wrap">' + esc(cls.notes) + '</div></div>';
-    html += '</div>';
-  }
-
-  if (!html) html = '<div class="text-center text-gray-400 py-4">No feedback submitted yet</div>';
-
-  document.getElementById('view-feedback-content').innerHTML = html;
-  document.getElementById('view-modal').classList.remove('hidden');
-  document.getElementById('view-modal').classList.add('flex');
 }
 
 function editFromView() {
@@ -1073,8 +1089,12 @@ function editFromView() {
 }
 
 function closeViewModal() {
-  document.getElementById('view-modal').classList.add('hidden');
-  document.getElementById('view-modal').classList.remove('flex');
+  var vModal = document.getElementById('view-modal');
+  if (vModal) {
+    vModal.classList.add('hidden');
+    vModal.classList.remove('flex');
+    vModal.style.display = 'none';
+  }
 }
 
 // ===== Video Modal (Floating Lightbox) =====
