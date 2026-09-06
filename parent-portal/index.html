@@ -2038,8 +2038,8 @@ async function loadStudentData() {
       hAvEl.textContent = initials;
     }
 
-    // 获取课程
-    var classesResp = await apiGet('/classes?page_size=200');
+    // 获取课程 (按学员ID过滤，避免全量扫描与CORS缓存冲突)
+    var classesResp = await apiGet('/classes?student_id=' + encodeURIComponent(studentId) + '&page_size=200');
     var classesData = classesResp.data && classesResp.data.data ? classesResp.data.data
                     : classesResp.data ? classesResp.data
                     : classesResp;
@@ -4175,8 +4175,7 @@ function renderAssessments(list) {
 
 function viewProgressReport(reportId) {
   var w = window.open('', '_blank', 'width=800,height=900');
-  w.document.write('<html><head><meta charset="UTF-8"><title>阶段成长评估报告</title><style>' + getReportPrintCSS() + '</style>  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head><body><div style="text-align:center;padding:60px;color:#94a3b8;">加载中...</div></body></html>');
+  w.document.write('<html><head><meta charset="UTF-8"><title>阶段成长评估报告</title><style>' + getReportPrintCSS() + '</style></head><body><div style="text-align:center;padding:60px;color:#94a3b8;">加载中...</div></body></html>');
   w.document.close();
 
   apiGet('/progress-reports/' + reportId).then(function(resp) {
@@ -4301,8 +4300,7 @@ function buildProgressReportHTML(r) {
 
 function viewAssessmentReport(assessmentId) {
   var w = window.open('', '_blank', 'width=800,height=900');
-  w.document.write('<html><head><meta charset="UTF-8"><title>评估报告</title><style>' + getReportPrintCSS() + '</style>  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head><body><div style="text-align:center;padding:60px;color:#94a3b8;">加载中...</div></body></html>');
+  w.document.write('<html><head><meta charset="UTF-8"><title>评估报告</title><style>' + getReportPrintCSS() + '</style></head><body><div style="text-align:center;padding:60px;color:#94a3b8;">加载中...</div></body></html>');
   w.document.close();
   
   apiGet('/assessments/' + assessmentId).then(function(resp) {

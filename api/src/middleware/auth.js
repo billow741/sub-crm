@@ -23,11 +23,15 @@ export const cors = async (c, next) => {
   const applyCorsHeaders = (res) => {
     if (!res || !res.headers) return;
     res.headers.set('Access-Control-Allow-Origin', allowOrigin);
+    res.headers.append('Vary', 'Origin');
     res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     const reqHeaders = c.req.header('Access-Control-Request-Headers');
     res.headers.set('Access-Control-Allow-Headers', reqHeaders ? `*, ${reqHeaders}` : '*');
     res.headers.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges, ETag');
     res.headers.set('Access-Control-Max-Age', '86400');
+    if (!res.headers.has('Cache-Control')) {
+      res.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
   };
 
   // 处理预检请求
