@@ -58,6 +58,29 @@
   </div>
 
   <div class="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <!-- 🏆 Pending Milestone Reminder Banner (Mode A) -->
+    <div id="milestone-reminder-banner" class="hidden bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white rounded-2xl shadow-lg p-5 border border-amber-400/40 relative overflow-hidden">
+      <div class="absolute -right-8 -bottom-8 w-36 h-36 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+      <div class="flex items-start justify-between gap-4 relative z-10">
+        <div class="flex items-start gap-3.5">
+          <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0 text-xl shadow-inner">
+            🔔
+          </div>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h2 class="text-base font-bold tracking-tight">待出具阶段评估报告 (Pending Milestone Reports)</h2>
+              <span id="milestone-pending-count-badge" class="px-2 py-0.5 bg-white text-orange-700 font-extrabold text-xs rounded-full shadow-xs">0</span>
+            </div>
+            <p class="text-xs text-amber-100 mt-1 leading-relaxed">
+              以下学员课程已达成重要里程碑课时（10 / 30 / 60 / 100 课），请在备课或课后空余时间为学员填写阶段报告：
+            </p>
+          </div>
+        </div>
+      </div>
+      <!-- List of pending milestone cards -->
+      <div id="milestone-pending-list" class="mt-4 space-y-2.5 relative z-10"></div>
+    </div>
+
     <!-- Today's Classes -->
     <section>
       <h2 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -275,6 +298,32 @@
  </div>
 </div>
 
+<!-- Milestone Prompt Modal (Mode A: Fill Now or Later) -->
+<div id="milestone-prompt-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl text-center space-y-4 border border-purple-100">
+    <div class="w-16 h-16 bg-gradient-to-tr from-amber-400 to-orange-500 rounded-full flex items-center justify-center mx-auto text-3xl shadow-lg">
+      🏆
+    </div>
+    <div>
+      <h3 id="ms-prompt-title" class="text-xl font-extrabold text-gray-900">Milestone Reached!</h3>
+      <p id="ms-prompt-subtitle" class="text-sm font-semibold text-purple-600 mt-0.5">10-Lesson Milestone</p>
+    </div>
+    <div id="ms-prompt-desc" class="text-sm text-gray-600 bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 text-left leading-relaxed">
+      Student <b id="ms-prompt-student-name">Alex</b> has just completed their <b id="ms-prompt-count-text">10th lesson</b>! A milestone assessment report is due.
+      <div class="mt-2 text-xs text-amber-800 font-medium">
+        💡 You can write it now, or submit it later whenever you're free. The system will keep reminding you on your portal.
+      </div>
+    </div>
+    <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
+      <button type="button" id="ms-prompt-later-btn" onclick="closeMilestonePromptModal(true)" class="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl hover:bg-gray-50 text-sm font-semibold text-gray-700 transition-colors cursor-pointer">
+        ⏰ 稍后有空写 (Later)
+      </button>
+      <button type="button" id="ms-prompt-now-btn" onclick="proceedToMilestoneReportNow()" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-sm font-bold shadow-md transition-all cursor-pointer">
+        ✍️ 现在填写 (Write Now)
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- View Modal -->
 <div id="view-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" onclick="if(event.target===this)closeViewModal()">
@@ -562,6 +611,12 @@ var window_historyClasses = [];
 var window_allPastClasses = [];
 var window_historyPage = 1;
 var window_historyPageSize = 20;
+var window_progressReports = [];
+var window_progressReportsByClassId = {};
+var window_progressReportsByStudentAndType = {};
+var window_pendingMilestones = [];
+var window_currentMilestoneReportId = null;
+var pendingPromptClass = null, pendingPromptMilestone = null, pendingPromptReportType = null;
 
 // ===== XOR Encryption =====
 function xorEncode(str, key) {
@@ -761,6 +816,22 @@ function showViewFeedback(idx) {
   };
 
   var html = '';
+
+  // 🏆 Milestone Reminder / Status in Feedback View
+  if (cls.milestone_type) {
+    var isDone = hasSubmittedMilestoneReport(cls);
+    if (isDone) {
+      html += '<div class="p-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center justify-between gap-3 mb-3">' +
+        '<div><div class="font-bold text-purple-900 text-sm flex items-center gap-1.5"><span>🏅</span> ' + formatMilestoneShortLabel(cls.milestone_type) + ' 里程碑报告已出具</div><div class="text-xs text-purple-700 mt-0.5">该课的阶段评估报告已成功归档并对家长展示。</div></div>' +
+        '<button type="button" onclick="closeViewModal(); openMilestoneForClassObj(currentViewClass);" class="cursor-pointer px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs">👁️ 查看/修改报告</button>' +
+        '</div>';
+    } else {
+      html += '<div class="p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-center justify-between gap-3 mb-3">' +
+        '<div><div class="font-bold text-amber-900 text-sm flex items-center gap-1.5"><span>⚠️</span> 本课为 ' + formatMilestoneShortLabel(cls.milestone_type) + ' 里程碑课时！</div><div class="text-xs text-amber-800 mt-0.5">该课尚未出具阶段评估报告，请抽空为学员完成阶段评估。</div></div>' +
+        '<button type="button" onclick="closeViewModal(); openMilestoneForClassObj(currentViewClass);" class="cursor-pointer px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs">✍️ 立即填写里程碑报告</button>' +
+        '</div>';
+    }
+  }
 
   // Lesson Info
   if (cls.fb_lesson_level || cls.fb_unit || cls.fb_lesson) {
@@ -979,13 +1050,29 @@ async function loadTeacherData() {
     var studentEnMap = {};
     studentsData.forEach(function(s) { studentMap[s.id] = s.name; studentEnMap[s.id] = s.english_name || ''; });
 
-// Add student names to classes
- teacherClasses.forEach(function(c) {
-  if (!c.student_name || c.student_name === 'Unknown Student') {
-   c.student_name = studentMap[c.student_id] || 'Unknown Student';
-  }
-  c.student_english_name = studentEnMap[c.student_id] || '';
- });
+    // Fetch submitted progress reports
+    try {
+      var reportsResponse = await apiGet('/progress-reports?page_size=200');
+      var reportsList = (reportsResponse.data && reportsResponse.data.data) ? reportsResponse.data.data
+                      : (reportsResponse.data ? reportsResponse.data : []);
+      window_progressReports = Array.isArray(reportsList) ? reportsList : [];
+      window_progressReportsByClassId = {};
+      window_progressReportsByStudentAndType = {};
+      window_progressReports.forEach(function(r) {
+        if (r.class_id) window_progressReportsByClassId[r.class_id] = r;
+        if (r.student_id && r.report_type) window_progressReportsByStudentAndType[r.student_id + '_' + r.report_type] = r;
+      });
+    } catch(rErr) {
+      console.warn('Failed to fetch progress reports:', rErr);
+    }
+
+    // Add student names to classes
+    teacherClasses.forEach(function(c) {
+      if (!c.student_name || c.student_name === 'Unknown Student') {
+        c.student_name = studentMap[c.student_id] || 'Unknown Student';
+      }
+      c.student_english_name = studentEnMap[c.student_id] || '';
+    });
 
     // Classify classes - use local date
     var today = getLocalDate();
@@ -997,6 +1084,12 @@ async function loadTeacherData() {
     todayClasses.sort(function(a, b) { return (a.start_time || '').localeCompare(b.start_time || ''); });
     upcoming.sort(function(a, b) { return a.date.localeCompare(b.date); });
     past.sort(function(a, b) { return b.date.localeCompare(a.date); });
+
+    // Calculate pending milestones across teacher classes
+    window_pendingMilestones = teacherClasses.filter(function(c) {
+      return c.status === 'completed' && c.milestone_type && !hasSubmittedMilestoneReport(c);
+    });
+    renderMilestoneReminderBanner(window_pendingMilestones);
 
     renderTodayClasses(todayClasses);
     renderUpcoming(upcoming.slice(0, 10));
@@ -1754,6 +1847,18 @@ if (c.is_trial) {
   html += '<button onclick="openAssessment(' + i + ')" class="mt-4 w-full py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm">📝 Assessment</button>';
 } else if (c.status === 'completed') {
   html += '<button onclick="openTodayFeedback(' + i + ')" class="mt-4 w-full py-2 bg-gray-400 text-white rounded-lg cursor-not-allowed text-sm" disabled>Feedback Submitted</button>';
+  if (c.milestone_type) {
+    if (hasSubmittedMilestoneReport(c)) {
+      html += '<div class="mt-2 flex items-center justify-between p-2 bg-purple-50 border border-purple-200 rounded-lg text-xs">';
+      html += '  <span class="text-purple-700 font-semibold flex items-center gap-1">🏅 ' + formatMilestoneShortLabel(c.milestone_type) + ' 已出具</span>';
+      html += '  <button onclick="openMilestoneForTodayClass(' + i + ')" class="cursor-pointer text-purple-600 hover:underline font-bold">查看/修改</button>';
+      html += '</div>';
+    } else {
+      html += '<button onclick="openMilestoneForTodayClass(' + i + ')" class="cursor-pointer mt-2 w-full py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-all">';
+      html += '  <span>🏆</span> 填写阶段评估报告 (' + formatMilestoneShortLabel(c.milestone_type) + ')';
+      html += '</button>';
+    }
+  }
 } else {
   // scheduled / in_progress / cancelled all allow feedback submission
   // Submit feedback = mark completed + deduct hours
@@ -1843,10 +1948,19 @@ function renderHistory() {
   for (var i = 0; i < pageData.length; i++) {
     var c = pageData[i];
     var globalIdx = start + i;
+    var msTag = '';
+    if (c.milestone_type) {
+      if (hasSubmittedMilestoneReport(c)) {
+        msTag = '<span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold" title="Milestone Report Submitted">🏅 ' + formatMilestoneShortLabel(c.milestone_type) + ' (已出具)</span>';
+      } else {
+        msTag = '<span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-300 animate-pulse" title="Milestone Report Pending">⚠️ ' + formatMilestoneShortLabel(c.milestone_type) + ' 待出具</span>';
+      }
+    }
+
     html += '<tr class="hover:bg-gray-50">';
     html += '<td class="px-4 py-3 text-sm">' + c.date + '</td>';
     html += '<td class="px-4 py-3 text-sm">' + formatTime(c.start_time) + ' ' + (c.is_trial ? '<span class="trial-badge">🎁</span>' : '') + '</td>';
-    html += '<td class="px-4 py-3 text-sm font-medium">' + formatStudentName(c) + '</td>';
+    html += '<td class="px-4 py-3 text-sm font-medium"><div class="flex items-center gap-1.5 flex-wrap">' + formatStudentName(c) + ' ' + msTag + '</div></td>';
     html += '<td class="px-4 py-3 text-sm">' + (c.subject || 'English') + '</td>';
     html += '<td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full ' + (STATUS_COLORS[c.status] || '') + '">' + (STATUS_LABELS[c.status] || c.status) + '</span></td>';
 
@@ -1855,8 +1969,16 @@ function renderHistory() {
        if (c.is_trial) {
          html += '<td class="px-4 py-3"><button onclick="openAssessmentFromHistory(' + globalIdx + '); return false;" class="px-2 py-1 bg-orange-100 text-orange-700 rounded text-sm hover:bg-orange-200">📝 View Report</button></td>';
        } else {
-        html += '<td class="px-4 py-3"><button onclick="showViewFeedback(' + globalIdx + '); return false;" class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200">View</button></td>';
-      }
+         var msAction = '';
+         if (c.milestone_type) {
+           if (hasSubmittedMilestoneReport(c)) {
+             msAction = '<button onclick="openMilestoneFromHistory(' + globalIdx + '); return false;" class="cursor-pointer px-2.5 py-1 bg-purple-100 text-purple-700 rounded text-xs hover:bg-purple-200 font-medium whitespace-nowrap" title="查看/编辑阶段评估报告">🏅 阶段报告</button>';
+           } else {
+             msAction = '<button onclick="openMilestoneFromHistory(' + globalIdx + '); return false;" class="cursor-pointer px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 text-white rounded text-xs font-bold shadow-xs whitespace-nowrap" title="填写阶段评估报告">✍️ 填写里程碑</button>';
+           }
+         }
+         html += '<td class="px-4 py-3"><div class="flex items-center gap-1.5 flex-wrap"><button onclick="showViewFeedback(' + globalIdx + '); return false;" class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200">View</button>' + msAction + '</div></td>';
+       }
     } else {
       // Unsubmitted classes show Submit button
       if (c.is_trial) {
@@ -1972,42 +2094,174 @@ var MILESTONE_INFO = {
   }
 };
 
+// ===== Helper Functions for Milestone & Reminders =====
+function formatMilestoneShortLabel(type) {
+  if (type === 'milestone_10') return '10 Lessons';
+  if (type === 'milestone_30') return '30 Lessons';
+  if (type === 'milestone_60') return '60 Lessons';
+  if (type === 'milestone_100') return '100 Lessons';
+  if (type === 'level_up') return 'Level Up';
+  return 'Milestone';
+}
+
+function getMilestoneReportForClass(cls) {
+  if (!cls || !cls.milestone_type) return null;
+  return (cls.id && window_progressReportsByClassId[cls.id]) || 
+         (cls.student_id && window_progressReportsByStudentAndType[cls.student_id + '_' + cls.milestone_type]) || 
+         null;
+}
+
+function hasSubmittedMilestoneReport(cls) {
+  return !!getMilestoneReportForClass(cls);
+}
+
+function renderMilestoneReminderBanner(pendingList) {
+  var banner = document.getElementById('milestone-reminder-banner');
+  var listEl = document.getElementById('milestone-pending-list');
+  var countBadge = document.getElementById('milestone-pending-count-badge');
+  if (!banner || !listEl) return;
+
+  if (!pendingList || pendingList.length === 0) {
+    banner.classList.add('hidden');
+    listEl.innerHTML = '';
+    return;
+  }
+
+  banner.classList.remove('hidden');
+  if (countBadge) countBadge.textContent = pendingList.length;
+
+  var html = '';
+  pendingList.forEach(function(c, idx) {
+    var info = MILESTONE_INFO[c.milestone_type] || {};
+    var badgeName = info.badge || formatMilestoneShortLabel(c.milestone_type);
+    var icon = c.milestone_type === 'milestone_10' ? '🥉'
+             : c.milestone_type === 'milestone_30' ? '🥈'
+             : c.milestone_type === 'milestone_60' ? '🥇'
+             : c.milestone_type === 'milestone_100' ? '💎' : '🏅';
+
+    html += '<div class="bg-white/15 backdrop-blur-md rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-white/20 hover:bg-white/25 transition-all">';
+    html += '  <div class="flex items-center gap-3">';
+    html += '    <span class="text-2xl shrink-0">' + icon + '</span>';
+    html += '    <div>';
+    html += '      <div class="font-bold text-sm text-white flex items-center gap-2 flex-wrap">';
+    html += '        <span>' + escapeHtml(formatStudentName(c)) + '</span>';
+    html += '        <span class="text-xs px-2 py-0.5 rounded-full bg-white/25 text-white font-medium">' + escapeHtml(badgeName) + '</span>';
+    html += '      </div>';
+    html += '      <div class="text-xs text-amber-100 mt-0.5">';
+    html += '        上课时间: ' + c.date + ' ' + formatTime(c.start_time) + ' · 科目: ' + escapeHtml(c.subject || 'English');
+    html += '      </div>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '  <button type="button" onclick="openMilestoneFromPending(' + idx + ')" class="cursor-pointer px-4 py-1.5 bg-white text-orange-700 hover:bg-orange-50 rounded-lg text-xs font-bold shadow-md transition-transform hover:scale-105 shrink-0 flex items-center justify-center gap-1.5">';
+    html += '    <span>✍️</span> 立即填写阶段报告 (Write Report)';
+    html += '  </button>';
+    html += '</div>';
+  });
+
+  listEl.innerHTML = html;
+}
+
+function openMilestoneForClass(cls) {
+  if (!cls || !cls.milestone_type) return;
+  var reportType = cls.milestone_type;
+  var info = MILESTONE_INFO[reportType] || { lessons: 10 };
+  var m = {
+    type: 'milestone',
+    completedCount: info.lessons || 10,
+    reportType: reportType
+  };
+  openMilestoneReport(cls, m, reportType);
+}
+
+function openMilestoneFromPending(idx) {
+  var cls = window_pendingMilestones[idx];
+  if (cls) openMilestoneForClass(cls);
+}
+
+function openMilestoneForTodayClass(idx) {
+  var cls = window_todayClasses[idx];
+  if (cls) openMilestoneForClass(cls);
+}
+
+function openMilestoneFromHistory(globalIdx) {
+  var cls = (window_historyClasses || window_allPastClasses)[globalIdx];
+  if (cls) openMilestoneForClass(cls);
+}
+
+function openMilestoneForClassObj(cls) {
+  if (cls) openMilestoneForClass(cls);
+}
+
+// Mode A Prompt functions
+function showMilestonePrompt(cls, m, reportType) {
+  pendingPromptClass = cls;
+  pendingPromptMilestone = m;
+  pendingPromptReportType = reportType;
+
+  var info = MILESTONE_INFO[reportType] || { title: 'Milestone Reached!', badge: 'Milestone' };
+  var titleEl = document.getElementById('ms-prompt-title');
+  var subEl = document.getElementById('ms-prompt-subtitle');
+  var nameEl = document.getElementById('ms-prompt-student-name');
+  var countEl = document.getElementById('ms-prompt-count-text');
+
+  if (titleEl) titleEl.textContent = '🎉 里程碑课时达成！';
+  if (subEl) subEl.textContent = info.title || 'Milestone Reached';
+  if (nameEl) nameEl.textContent = formatStudentName(cls);
+  if (countEl) countEl.textContent = (m.completedCount ? ('第 ' + m.completedCount + ' 课') : (info.lessons ? ('第 ' + info.lessons + ' 课') : '里程碑课时'));
+
+  var modal = document.getElementById('milestone-prompt-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+}
+
+function closeMilestonePromptModal(later) {
+  var modal = document.getElementById('milestone-prompt-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+  if (later) {
+    // Teacher chose to write later: refresh data so the reminder banner and tags are visible
+    loadTeacherData();
+  }
+}
+
+function proceedToMilestoneReportNow() {
+  var cls = pendingPromptClass;
+  var m = pendingPromptMilestone;
+  var rType = pendingPromptReportType;
+  closeMilestonePromptModal(false);
+  if (cls && rType) {
+    openMilestoneReport(cls, m, rType);
+  }
+}
+
 async function openMilestoneReport(cls, m, reportType) {
   milestoneClass = cls;
   milestoneType = reportType;
-  milestoneData = m;
+  milestoneData = m || {};
+
+  var existingReport = getMilestoneReportForClass(cls);
+  window_currentMilestoneReportId = existingReport ? existingReport.id : null;
 
   var info = MILESTONE_INFO[reportType] || { title: 'Milestone Report', desc: '', color: '#6366F1', badge: '🏅 阶段荣耀', lessons: 10, tips: {} };
   var banner = document.getElementById('milestone-banner');
   banner.style.background = info.color;
-  document.getElementById('ms-banner-title').textContent = info.title;
+  document.getElementById('ms-banner-title').textContent = existingReport ? (info.title + ' (Review & Edit / 查看与修改)') : info.title;
   document.getElementById('ms-banner-desc').textContent = info.desc;
 
   var studentText = '<b>' + escapeHtml(formatStudentName(cls)) + '</b> · ' + cls.date;
-  if (m.levelUp && m.levelUp.fromLevel) {
-    studentText += ' · <span class="text-purple-700 font-semibold">' + escapeHtml(m.levelUp.fromLevel) + ' ➔ ' + escapeHtml(m.levelUp.toLevel) + '</span>';
+  if (milestoneData.levelUp && milestoneData.levelUp.fromLevel) {
+    studentText += ' · <span class="text-purple-700 font-semibold">' + escapeHtml(milestoneData.levelUp.fromLevel) + ' ➔ ' + escapeHtml(milestoneData.levelUp.toLevel) + '</span>';
   }
   document.getElementById('ms-student-summary').innerHTML = studentText;
-  document.getElementById('ms-badge-pill').textContent = info.badge || '🏅 里程碑';
-  document.getElementById('ms-badge-name').value = info.badge || '';
-
-  // Set default dimensional ratings to 5 stars
-  ['score_listening', 'score_speaking', 'score_interaction', 'score_pronunciation'].forEach(function(dim) {
-    var rating = document.querySelector('.ms-star-rating[data-name="' + dim + '"]');
-    if (rating) {
-      rating.querySelectorAll('.star').forEach(function(s) { s.classList.add('active'); });
-      var hidden = rating.querySelector('input[type="hidden"]');
-      if (hidden) hidden.value = '5';
-    }
-  });
+  document.getElementById('ms-badge-pill').textContent = (existingReport && existingReport.badge_name) ? existingReport.badge_name : (info.badge || '🏅 里程碑');
+  document.getElementById('ms-badge-name').value = (existingReport && existingReport.badge_name) ? existingReport.badge_name : (info.badge || '');
 
   // Pre-fill metrics
-  var defaultLessons = info.lessons || (m.lessonsCompleted || 10);
-  document.getElementById('ms-total-lessons').value = defaultLessons;
-  document.getElementById('ms-vocab-count').value = '';
-  document.getElementById('ms-highlight-url').value = cls.fb_recording ? (parseRecordingInfo(cls.fb_recording)?.url || '') : '';
-
-  // Set placeholders according to stage tips
+  var defaultLessons = info.lessons || (milestoneData.completedCount || 10);
   var tips = info.tips || {};
   document.getElementById('ms-summary').placeholder = tips.summary || 'Overall assessment of this period...';
   document.getElementById('ms-strengths').placeholder = tips.strengths || 'What the student did well...';
@@ -2015,16 +2269,65 @@ async function openMilestoneReport(cls, m, reportType) {
   document.getElementById('ms-recommendation').placeholder = tips.recommendation || 'What to focus on next...';
   document.getElementById('ms-message').placeholder = tips.message || 'A personal message to the parents...';
 
-  // Clear previous values
-  document.getElementById('ms-summary').value = '';
-  document.getElementById('ms-strengths').value = '';
-  document.getElementById('ms-improvements').value = '';
-  document.getElementById('ms-recommendation').value = '';
-  document.getElementById('ms-message').value = '';
+  var submitBtn = document.getElementById('ms-submit-btn');
+
+  if (existingReport) {
+    // Populate with existing saved report values
+    document.getElementById('ms-total-lessons').value = existingReport.total_lessons_completed || defaultLessons;
+    document.getElementById('ms-vocab-count').value = existingReport.vocabulary_count || '';
+    document.getElementById('ms-highlight-url').value = existingReport.highlight_recording_url || '';
+    document.getElementById('ms-summary').value = existingReport.summary || '';
+    document.getElementById('ms-strengths').value = existingReport.strengths || '';
+    document.getElementById('ms-improvements').value = existingReport.improvements || '';
+    document.getElementById('ms-recommendation').value = existingReport.recommendation || '';
+    document.getElementById('ms-message').value = existingReport.teacher_message || '';
+
+    // Set dimensional star ratings from existing report
+    var dims = [
+      { name: 'score_listening', val: existingReport.score_listening || 5 },
+      { name: 'score_speaking', val: existingReport.score_speaking || 5 },
+      { name: 'score_interaction', val: existingReport.score_interaction || 5 },
+      { name: 'score_pronunciation', val: existingReport.score_pronunciation || 5 }
+    ];
+    dims.forEach(function(item) {
+      var rating = document.querySelector('.ms-star-rating[data-name="' + item.name + '"]');
+      if (rating) {
+        rating.querySelectorAll('.star').forEach(function(s) {
+          if (parseInt(s.getAttribute('data-val')) <= item.val) s.classList.add('active');
+          else s.classList.remove('active');
+        });
+        var hidden = rating.querySelector('input[type="hidden"]');
+        if (hidden) hidden.value = item.val;
+      }
+    });
+
+    if (submitBtn) submitBtn.textContent = '💾 Update Milestone Report (更新阶段报告)';
+  } else {
+    // New report: reset to default
+    ['score_listening', 'score_speaking', 'score_interaction', 'score_pronunciation'].forEach(function(dim) {
+      var rating = document.querySelector('.ms-star-rating[data-name="' + dim + '"]');
+      if (rating) {
+        rating.querySelectorAll('.star').forEach(function(s) { s.classList.add('active'); });
+        var hidden = rating.querySelector('input[type="hidden"]');
+        if (hidden) hidden.value = '5';
+      }
+    });
+
+    document.getElementById('ms-total-lessons').value = defaultLessons;
+    document.getElementById('ms-vocab-count').value = '';
+    document.getElementById('ms-highlight-url').value = cls.fb_recording ? (parseRecordingInfo(cls.fb_recording)?.url || '') : '';
+    document.getElementById('ms-summary').value = '';
+    document.getElementById('ms-strengths').value = '';
+    document.getElementById('ms-improvements').value = '';
+    document.getElementById('ms-recommendation').value = '';
+    document.getElementById('ms-message').value = '';
+
+    if (submitBtn) submitBtn.textContent = '🎉 Submit Milestone Report (出具阶段报告)';
+  }
 
   // Show stats card placeholder
-  document.getElementById('ms-stat-completed').textContent = defaultLessons + ' lessons';
-  document.getElementById('ms-stat-vocab').textContent = 'Loading...';
+  document.getElementById('ms-stat-completed').textContent = (existingReport?.total_lessons_completed || defaultLessons) + ' lessons';
+  document.getElementById('ms-stat-vocab').textContent = existingReport?.vocabulary_count ? (existingReport.vocabulary_count + ' words') : 'Loading...';
   document.getElementById('ms-stat-badge').textContent = info.badge || '-';
 
   var chipsBox = document.getElementById('ms-vocab-chips-box');
@@ -2033,20 +2336,22 @@ async function openMilestoneReport(cls, m, reportType) {
   document.getElementById('milestone-modal').classList.remove('hidden');
   document.getElementById('milestone-modal').classList.add('flex');
 
-  // Async fetch stats from backend to auto-populate
+  // Async fetch stats from backend to auto-populate if creating or vocab empty
   try {
     var statsRes = await apiGet('/progress-reports/stats/' + cls.student_id);
     var stats = statsRes.data || statsRes;
     if (stats) {
       if (stats.completed_count) {
         document.getElementById('ms-stat-completed').textContent = stats.completed_count + ' lessons';
-        if (stats.completed_count >= defaultLessons) {
+        if (!existingReport && stats.completed_count >= defaultLessons) {
           document.getElementById('ms-total-lessons').value = stats.completed_count;
         }
       }
       if (stats.vocabulary_count !== undefined) {
         document.getElementById('ms-stat-vocab').textContent = stats.vocabulary_count + ' words';
-        document.getElementById('ms-vocab-count').value = stats.vocabulary_count;
+        if (!existingReport || !document.getElementById('ms-vocab-count').value) {
+          document.getElementById('ms-vocab-count').value = stats.vocabulary_count;
+        }
       }
       if (stats.sample_words && stats.sample_words.length > 0 && chipsBox) {
         chipsBox.classList.remove('hidden');
@@ -2054,7 +2359,7 @@ async function openMilestoneReport(cls, m, reportType) {
       }
     }
   } catch(e) {
-    document.getElementById('ms-stat-vocab').textContent = '~100+ words';
+    if (!existingReport) document.getElementById('ms-stat-vocab').textContent = '~100+ words';
   }
 }
 
@@ -2104,7 +2409,7 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
   if (!milestoneClass) return;
 
   var submitBtn = document.getElementById('ms-submit-btn');
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving...'; }
 
   var teacherId = getTeacherId();
   var teacherName = '';
@@ -2115,7 +2420,6 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
   } catch(e) {}
 
   var reportType = milestoneData.reportType || (milestoneData.levelUp ? milestoneData.levelUp.reportType : milestoneType);
-
   var totalLessons = parseInt(document.getElementById('ms-total-lessons').value);
   var vocabCount = parseInt(document.getElementById('ms-vocab-count').value);
 
@@ -2144,23 +2448,22 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
   };
 
   try {
-    var res = await fetch(API_BASE + '/progress-reports', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-      body: JSON.stringify(reportData)
-    });
-    var result = await res.json();
-    if (result.success || result.data) {
-      alert('Progress report submitted successfully! 🎉');
-      closeMilestoneModal();
-      loadTeacherData();
+    if (window_currentMilestoneReportId) {
+      await apiPatch('/progress-reports/' + window_currentMilestoneReportId, reportData);
+      alert('Milestone report updated successfully! 💾');
     } else {
-      alert('Failed: ' + (result.error?.message || 'Unknown error'));
+      await apiPost('/progress-reports', reportData);
+      alert('Milestone report submitted successfully! 🎉');
     }
+    closeMilestoneModal();
+    loadTeacherData();
   } catch(err) {
-    alert('Failed to submit report: ' + err.message);
+    alert('Failed to save report: ' + err.message);
   } finally {
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🎉 Submit Milestone Report'; }
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = window_currentMilestoneReportId ? '💾 Update Milestone Report (更新阶段报告)' : '🎉 Submit Milestone Report (出具阶段报告)';
+    }
   }
 });
 
@@ -2665,14 +2968,14 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
     }
     alert(msg);
 
-    // Check milestone trigger (only when completed)
+    // Check milestone trigger (Mode A: non-blocking celebratory prompt)
     if (status === 'completed' && responseData.milestone && !responseData.milestone.alreadyExists) {
       var m = responseData.milestone;
       var reportType = m.reportType || (m.levelUp ? m.levelUp.reportType : null);
       if (reportType) {
         setTimeout(function() {
-          openMilestoneReport(selectedClass, m, reportType);
-        }, 500);
+          showMilestonePrompt(selectedClass, m, reportType);
+        }, 400);
       }
     }
   } catch (err) {

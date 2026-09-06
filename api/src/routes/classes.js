@@ -659,6 +659,7 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
         if (milestone) {
           const reportType = milestone.reportType || milestone.levelUp?.reportType;
           if (reportType) {
+            await DB.prepare('UPDATE classes SET milestone_type = ? WHERE id = ?').bind(reportType, existing.id).run();
             const existingReport = await DB.prepare(
               'SELECT id FROM progress_reports WHERE student_id = ? AND report_type = ? ORDER BY created_at DESC LIMIT 1'
             ).bind(existing.student_id, reportType).first();
@@ -770,6 +771,7 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
       page_from: updated.page_from,
       page_to: updated.page_to,
       duration: updated.duration,
+      milestone_type: updated.milestone_type,
       milestone: milestone
     }));
   } catch (err) {

@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS classes (
   page_from INTEGER,
   page_to INTEGER,
   actual_end_at TEXT,
+  milestone_type TEXT,
   idempotency_key TEXT UNIQUE,
   is_self_paid INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

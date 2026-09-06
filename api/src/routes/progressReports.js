@@ -56,6 +56,8 @@ progressReports.get('/stats/:student_id', async (c) => {
 progressReports.get('/', async (c) => {
   const DB = c.env.DB;
   const studentId = c.req.query('student_id');
+  const teacherId = c.req.query('teacher_id');
+  const classId = c.req.query('class_id');
   const page = c.req.query('page') || '1';
   const pageSize = c.req.query('page_size') || '50';
 
@@ -65,6 +67,14 @@ progressReports.get('/', async (c) => {
   if (studentId) {
     whereClause += ' AND pr.student_id = ?';
     params.push(parseInt(studentId));
+  }
+  if (teacherId) {
+    whereClause += ' AND pr.teacher_id = ?';
+    params.push(parseInt(teacherId));
+  }
+  if (classId) {
+    whereClause += ' AND pr.class_id = ?';
+    params.push(parseInt(classId));
   }
 
   const countResult = await DB.prepare(`SELECT COUNT(*) as total FROM progress_reports pr ${whereClause}`).bind(...params).first();
