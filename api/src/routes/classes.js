@@ -5,6 +5,7 @@
 import { Hono } from 'hono';
 import { classSchema, classUpdateSchema, validate, validateParams, idParamSchema, paginationSchema, validateQuery } from '../utils/validation.js';
 import { success, error, calculatePagination } from '../utils/response.js';
+import { createPublishedMilestoneReport } from './progressReports.js';
 
 const classes = new Hono();
 
@@ -666,6 +667,34 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
                 'SELECT id FROM progress_reports WHERE student_id = ? AND report_type = ? ORDER BY created_at DESC LIMIT 1'
               ).bind(existing.student_id, reportType).first();
               milestone.alreadyExists = !!existingReport;
+
+              // 🌟 自动在后台生成阶段报告并标记为 published
+              if (!milestone.alreadyExists) {
+                const autoGenerateReportTask = async () => {
+                  try {
+                    console.log(`[AutoMilestone] Auto-generating ${reportType} report for student ${existing.student_id}...`);
+                    await createPublishedMilestoneReport({
+                      DB,
+                      env: c.env,
+                      student_id: existing.student_id,
+                      milestone_type: reportType,
+                      class_id: existing.id,
+                      teacher_id: existing.teacher_id,
+                      teacher_name: existing.teacher_name,
+                      organization_id: existing.organization_id
+                    });
+                    console.log(`[AutoMilestone] ${reportType} report published successfully for student ${existing.student_id}`);
+                  } catch (genErr) {
+                    console.error(`[AutoMilestone] Auto generation failed for student ${existing.student_id}:`, genErr);
+                  }
+                };
+
+                if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
+                  c.executionCtx.waitUntil(autoGenerateReportTask());
+                } else {
+                  autoGenerateReportTask().catch(e => console.error('[AutoMilestone] Task error:', e));
+                }
+              }
             }
           }
         }

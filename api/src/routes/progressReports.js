@@ -181,15 +181,14 @@ const aiGenerateSchema = z.object({
   teacher_id: z.coerce.number().int().positive().optional().nullable()
 });
 
-progressReports.post('/ai-generate', validate(aiGenerateSchema), async (c) => {
-  try {
-    const DB = c.env.DB;
-    const { student_id, milestone_type, class_id, teacher_id } = c.req.validated;
-
+/**
+ * Core function to generate milestone report data using DB records + LLM
+ */
+export async function generateMilestoneReportData({ DB, env, student_id, milestone_type, class_id, teacher_id, headers = {} }) {
   const student = await DB.prepare('SELECT id, name, english_name, grade, status FROM students WHERE id = ?').bind(student_id).first();
-  if (!student) return c.json(error('NOT_FOUND', 'Student not found'), 404);
+  if (!student) throw new Error('Student not found');
   if (student.status === 'graduated') {
-    return c.json(error('STUDENT_GRADUATED', 'The student has graduated. Milestone reports cannot be generated for graduated students.'), 400);
+    throw new Error('The student has graduated. Milestone reports cannot be generated for graduated students.');
   }
 
   // Determine target lesson count
@@ -297,9 +296,9 @@ progressReports.post('/ai-generate', validate(aiGenerateSchema), async (c) => {
   let isFromLLM = false;
 
   try {
-    const baseUrl = c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
-    const apiKey = c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
-    const preferredModel = c.req.header('x-llm-model') || c.env.LLM_MODEL || 'meta/llama-3.1-8b-instruct';
+    const baseUrl = (headers && headers['x-llm-base-url']) || (env && env.LLM_BASE_URL) || 'https://integrate.api.nvidia.com/v1';
+    const apiKey = (headers && headers['x-llm-api-key']) || (env && env.LLM_API_KEY);
+    const preferredModel = (headers && headers['x-llm-model']) || (env && env.LLM_MODEL) || 'nvidia/nemotron-3-ultra-550b-a55b';
 
     if (apiKey) {
       const systemPrompt = `You are a Senior ESL Pedagogical Director and Educational Psychologist at SunnyBridge Academy. 
@@ -471,40 +470,134 @@ Remember: Output ONLY valid JSON matching the schema defined in the system promp
     };
   }
 
-    const normalizeBulletList = (val) => {
-      if (Array.isArray(val)) {
-        return val.map(item => (typeof item === 'string' && (item.startsWith('•') || item.startsWith('-') || item.startsWith('*'))) ? item : `• ${item}`).join('\n');
-      }
-      return typeof val === 'string' ? val : '';
-    };
-    const normalizeParagraph = (val) => {
-      if (Array.isArray(val)) {
-        return val.join('\n\n');
-      }
-      return typeof val === 'string' ? val : '';
-    };
+  const normalizeBulletList = (val) => {
+    if (Array.isArray(val)) {
+      return val.map(item => (typeof item === 'string' && (item.startsWith('•') || item.startsWith('-') || item.startsWith('*'))) ? item : `• ${item}`).join('\n');
+    }
+    return typeof val === 'string' ? val : '';
+  };
+  const normalizeParagraph = (val) => {
+    if (Array.isArray(val)) {
+      return val.join('\n\n');
+    }
+    return typeof val === 'string' ? val : '';
+  };
 
-    return c.json(success({
-      summary: normalizeParagraph(generatedData.summary),
-      stage_growth_insights: normalizeParagraph(generatedData.stage_growth_insights),
-      strengths: normalizeBulletList(generatedData.strengths),
-      improvements: normalizeBulletList(generatedData.improvements),
-      next_phase_strategy: JSON.stringify(generatedData.next_phase_strategy || []),
-      radar_scores: JSON.stringify(generatedData.radar_scores || {}),
-      recommendation: normalizeParagraph(generatedData.recommendation),
-      teacher_message: normalizeParagraph(generatedData.teacher_message),
-      score_listening: parseInt(generatedData.score_listening) || 5,
-      score_speaking: parseInt(generatedData.score_speaking) || 5,
-      score_interaction: parseInt(generatedData.score_interaction) || 5,
-      score_pronunciation: parseInt(generatedData.score_pronunciation) || 4,
-      badge_name: generatedData.badge_name || badgeName,
-      total_lessons_completed: actualCount || targetLessons,
-      vocabulary_count: allVocab.length,
-      sample_words: frequentWords.slice(0, 25),
-      is_llm: isFromLLM
-    }));
+  return {
+    summary: normalizeParagraph(generatedData.summary),
+    stage_growth_insights: normalizeParagraph(generatedData.stage_growth_insights),
+    strengths: normalizeBulletList(generatedData.strengths),
+    improvements: normalizeBulletList(generatedData.improvements),
+    next_phase_strategy: typeof generatedData.next_phase_strategy === 'string' ? generatedData.next_phase_strategy : JSON.stringify(generatedData.next_phase_strategy || []),
+    radar_scores: typeof generatedData.radar_scores === 'string' ? generatedData.radar_scores : JSON.stringify(generatedData.radar_scores || {}),
+    recommendation: normalizeParagraph(generatedData.recommendation),
+    teacher_message: normalizeParagraph(generatedData.teacher_message),
+    score_listening: parseInt(generatedData.score_listening) || 5,
+    score_speaking: parseInt(generatedData.score_speaking) || 5,
+    score_interaction: parseInt(generatedData.score_interaction) || 5,
+    score_pronunciation: parseInt(generatedData.score_pronunciation) || 4,
+    badge_name: generatedData.badge_name || badgeName,
+    total_lessons_completed: actualCount || targetLessons,
+    vocabulary_count: allVocab.length,
+    sample_words: frequentWords.slice(0, 25),
+    is_llm: isFromLLM
+  };
+}
+
+/**
+ * Automatically create and publish a milestone report in the database
+ */
+export async function createPublishedMilestoneReport({
+  DB,
+  env,
+  student_id,
+  milestone_type,
+  class_id = null,
+  teacher_id = null,
+  teacher_name = null,
+  organization_id = null,
+  headers = {}
+}) {
+  const generated = await generateMilestoneReportData({
+    DB,
+    env,
+    student_id,
+    milestone_type,
+    class_id,
+    teacher_id,
+    headers
+  });
+
+  const result = await DB.prepare(`
+    INSERT INTO progress_reports (
+      student_id, class_id, report_type, teacher_id, teacher_name,
+      summary, strengths, improvements, recommendation, teacher_message,
+      from_level, to_level,
+      total_lessons_completed, vocabulary_count,
+      score_listening, score_speaking, score_interaction, score_pronunciation,
+      highlight_recording_url, badge_name,
+      stage_growth_insights, radar_scores, next_phase_strategy,
+      status, organization_id
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)
+  `).bind(
+    student_id,
+    class_id || null,
+    milestone_type,
+    teacher_id || null,
+    teacher_name || null,
+    generated.summary || null,
+    generated.strengths || null,
+    generated.improvements || null,
+    generated.recommendation || null,
+    generated.teacher_message || null,
+    null,
+    null,
+    generated.total_lessons_completed || 0,
+    generated.vocabulary_count || 0,
+    generated.score_listening || 5,
+    generated.score_speaking || 5,
+    generated.score_interaction || 5,
+    generated.score_pronunciation || 4,
+    null,
+    generated.badge_name || null,
+    generated.stage_growth_insights || null,
+    generated.radar_scores || null,
+    generated.next_phase_strategy || null,
+    organization_id || null
+  ).run();
+
+  return { id: result.meta.last_row_id, reportData: generated };
+}
+
+progressReports.post('/ai-generate', validate(aiGenerateSchema), async (c) => {
+  try {
+    const DB = c.env.DB;
+    const { student_id, milestone_type, class_id, teacher_id } = c.req.validated;
+
+    const data = await generateMilestoneReportData({
+      DB,
+      env: c.env,
+      student_id,
+      milestone_type,
+      class_id,
+      teacher_id,
+      headers: {
+        'x-llm-base-url': c.req.header('x-llm-base-url'),
+        'x-llm-api-key': c.req.header('x-llm-api-key'),
+        'x-llm-model': c.req.header('x-llm-model')
+      }
+    });
+
+    return c.json(success(data));
   } catch (err) {
     console.error('ai-generate fatal error:', err);
+    if (err.message.includes('not found')) {
+      return c.json(error('NOT_FOUND', err.message), 404);
+    }
+    if (err.message.includes('graduated')) {
+      return c.json(error('STUDENT_GRADUATED', err.message), 400);
+    }
     return c.json(error('AI_GENERATE_ERROR', err.message || 'Internal error in AI generation'), 500);
   }
 });

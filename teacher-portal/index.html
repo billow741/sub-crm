@@ -944,19 +944,13 @@ function showViewFeedback(idx) {
 
     var html = '';
 
-    // 🏆 Milestone Reminder / Status in Feedback View
+    // 🏆 Milestone Status in Feedback View
     if (cls.milestone_type) {
       var isDone = hasSubmittedMilestoneReport(cls);
-      var isGrad = window_studentStatusMap[cls.student_id] === 'graduated';
       if (isDone) {
         html += '<div class="p-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center justify-between gap-3 mb-3">' +
-          '<div><div class="font-bold text-purple-900 text-sm flex items-center gap-1.5"><span>🏅</span> ' + formatMilestoneShortLabel(cls.milestone_type) + ' Milestone Report Submitted</div><div class="text-xs text-purple-700 mt-0.5">The milestone report has been submitted and shared with parents.</div></div>' +
-          '<button type="button" onclick="closeViewModal(); openMilestoneForClassObj(currentViewClass);" class="cursor-pointer px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs">👁️ View / Edit Report</button>' +
-          '</div>';
-      } else if (!isGrad) {
-        html += '<div class="p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-center justify-between gap-3 mb-3">' +
-          '<div><div class="font-bold text-amber-900 text-sm flex items-center gap-1.5"><span>⚠️</span> This was a ' + formatMilestoneShortLabel(cls.milestone_type) + ' Milestone Lesson!</div><div class="text-xs text-amber-800 mt-0.5">A milestone report has not been submitted yet. Please write it when free.</div></div>' +
-          '<button type="button" onclick="closeViewModal(); openMilestoneForClassObj(currentViewClass);" class="cursor-pointer px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs">✍️ Write Milestone Report</button>' +
+          '<div><div class="font-bold text-purple-900 text-sm flex items-center gap-1.5"><span>🏅</span> ' + formatMilestoneShortLabel(cls.milestone_type) + ' Milestone Assessment Report</div><div class="text-xs text-purple-700 mt-0.5">The automated pedagogical assessment is published and accessible to parents.</div></div>' +
+          '<button type="button" onclick="closeViewModal(); openMilestoneForClassObj(currentViewClass);" class="cursor-pointer px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs">👁️ View Report</button>' +
           '</div>';
       }
     }
@@ -1231,12 +1225,10 @@ async function loadTeacherData() {
     upcoming.sort(function(a, b) { return a.date.localeCompare(b.date); });
     past.sort(function(a, b) { return b.date.localeCompare(a.date); });
 
-    // Calculate pending milestones across teacher classes (excluding graduated students)
-    window_pendingMilestones = teacherClasses.filter(function(c) {
-      var isGraduated = window_studentStatusMap[c.student_id] === 'graduated';
-      return c.status === 'completed' && c.milestone_type && !isGraduated && !hasSubmittedMilestoneReport(c);
-    });
-    renderMilestoneReminderBanner(window_pendingMilestones);
+    // Milestone reports are now generated automatically by the AI pedagogical engine.
+    window_pendingMilestones = [];
+    var mbEl = document.getElementById('milestone-reminder-banner');
+    if (mbEl) mbEl.classList.add('hidden');
 
     renderTodayClasses(todayClasses);
     renderUpcoming(upcoming.slice(0, 10));
@@ -2099,11 +2091,7 @@ function renderHistory() {
     var isGrad = window_studentStatusMap[c.student_id] === 'graduated';
     var msTag = '';
     if (c.milestone_type) {
-      if (hasSubmittedMilestoneReport(c)) {
-        msTag = '<span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold" title="Milestone Report Submitted">🏅 ' + formatMilestoneShortLabel(c.milestone_type) + ' (Done)</span>';
-      } else if (!isGrad) {
-        msTag = '<span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-300 animate-pulse" title="Milestone Report Pending">⚠️ ' + formatMilestoneShortLabel(c.milestone_type) + ' Due</span>';
-      }
+      msTag = '<span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium" title="Milestone Stage">🏅 ' + formatMilestoneShortLabel(c.milestone_type) + '</span>';
     }
 
     html += '<tr class="hover:bg-gray-50">';
@@ -2120,11 +2108,7 @@ function renderHistory() {
        } else {
          var msAction = '';
          if (c.milestone_type) {
-           if (hasSubmittedMilestoneReport(c)) {
-             msAction = '<button onclick="openMilestoneFromHistory(' + globalIdx + '); return false;" class="cursor-pointer px-2.5 py-1 bg-purple-100 text-purple-700 rounded text-xs hover:bg-purple-200 font-medium whitespace-nowrap" title="View / Edit Milestone Report">🏅 Milestone</button>';
-           } else if (!isGrad) {
-             msAction = '<button onclick="openMilestoneFromHistory(' + globalIdx + '); return false;" class="cursor-pointer px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 text-white rounded text-xs font-bold shadow-xs whitespace-nowrap" title="Write Milestone Report">✍️ Write Milestone</button>';
-           }
+           msAction = '<button onclick="openMilestoneFromHistory(' + globalIdx + '); return false;" class="cursor-pointer px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded text-xs font-medium whitespace-nowrap" title="View Milestone Assessment">🏅 Milestone</button>';
          }
          html += '<td class="px-4 py-3"><div class="flex items-center gap-1.5 flex-wrap"><button onclick="showViewFeedback(' + globalIdx + '); return false;" class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200">View</button>' + msAction + '</div></td>';
        }
@@ -3227,18 +3211,6 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
       msg = 'Feedback submitted.';
     }
     alert(msg);
-
-    // Check milestone trigger (Mode A: non-blocking celebratory prompt, excluding graduated students)
-    var isGrad = (selectedClass && window_studentStatusMap[selectedClass.student_id] === 'graduated');
-    if (status === 'completed' && !isGrad && responseData.milestone && !responseData.milestone.alreadyExists) {
-      var m = responseData.milestone;
-      var reportType = m.reportType || (m.levelUp ? m.levelUp.reportType : null);
-      if (reportType) {
-        setTimeout(function() {
-          showMilestonePrompt(selectedClass, m, reportType);
-        }, 400);
-      }
-    }
   } catch (err) {
     alert('Failed to submit: ' + err.message);
   } finally {

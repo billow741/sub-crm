@@ -3798,11 +3798,11 @@ function renderStudyProfile(student, allClasses) {
   var progressReports = window_progressReports || [];
 
   var REPORT_TYPE_INFO = {
-    milestone_10: { icon: '🥉', label: '第 10 课时 · 入门适应期评估', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
-    milestone_30: { icon: '🥈', label: '第 30 课时 · 进阶强化期评估', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' },
-    milestone_60: { icon: '🥇', label: '第 60 课时 · 学期大纲总评估', color: '#E26B31', bg: 'rgba(226,107,49,0.08)' },
-    milestone_100: { icon: '💎', label: '第 100 课时 · 百课荣耀卓越评估', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' },
-    level_up: { icon: '🚀', label: '能力进阶 · 等级跃迁报告', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' }
+    milestone_10: { icon: '🥉', label: '第 10 课时 · 智能教研阶段评估', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
+    milestone_30: { icon: '🥈', label: '第 30 课时 · 智能教研阶段评估', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' },
+    milestone_60: { icon: '🥇', label: '第 60 课时 · 智能教研阶段评估', color: '#E26B31', bg: 'rgba(226,107,49,0.08)' },
+    milestone_100: { icon: '💎', label: '第 100 课时 · 智能教研阶段评估', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' },
+    level_up: { icon: '🚀', label: '能力进阶 · 智能教研跃迁评估', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' }
   };
 
   var rpHtml = '';
@@ -3810,18 +3810,18 @@ function renderStudyProfile(student, allClasses) {
   // 1. 阶段性成长报告区域
   rpHtml += '<div style="margin-bottom:24px;">';
   rpHtml += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
-  rpHtml += '<h3 style="font-size:16px;font-weight:700;color:var(--sb-dark);display:flex;align-items:center;gap:6px;"><span>🏆 阶段性进阶成长报告</span><span style="font-size:12px;padding:2px 8px;background:rgba(99,102,241,0.1);color:#6366F1;border-radius:12px;font-weight:600;">共 ' + progressReports.length + ' 份</span></h3>';
+  rpHtml += '<h3 style="font-size:16px;font-weight:700;color:var(--sb-dark);display:flex;align-items:center;gap:6px;"><span>🏆 智能教研阶段评估报告</span><span style="font-size:12px;padding:2px 8px;background:rgba(99,102,241,0.1);color:#6366F1;border-radius:12px;font-weight:600;">共 ' + progressReports.length + ' 份</span></h3>';
   rpHtml += '</div>';
 
   if (progressReports.length === 0) {
-    rpHtml += '<div class="sp-card" style="text-align:center;padding:24px;color:var(--sb-muted);font-size:13px;background:#FAFCFF;border:1px dashed #D3E2F2;border-radius:14px;">🌱 学习进行中，完成第 10、30、60、100 节课或晋升等级时将自动生成阶段进阶大考报告</div>';
+    rpHtml += '<div class="sp-card" style="text-align:center;padding:24px;color:var(--sb-muted);font-size:13px;background:#FAFCFF;border:1px dashed #D3E2F2;border-radius:14px;">🌱 学习进行中，完成第 10、30、60、100 节课或晋升等级时，智能教研系统将自动出具全量大数据阶段评估报告</div>';
   } else {
     var prCounter = 0;
     progressReports.forEach(function(r) {
       prCounter++;
       var isFirstPr = prCounter === 1; // 仅最新一份阶段报告默认展开
       var collapseId = 'pr-body-' + r.id;
-      var typeInfo = REPORT_TYPE_INFO[r.report_type] || { icon: '📋', label: '阶段成长报告', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' };
+      var typeInfo = REPORT_TYPE_INFO[r.report_type] || { icon: '📋', label: '智能教研阶段评估', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' };
       
       rpHtml += '<div class="sp-card" style="border-left:4px solid ' + typeInfo.color + ';border-radius:14px;box-shadow:0 4px 20px rgba(28,36,75,0.05);margin-bottom:14px;padding:18px 20px;">';
       
@@ -3836,7 +3836,7 @@ function renderStudyProfile(student, allClasses) {
         rpHtml += '<span style="font-size:11px;padding:1px 8px;background:rgba(245,166,35,0.2);color:#D97706;border-radius:10px;font-weight:700;">' + spEsc(r.badge_name) + '</span>';
       }
       rpHtml += '</div>';
-      rpHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:2px;">执教外教: <b style="color:var(--sb-dark);">' + spEsc(r.teacher_name || '-') + '</b> · 生成日期: ' + ((r.created_at || '').substring(0, 10)) + '</div>';
+      rpHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:2px;">评定机制: <b style="color:var(--sb-dark);">教学大数据与智能教研客观诊断</b> · 授课外教: <b style="color:var(--sb-dark);">' + spEsc(r.teacher_name || '-') + '</b> · 评估日期: ' + ((r.created_at || '').substring(0, 10)) + '</div>';
       if (r.from_level || r.to_level) {
         rpHtml += '<div style="margin-top:6px;font-size:12px;color:#6D28D9;font-weight:600;">🎓 晋升: ' + spEsc(r.from_level || '入学') + ' ➔ ' + spEsc(r.to_level) + '</div>';
       }
@@ -4195,13 +4195,13 @@ function buildProgressReportHTML(r) {
   }
 
   var typeLabels = {
-    milestone_10: '第 10 课时 · 入门适应期评估报告',
-    milestone_30: '第 30 课时 · 进阶强化期评估报告',
-    milestone_60: '第 60 课时 · 学期大纲总评估报告',
-    milestone_100: '第 100 课时 · 百课荣耀卓越评估报告',
-    level_up: '能力进阶 · 等级跃迁报告'
+    milestone_10: '第 10 课时 · 智能教研阶段评估报告',
+    milestone_30: '第 30 课时 · 智能教研阶段评估报告',
+    milestone_60: '第 60 课时 · 智能教研阶段评估报告',
+    milestone_100: '第 100 课时 · 智能教研阶段评估报告',
+    level_up: '能力进阶 · 智能教研跃迁评估报告'
   };
-  var reportTitle = typeLabels[r.report_type] || '阶段成长评估报告';
+  var reportTitle = typeLabels[r.report_type] || '智能教研阶段评估报告';
 
   var h = '<div class="report-page">';
   h += '<div class="report-header">';
@@ -4210,14 +4210,15 @@ function buildProgressReportHTML(r) {
   h += '<div class="header-website">www.sunnybridge.qzz.io</div>';
   h += '</div>';
   h += '<div class="report-title"><h1>' + reportTitle + '</h1>';
-  h += '<div class="subtitle">Student Milestone Progress Report</div></div>';
+  h += '<div class="subtitle">AI & Big Data Smart Pedagogical Milestone Assessment</div></div>';
   h += '</div>';
 
   // Info
   h += '<div class="info-section">';
   h += '<div class="info-item"><div class="info-label">学生姓名 / Student Name</div><div class="info-value">' + escapeHtml(r.student_name || '') + (r.student_english_name ? ' (' + escapeHtml(r.student_english_name) + ')' : '') + '</div></div>';
-  h += '<div class="info-item"><div class="info-label">执教外教 / Teacher</div><div class="info-value">' + escapeHtml(r.teacher_name || '-') + '</div></div>';
-  h += '<div class="info-item"><div class="info-label">报告日期 / Date</div><div class="info-value">' + ((r.created_at || '').substring(0,10)) + '</div></div>';
+  h += '<div class="info-item"><div class="info-label">评定机制 / Assessment Engine</div><div class="info-value">教学大数据与智能教研客观诊断</div></div>';
+  h += '<div class="info-item"><div class="info-label">授课外教 / Teacher</div><div class="info-value">' + escapeHtml(r.teacher_name || '-') + '</div></div>';
+  h += '<div class="info-item"><div class="info-label">评估日期 / Date</div><div class="info-value">' + ((r.created_at || '').substring(0,10)) + '</div></div>';
   h += '<div class="info-item"><div class="info-label">当前阶段 / Level</div><div class="info-value">' + escapeHtml(r.to_level || r.from_level || '英语进阶') + '</div></div>';
   if (r.badge_name) {
     h += '<div class="info-item"><div class="info-label">荣誉成就 / Milestone Badge</div><div class="info-value" style="color:#D97706;font-weight:700;">' + escapeHtml(r.badge_name) + '</div></div>';
