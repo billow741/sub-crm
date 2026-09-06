@@ -14,16 +14,18 @@
     function renderRadarChart(scoresJson) {
       const canvas = document.getElementById('ms-radar-chart');
       const emptyMsg = document.getElementById('ms-radar-empty');
+      const barContainer = document.getElementById('ms-radar-dim-bars');
       if (!canvas) return;
       
       let scores = {};
       try { scores = typeof scoresJson === 'string' ? JSON.parse(scoresJson) : scoresJson; } catch(e){}
       
-      if (window.msRadarChart) { window.msRadarChart.destroy(); }
+      if (window.msRadarChart) { window.msRadarChart.destroy(); window.msRadarChart = null; }
       
       if (!scores || Object.keys(scores).length === 0) {
         if (emptyMsg) emptyMsg.style.display = 'block';
         canvas.style.display = 'none';
+        if (barContainer) barContainer.innerHTML = '';
         return;
       }
       
@@ -34,9 +36,9 @@
       window.msRadarChart = new Chart(ctx, {
         type: 'radar',
         data: {
-          labels: ['Phonics', 'Vocab Retention', 'Speaking', 'Listening', 'Engagement'],
+          labels: ['自然拼读\nPhonics', '词汇留存\nVocab', '自发表达\nSpeaking', '听力理解\nListening', '课堂参与\nEngagement'],
           datasets: [{
-            label: 'Capability Score',
+            label: '能力得分',
             data: [
               scores.phonics || 0,
               scores.vocabulary_retention || 0,
@@ -44,12 +46,13 @@
               scores.listening_comprehension || 0,
               scores.classroom_engagement || 0
             ],
-            backgroundColor: 'rgba(99, 102, 241, 0.2)',
-            borderColor: 'rgba(99, 102, 241, 1)',
-            pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+            backgroundColor: 'rgba(124, 58, 237, 0.22)',
+            borderColor: 'rgba(124, 58, 237, 1)',
+            pointBackgroundColor: 'rgba(124, 58, 237, 1)',
             pointBorderColor: '#fff',
             pointHoverBackgroundColor: '#fff',
-            pointHoverBorderColor: 'rgba(99, 102, 241, 1)'
+            pointHoverBorderColor: 'rgba(124, 58, 237, 1)',
+            borderWidth: 2
           }]
         },
         options: {
@@ -57,15 +60,39 @@
           maintainAspectRatio: true,
           scales: {
             r: {
-              angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
-              grid: { color: 'rgba(0, 0, 0, 0.1)' },
-              pointLabels: { font: { size: 9 }, color: '#64748b' },
+              angleLines: { color: 'rgba(0, 0, 0, 0.08)' },
+              grid: { color: 'rgba(0, 0, 0, 0.08)' },
+              pointLabels: { font: { size: 10, weight: 'bold' }, color: '#4B5563' },
               ticks: { display: false, min: 0, max: 100, stepSize: 20 }
             }
           },
           plugins: { legend: { display: false } }
         }
       });
+
+      // 5-Dimension score bars
+      const radarDims = [
+        { key: 'phonics', label: '自然拼读', en: 'Phonics', icon: '🔤', val: scores.phonics || 0, color: '#8B5CF6' },
+        { key: 'vocabulary_retention', label: '词汇留存', en: 'Vocab', icon: '📚', val: scores.vocabulary_retention || 0, color: '#3B82F6' },
+        { key: 'spontaneous_speaking', label: '自发表达', en: 'Speaking', icon: '🗣️', val: scores.spontaneous_speaking || 0, color: '#10B981' },
+        { key: 'listening_comprehension', label: '听力理解', en: 'Listening', icon: '🎧', val: scores.listening_comprehension || 0, color: '#F59E0B' },
+        { key: 'classroom_engagement', label: '课堂参与', en: 'Engagement', icon: '🌟', val: scores.classroom_engagement || 0, color: '#EC4899' }
+      ];
+      if (barContainer) {
+        let bHtml = '';
+        radarDims.forEach(function(d) {
+          bHtml += '<div class="bg-white p-2 px-2.5 rounded-lg border border-purple-100/90 shadow-2xs">';
+          bHtml += '  <div class="flex justify-between items-center mb-1">';
+          bHtml += '    <span class="text-slate-700 font-bold text-[11px] flex items-center gap-1.5"><span>' + d.icon + '</span> ' + d.label + ' <span class="text-slate-400 font-normal text-[10px]">(' + d.en + ')</span></span>';
+          bHtml += '    <b style="color:' + d.color + ';" class="text-xs font-black">' + d.val + ' <span class="text-[10px] font-normal text-slate-400">分</span></b>';
+          bHtml += '  </div>';
+          bHtml += '  <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">';
+          bHtml += '    <div class="h-full rounded-full transition-all duration-500" style="width:' + Math.min(100, Math.max(0, d.val)) + '%;background:' + d.color + ';"></div>';
+          bHtml += '  </div>';
+          bHtml += '</div>';
+        });
+        barContainer.innerHTML = bHtml;
+      }
     }
   </script>
   <style>
@@ -206,207 +233,240 @@
 </div>
 
 <!-- Milestone Report Modal -->
-<div id="milestone-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
- <div class="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-100">
+<div id="milestone-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs hidden items-center justify-center z-50 p-3 sm:p-4">
+ <div class="bg-white rounded-2xl p-5 sm:p-6 w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-100 flex flex-col">
   <!-- Milestone Banner -->
-  <div id="milestone-banner" class="rounded-xl p-4 mb-4 text-center text-white shadow-sm flex flex-col items-center justify-center">
+  <div id="milestone-banner" class="rounded-xl p-4 mb-3 text-center text-white shadow-sm flex flex-col items-center justify-center">
     <div id="ms-banner-title" class="text-lg sm:text-xl font-black tracking-wide"></div>
     <div id="ms-banner-desc" class="text-xs opacity-90 mt-1 max-w-lg"></div>
   </div>
 
-  <!-- Student Info & Auto-stats Card -->
-  <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 mb-4 text-sm text-slate-700">
+  <!-- Student Info & Progress Summary Card -->
+  <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 mb-3 text-sm text-slate-700">
     <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
       <div id="ms-student-summary" class="font-medium text-slate-900"></div>
       <div id="ms-badge-pill" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200"></div>
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2.5 text-xs">
       <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
-        <span class="text-gray-400 block mb-0.5">📚 Completed Lessons</span>
+        <span class="text-gray-400 block mb-0.5">📚 已完成课时</span>
         <span id="ms-stat-completed" class="font-bold text-slate-800 text-sm">-</span>
       </div>
       <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
-        <span class="text-gray-400 block mb-0.5">🔤 Cumulative Vocab</span>
+        <span class="text-gray-400 block mb-0.5">🔤 累计掌握词汇</span>
         <span id="ms-stat-vocab" class="font-bold text-slate-800 text-sm">-</span>
       </div>
       <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
-        <span class="text-gray-400 block mb-0.5">🏆 Honor Badge</span>
+        <span class="text-gray-400 block mb-0.5">🏆 阶段荣誉徽章</span>
         <span id="ms-stat-badge" class="font-bold text-indigo-700 text-sm">-</span>
       </div>
     </div>
     <!-- Sample Vocab Chips -->
     <div id="ms-vocab-chips-box" class="hidden mt-2 pt-2 border-t border-slate-200 text-xs">
-      <span class="text-gray-500 font-medium">Recent vocabulary learned: </span>
+      <span class="text-gray-500 font-medium">重点掌握词汇样例: </span>
       <span id="ms-vocab-chips" class="text-slate-700 font-mono text-[11px]"></span>
     </div>
   </div>
 
   <!-- AI Milestone Assistant Bar -->
-  <div class="bg-gradient-to-r from-purple-50 via-indigo-50 to-amber-50 border border-purple-200/80 rounded-xl p-3.5 mb-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-    <div class="flex items-start gap-3">
+  <div class="bg-gradient-to-r from-purple-50 via-indigo-50 to-amber-50 border border-purple-200/80 rounded-xl p-3 mb-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div class="flex items-start gap-2.5">
       <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs text-base">
         ✨
       </div>
       <div>
-        <div class="font-extrabold text-sm text-purple-950 flex items-center gap-2">
-          <span>AI Milestone Report Generator</span>
-          <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-200 text-purple-800 font-bold tracking-wide">AI Powered</span>
+        <div class="font-extrabold text-xs sm:text-sm text-purple-950 flex items-center gap-2">
+          <span>AI 智能教研阶段评估助手</span>
+          <span class="text-[10px] px-2 py-0.2 rounded-full bg-purple-200 text-purple-800 font-bold tracking-wide">Nemotron 550B Ultra</span>
         </div>
-        <p class="text-xs text-purple-800/80 mt-0.5 leading-relaxed">
-          Synthesizes all lesson logs, vocabulary mastery, sentence patterns, and pronunciation history into a comprehensive stage assessment.
+        <p class="text-[11px] text-purple-800/80 mt-0.5 leading-relaxed">
+          一键自动深度提炼阶段全课时学情数据、五维能力雷达评分、下阶段教研定制策略及综合评语。
         </p>
       </div>
     </div>
-    <button type="button" id="ms-ai-generate-btn" onclick="generateMilestoneWithAI()" class="cursor-pointer px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 shrink-0">
+    <button type="button" id="ms-ai-generate-btn" onclick="generateMilestoneWithAI()" class="cursor-pointer px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-1.5 shrink-0">
       <span id="ms-ai-btn-icon">⚡</span>
-      <span id="ms-ai-btn-text">Auto-Generate with AI</span>
+      <span id="ms-ai-btn-text">一键智能生成评估</span>
     </button>
   </div>
 
   <!-- AI Notice / Status Box -->
-  <div id="ms-ai-status-notice" class="hidden rounded-xl p-3 mb-4 text-xs font-medium"></div>
+  <div id="ms-ai-status-notice" class="hidden rounded-xl p-3 mb-3 text-xs font-medium"></div>
+
+  <!-- Mode Switcher Tabs -->
+  <div class="flex items-center justify-between border-b border-gray-200 pb-2.5 mb-3.5">
+    <div class="flex items-center gap-2">
+      <button type="button" id="ms-tab-preview" onclick="switchMilestoneTab('preview')" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all bg-purple-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5">
+        <span>📄</span> 正式报告预览
+      </button>
+      <button type="button" id="ms-tab-edit" onclick="switchMilestoneTab('edit')" class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer flex items-center gap-1.5">
+        <span>✏️</span> 快速微调评语
+      </button>
+    </div>
+    <div class="text-[11px] text-slate-400">
+      数据与家长端/官方报告实时对齐
+    </div>
+  </div>
 
   <form id="milestone-form" class="space-y-4">
-    <!-- 4 Dimensional Ratings -->
-    <div class="border border-slate-200 rounded-xl p-3.5 bg-slate-50/50">
-      <div class="flex items-center justify-between mb-2.5">
-        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-          <span>⭐</span> Core Dimensional Ratings
-        </h3>
-        <span class="text-[11px] text-slate-400">Rate 1-5 stars</span>
+    <!-- PANE 1: Formal Assessment Preview -->
+    <div id="ms-preview-pane" class="space-y-3.5">
+      <!-- 🌟 Pedagogical Growth Insights -->
+      <div id="ms-pv-insights-box" class="p-4 rounded-xl bg-gradient-to-br from-indigo-50/70 to-purple-50/50 border border-indigo-100/90 shadow-2xs">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-base">🌟</span>
+          <span class="text-xs font-bold text-indigo-900">智能教研学情宏观洞察 (Pedagogical Growth Insights)</span>
+        </div>
+        <div id="ms-pv-insights" class="text-xs text-indigo-950 leading-relaxed whitespace-pre-wrap"></div>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
-        <div class="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between shadow-2xs">
-          <span class="text-slate-700 font-medium text-xs flex items-center gap-1">🎧 Listening Comprehension</span>
-          <div class="ms-star-rating" data-name="score_listening">
-            <span class="star active" data-val="1">★</span>
-            <span class="star active" data-val="2">★</span>
-            <span class="star active" data-val="3">★</span>
-            <span class="star active" data-val="4">★</span>
-            <span class="star active" data-val="5">★</span>
-            <input type="hidden" id="ms-score-listening" value="5">
+
+      <!-- 📊 Capability Radar Chart & 5-Dimension Score Bars -->
+      <div id="ms-pv-radar-box" class="p-4 rounded-xl bg-purple-50/40 border border-purple-100 shadow-2xs">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-base">📊</span>
+            <span class="text-xs font-bold text-purple-900">五维核心能力雷达评估 (Capability Radar)</span>
+          </div>
+          <span class="text-[11px] font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">100分制评估</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+          <div class="flex flex-col items-center justify-center p-2 bg-white rounded-xl border border-purple-100/60 shadow-2xs">
+            <div class="relative w-full aspect-square max-w-[210px] flex items-center justify-center">
+              <canvas id="ms-radar-chart"></canvas>
+            </div>
+            <div id="ms-radar-empty" class="text-xs text-gray-400 mt-2">暂无雷达数据</div>
+          </div>
+          <div id="ms-radar-dim-bars" class="space-y-2 text-xs">
+            <!-- Populated dynamically with 5 dimension bars -->
           </div>
         </div>
-        <div class="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between shadow-2xs">
-          <span class="text-slate-700 font-medium text-xs flex items-center gap-1">🗣️ Speaking Fluency</span>
-          <div class="ms-star-rating" data-name="score_speaking">
-            <span class="star active" data-val="1">★</span>
-            <span class="star active" data-val="2">★</span>
-            <span class="star active" data-val="3">★</span>
-            <span class="star active" data-val="4">★</span>
-            <span class="star active" data-val="5">★</span>
-            <input type="hidden" id="ms-score-speaking" value="5">
+      </div>
+
+      <!-- 🎯 Next Phase Strategy Cards -->
+      <div id="ms-pv-strategy-box" class="p-4 rounded-xl bg-emerald-50/50 border border-emerald-100 shadow-2xs">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-base">🎯</span>
+          <span class="text-xs font-bold text-emerald-900">下阶段定制教学战略 (Next Phase Strategy)</span>
+        </div>
+        <div id="ms-strategy-cards-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Populated dynamically from next_phase_strategy JSON -->
+        </div>
+      </div>
+
+      <!-- 📝 Overall Summary & Detailed Comments -->
+      <div class="space-y-3">
+        <div class="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl shadow-2xs">
+          <div class="text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+            <span>📝</span> 总体评估总结 (Overall Summary)
+          </div>
+          <div id="ms-pv-summary" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="p-3 bg-emerald-50/40 border border-emerald-200/70 rounded-xl shadow-2xs">
+            <div class="text-xs font-bold text-emerald-900 mb-1 flex items-center gap-1">
+              <span>💪</span> 亮点与优势 (Strengths)
+            </div>
+            <div id="ms-pv-strengths" class="text-xs text-emerald-950 leading-relaxed whitespace-pre-wrap"></div>
+          </div>
+          <div class="p-3 bg-amber-50/40 border border-amber-200/70 rounded-xl shadow-2xs">
+            <div class="text-xs font-bold text-amber-900 mb-1 flex items-center gap-1">
+              <span>📈</span> 需提升与重点关注 (Areas for Improvement)
+            </div>
+            <div id="ms-pv-improvements" class="text-xs text-amber-950 leading-relaxed whitespace-pre-wrap"></div>
           </div>
         </div>
-        <div class="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between shadow-2xs">
-          <span class="text-slate-700 font-medium text-xs flex items-center gap-1">🌟 Classroom Engagement</span>
-          <div class="ms-star-rating" data-name="score_interaction">
-            <span class="star active" data-val="1">★</span>
-            <span class="star active" data-val="2">★</span>
-            <span class="star active" data-val="3">★</span>
-            <span class="star active" data-val="4">★</span>
-            <span class="star active" data-val="5">★</span>
-            <input type="hidden" id="ms-score-interaction" value="5">
+
+        <div class="p-3.5 bg-indigo-50/30 border border-indigo-100 rounded-xl shadow-2xs">
+          <div class="text-xs font-bold text-indigo-900 mb-1 flex items-center gap-1">
+            <span>🎯</span> 下阶段建议 (Recommendation)
           </div>
+          <div id="ms-pv-recommendation" class="text-xs text-indigo-950 leading-relaxed whitespace-pre-wrap"></div>
         </div>
-        <div class="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between shadow-2xs">
-          <span class="text-slate-700 font-medium text-xs flex items-center gap-1">🔤 Phonics & Pronunciation</span>
-          <div class="ms-star-rating" data-name="score_pronunciation">
-            <span class="star active" data-val="1">★</span>
-            <span class="star active" data-val="2">★</span>
-            <span class="star active" data-val="3">★</span>
-            <span class="star active" data-val="4">★</span>
-            <span class="star active" data-val="5">★</span>
-            <input type="hidden" id="ms-score-pronunciation" value="5">
+
+        <div class="p-3.5 bg-purple-50/30 border border-purple-100 rounded-xl shadow-2xs">
+          <div class="text-xs font-bold text-purple-900 mb-1 flex items-center gap-1">
+            <span>💌</span> 教师致家长寄语 (Teacher's Message)
           </div>
+          <div id="ms-pv-message" class="text-xs text-purple-950 leading-relaxed whitespace-pre-wrap"></div>
+        </div>
+
+        <div id="ms-pv-video-container" class="hidden p-3 bg-blue-50/50 border border-blue-200 rounded-xl flex items-center justify-between">
+          <span class="text-xs text-blue-900 font-medium">📹 阶段高光实录回放：</span>
+          <a id="ms-pv-video-link" href="#" target="_blank" class="text-xs text-blue-700 font-bold underline hover:text-blue-900">点击观看回放视频 ↗</a>
         </div>
       </div>
     </div>
 
-    <!-- Snapshot Metrics: Lessons & Vocab -->
-    <div class="grid grid-cols-2 gap-3">
+    <!-- PANE 2: Quick Edit Fields -->
+    <div id="ms-edit-pane" class="hidden space-y-3.5">
+      <div class="bg-amber-50/60 border border-amber-200 rounded-lg p-2.5 text-[11px] text-amber-800 flex items-center gap-2">
+        <span>💡</span>
+        <span>提示：您可以在此处微调 AI 诊断的洞察与评语。修改后可切换至「正式报告预览」查看效果，确认无误后点击下方保存。</span>
+      </div>
       <div>
-        <label class="block text-xs font-semibold text-gray-700 mb-1">Total Lessons Completed</label>
-        <input type="number" id="ms-total-lessons" min="1" max="999" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white">
+        <label class="block text-xs font-semibold text-gray-700 mb-1">🌟 智能教研学情宏观洞察 (Pedagogical Growth Insights)</label>
+        <textarea id="ms-stage-growth-insights" rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white" placeholder="深入教研学情宏观剖析..."></textarea>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-gray-700 mb-1">Cumulative Vocab Count</label>
-        <input type="number" id="ms-vocab-count" min="0" max="9999" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white">
+        <label class="block text-xs font-semibold text-gray-700 mb-1">📝 总体评估总结 (Overall Summary)</label>
+        <textarea id="ms-summary" rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white" required></textarea>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">💪 亮点优势 (Strengths)</label>
+          <textarea id="ms-strengths" rows="2" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">📈 需提升项 (Areas for Improvement)</label>
+          <textarea id="ms-improvements" rows="2" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">🎯 下阶段建议 (Recommendation)</label>
+        <textarea id="ms-recommendation" rows="2" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">💌 教师致家长寄语 (Teacher's Message)</label>
+        <textarea id="ms-message" rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">📹 阶段高光实录链接 (可选)</label>
+        <input type="text" id="ms-highlight-url" placeholder="https://... (VOOV 或云端录像链接)" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white">
       </div>
     </div>
 
-    <!-- Highlight Video URL -->
-    <div>
-      <label class="block text-xs font-semibold text-gray-700 mb-1">📹 Highlight Recording / Video URL (Optional)</label>
-      <input type="text" id="ms-highlight-url" placeholder="https://... (VOOV or Cloud video recording link to showcase student milestone)" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white">
-    </div>
+    <!-- Hidden Fields to maintain full API / DB compatibility -->
+    <input type="hidden" id="ms-badge-name" value="">
+    <input type="hidden" id="ms-total-lessons" value="10">
+    <input type="hidden" id="ms-vocab-count" value="0">
+    <input type="hidden" id="ms-radar-scores" value="{}">
+    <input type="hidden" id="ms-next-phase-strategy" value="[]">
+    <input type="hidden" id="ms-score-listening" value="5">
+    <input type="hidden" id="ms-score-speaking" value="5">
+    <input type="hidden" id="ms-score-interaction" value="5">
+    <input type="hidden" id="ms-score-pronunciation" value="5">
 
-    <!-- Template Prompts Fill Action -->
-    <div class="flex items-center justify-between pt-1">
-      <span class="text-xs font-bold text-gray-800">📝 Detailed Evaluation & Guidance</span>
-      <button type="button" onclick="applyMilestoneTemplateTips()" class="text-xs text-purple-600 hover:text-purple-800 font-semibold flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 rounded-md border border-purple-200 transition-colors">
-        <span>✨ Insert Stage Template Suggestions</span>
+    <!-- Action Bar in Preview Mode -->
+    <div id="ms-preview-actions" class="flex items-center gap-3 pt-3 border-t border-gray-100">
+      <button type="button" onclick="closeMilestoneModal()" class="flex-1 px-4 py-2.5 border rounded-xl hover:bg-gray-50 text-xs sm:text-sm font-medium text-gray-700 cursor-pointer">
+        关闭
+      </button>
+      <button type="button" onclick="switchMilestoneTab('edit')" class="flex-1 px-4 py-2.5 border border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl font-bold transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
+        <span>✏️</span> 调整/微调评语
+      </button>
+      <button type="submit" id="ms-submit-btn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-xl font-bold shadow-md hover:from-orange-600 hover:to-amber-700 transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
+        <span>🎉</span> 确认发布/更新报告
       </button>
     </div>
 
-
-    <!-- V2 Advanced Fields -->
-    <div class="border border-indigo-100 bg-indigo-50/30 rounded-xl p-4 space-y-4">
-      <div class="flex items-center gap-2 mb-2">
-        <span class="text-indigo-600 text-lg">🧠</span>
-        <h3 class="font-bold text-slate-800 text-sm">AI Pedagogical Analysis</h3>
-      </div>
-      
-      <div>
-        <label class="block text-xs font-semibold text-gray-700 mb-1">🌱 Stage Growth Insights</label>
-        <textarea id="ms-stage-growth-insights" rows="3" class="w-full px-3 py-2 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="Deep pedagogical analysis..."></textarea>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 mb-1">🎯 Next Phase Strategy (JSON)</label>
-          <textarea id="ms-next-phase-strategy" rows="6" class="w-full px-3 py-2 border border-indigo-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 bg-slate-50" placeholder="[{goal, rationale, action_plan}]"></textarea>
-        </div>
-        <div class="flex flex-col items-center justify-center bg-white border border-indigo-100 rounded-lg p-2">
-          <label class="block text-xs font-semibold text-gray-700 w-full mb-1">📊 Capability Radar</label>
-          <input type="hidden" id="ms-radar-scores" value="{}">
-          <div class="relative w-full aspect-square max-w-[200px]">
-            <canvas id="ms-radar-chart"></canvas>
-          </div>
-          <div id="ms-radar-empty" class="absolute text-xs text-gray-400">No radar data yet</div>
-        </div>
-      </div>
-    </div>
-    
-    <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">📝 Overall Assessment Summary</label>
-      <textarea id="ms-summary" rows="3" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500" required></textarea>
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">💪 Strengths & Highlights</label>
-        <textarea id="ms-strengths" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">📈 Areas for Improvement</label>
-        <textarea id="ms-improvements" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea>
-      </div>
-    </div>
-    <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">🎯 Recommendation for Next Stage</label>
-      <textarea id="ms-recommendation" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea>
-    </div>
-    <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">💌 Teacher's Personal Message to Parents</label>
-      <textarea id="ms-message" rows="3" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></textarea>
-    </div>
-
-    <input type="hidden" id="ms-badge-name" value="">
-
-    <div class="flex gap-3 pt-3 border-t border-gray-100">
-      <button type="button" onclick="closeMilestoneModal()" class="flex-1 px-4 py-2.5 border rounded-xl hover:bg-gray-50 text-sm font-medium text-gray-700">Later</button>
-      <button type="submit" id="ms-submit-btn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-xl font-bold shadow-md hover:from-orange-600 hover:to-amber-700 transition-all text-sm">
-        🎉 Submit Milestone Report
+    <!-- Action Bar in Edit Mode -->
+    <div id="ms-edit-actions" class="hidden flex items-center gap-3 pt-3 border-t border-gray-100">
+      <button type="button" onclick="switchMilestoneTab('preview')" class="flex-1 px-4 py-2.5 border rounded-xl hover:bg-gray-50 text-xs sm:text-sm font-medium text-gray-700 cursor-pointer flex items-center justify-center gap-1.5">
+        <span>👁️</span> 返回正式预览
+      </button>
+      <button type="submit" id="ms-edit-submit-btn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold shadow-md hover:from-purple-700 hover:to-indigo-700 transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
+        <span>💾</span> 保存修改并更新
       </button>
     </div>
   </form>
@@ -2237,10 +2297,11 @@ function formatMilestoneShortLabel(type) {
   return 'Milestone';
 }
 
-function getMilestoneReportForClass(cls) {
-  if (!cls || !cls.milestone_type) return null;
+function getMilestoneReportForClass(cls, rType) {
+  var type = rType || (cls ? cls.milestone_type : null);
+  if (!cls) return null;
   return (cls.id && window_progressReportsByClassId[cls.id]) || 
-         (cls.student_id && window_progressReportsByStudentAndType[cls.student_id + '_' + cls.milestone_type]) || 
+         (type && cls.student_id && window_progressReportsByStudentAndType[cls.student_id + '_' + type]) || 
          null;
 }
 
@@ -2371,18 +2432,129 @@ function proceedToMilestoneReportNow() {
   }
 }
 
+// ===== Milestone Formal Alignment & Tab Switcher Logic =====
+function renderNextPhaseStrategyCards(strategyJson) {
+  var container = document.getElementById('ms-strategy-cards-container');
+  var box = document.getElementById('ms-pv-strategy-box');
+  if (!container) return;
+  var list = [];
+  try {
+    list = typeof strategyJson === 'string' ? JSON.parse(strategyJson) : strategyJson;
+  } catch(e) {}
+  if (!Array.isArray(list) || list.length === 0) {
+    if (box) box.classList.add('hidden');
+    container.innerHTML = '';
+    return;
+  }
+  if (box) box.classList.remove('hidden');
+  var html = '';
+  list.forEach(function(st) {
+    html += '<div class="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs space-y-1.5">';
+    if (st.goal) {
+      html += '<div class="font-bold text-emerald-800 text-xs flex items-center gap-1.5"><span>🎯</span> ' + escapeHtml(st.goal) + '</div>';
+    }
+    if (st.rationale) {
+      html += '<div class="text-[11px] text-slate-600 leading-relaxed"><b class="text-slate-700">教研依据:</b> ' + escapeHtml(st.rationale) + '</div>';
+    }
+    if (st.action_plan) {
+      html += '<div class="text-[11px] text-emerald-900 bg-emerald-50/80 p-2 rounded-lg leading-relaxed"><b class="text-emerald-800">落地动作:</b> ' + escapeHtml(st.action_plan) + '</div>';
+    }
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function syncPreviewFromForm() {
+  var insights = (document.getElementById('ms-stage-growth-insights')?.value || '').trim();
+  var summary = (document.getElementById('ms-summary')?.value || '').trim();
+  var strengths = (document.getElementById('ms-strengths')?.value || '').trim();
+  var improvements = (document.getElementById('ms-improvements')?.value || '').trim();
+  var recommendation = (document.getElementById('ms-recommendation')?.value || '').trim();
+  var message = (document.getElementById('ms-message')?.value || '').trim();
+  var videoUrl = (document.getElementById('ms-highlight-url')?.value || '').trim();
+  var radarJson = document.getElementById('ms-radar-scores')?.value || '{}';
+  var stratJson = document.getElementById('ms-next-phase-strategy')?.value || '[]';
+
+  var insEl = document.getElementById('ms-pv-insights');
+  var insBox = document.getElementById('ms-pv-insights-box');
+  if (insEl) insEl.textContent = insights;
+  if (insBox) {
+    if (insights) insBox.classList.remove('hidden');
+    else insBox.classList.add('hidden');
+  }
+
+  var sumEl = document.getElementById('ms-pv-summary');
+  if (sumEl) sumEl.textContent = summary || '暂无总体评估总结，可点击上方「一键智能生成评估」自动生成。';
+
+  var strEl = document.getElementById('ms-pv-strengths');
+  if (strEl) strEl.textContent = strengths || '暂无亮点记录';
+
+  var impEl = document.getElementById('ms-pv-improvements');
+  if (impEl) impEl.textContent = improvements || '暂无改进建议';
+
+  var recEl = document.getElementById('ms-pv-recommendation');
+  if (recEl) recEl.textContent = recommendation || '暂无下阶段建议';
+
+  var msgEl = document.getElementById('ms-pv-message');
+  if (msgEl) msgEl.textContent = message || '暂无教师寄语';
+
+  var vidBox = document.getElementById('ms-pv-video-container');
+  var vidLink = document.getElementById('ms-pv-video-link');
+  if (vidBox && vidLink) {
+    if (videoUrl) {
+      vidLink.href = videoUrl;
+      vidBox.classList.remove('hidden');
+    } else {
+      vidBox.classList.add('hidden');
+    }
+  }
+
+  if (typeof renderRadarChart === 'function') {
+    renderRadarChart(radarJson);
+  }
+  if (typeof renderNextPhaseStrategyCards === 'function') {
+    renderNextPhaseStrategyCards(stratJson);
+  }
+}
+
+function switchMilestoneTab(tab) {
+  var pTab = document.getElementById('ms-tab-preview');
+  var eTab = document.getElementById('ms-tab-edit');
+  var pPane = document.getElementById('ms-preview-pane');
+  var ePane = document.getElementById('ms-edit-pane');
+  var pActions = document.getElementById('ms-preview-actions');
+  var eActions = document.getElementById('ms-edit-actions');
+
+  if (tab === 'edit') {
+    if (pTab) pTab.className = 'px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer flex items-center gap-1.5';
+    if (eTab) eTab.className = 'px-3 py-1.5 text-xs font-bold rounded-lg transition-all bg-purple-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5';
+    if (pPane) pPane.classList.add('hidden');
+    if (ePane) ePane.classList.remove('hidden');
+    if (pActions) pActions.classList.add('hidden');
+    if (eActions) eActions.classList.remove('hidden');
+  } else {
+    syncPreviewFromForm();
+    if (pTab) pTab.className = 'px-3 py-1.5 text-xs font-bold rounded-lg transition-all bg-purple-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5';
+    if (eTab) eTab.className = 'px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer flex items-center gap-1.5';
+    if (pPane) pPane.classList.remove('hidden');
+    if (ePane) ePane.classList.add('hidden');
+    if (pActions) pActions.classList.remove('hidden');
+    if (eActions) eActions.classList.add('hidden');
+  }
+}
+
 async function openMilestoneReport(cls, m, reportType) {
   milestoneClass = cls;
   milestoneType = reportType;
   milestoneData = m || {};
 
-  var existingReport = getMilestoneReportForClass(cls);
+  var existingReport = getMilestoneReportForClass(cls, reportType);
   window_currentMilestoneReportId = existingReport ? existingReport.id : null;
 
-  var info = MILESTONE_INFO[reportType] || { title: 'Milestone Report', desc: '', color: '#6366F1', badge: '🏅 Milestone Honor', lessons: 10, tips: {} };
+  var info = MILESTONE_INFO[reportType] || { title: '阶段教学综合评估', desc: '', color: '#6366F1', badge: '🏅 阶段荣誉', lessons: 10, tips: {} };
   var banner = document.getElementById('milestone-banner');
-  banner.style.background = info.color;
-  document.getElementById('ms-banner-title').textContent = existingReport ? (info.title + ' (Review & Edit)') : info.title;
+  if (banner) banner.style.background = info.color || '#6366F1';
+  document.getElementById('ms-banner-title').textContent = existingReport ? (info.title + ' (已归档评估)') : info.title;
   document.getElementById('ms-banner-desc').textContent = info.desc;
 
   var studentText = '<b>' + escapeHtml(formatStudentName(cls)) + '</b> · ' + cls.date;
@@ -2390,86 +2562,67 @@ async function openMilestoneReport(cls, m, reportType) {
     studentText += ' · <span class="text-purple-700 font-semibold">' + escapeHtml(milestoneData.levelUp.fromLevel) + ' ➔ ' + escapeHtml(milestoneData.levelUp.toLevel) + '</span>';
   }
   document.getElementById('ms-student-summary').innerHTML = studentText;
-  document.getElementById('ms-badge-pill').textContent = (existingReport && existingReport.badge_name) ? existingReport.badge_name : (info.badge || '🏅 Milestone');
+  document.getElementById('ms-badge-pill').textContent = (existingReport && existingReport.badge_name) ? existingReport.badge_name : (info.badge || '🏅 阶段荣誉');
   document.getElementById('ms-badge-name').value = (existingReport && existingReport.badge_name) ? existingReport.badge_name : (info.badge || '');
 
-  // Pre-fill metrics
   var defaultLessons = info.lessons || (milestoneData.completedCount || 10);
   var tips = info.tips || {};
-  document.getElementById('ms-summary').placeholder = tips.summary || 'Overall assessment of this period...';
-  document.getElementById('ms-strengths').placeholder = tips.strengths || 'What the student did well...';
-  document.getElementById('ms-improvements').placeholder = tips.improvements || 'Areas that need work...';
-  document.getElementById('ms-recommendation').placeholder = tips.recommendation || 'What to focus on next...';
-  document.getElementById('ms-message').placeholder = tips.message || 'A personal message to the parents...';
+  document.getElementById('ms-summary').placeholder = tips.summary || '阶段综合评估分析...';
+  document.getElementById('ms-strengths').placeholder = tips.strengths || '孩子在此阶段展现出的核心优势与亮点...';
+  document.getElementById('ms-improvements').placeholder = tips.improvements || '下阶段需重点突破的薄弱点与关注点...';
+  document.getElementById('ms-recommendation').placeholder = tips.recommendation || '下阶段教材与教研规划建议...';
+  document.getElementById('ms-message').placeholder = tips.message || '致家长的阶段暖心寄语与配合建议...';
 
   var submitBtn = document.getElementById('ms-submit-btn');
+  var editSubmitBtn = document.getElementById('ms-edit-submit-btn');
 
   if (existingReport) {
-    // Populate with existing saved report values
     document.getElementById('ms-total-lessons').value = existingReport.total_lessons_completed || defaultLessons;
     document.getElementById('ms-vocab-count').value = existingReport.vocabulary_count || '';
     document.getElementById('ms-highlight-url').value = existingReport.highlight_recording_url || '';
     document.getElementById('ms-summary').value = existingReport.summary || '';
     document.getElementById('ms-stage-growth-insights').value = existingReport.stage_growth_insights || '';
-    document.getElementById('ms-next-phase-strategy').value = existingReport.next_phase_strategy || '';
-    document.getElementById('ms-radar-scores').value = existingReport.radar_scores || '{}';
-    if (typeof renderRadarChart === 'function') renderRadarChart(existingReport.radar_scores);
+    document.getElementById('ms-next-phase-strategy').value = typeof existingReport.next_phase_strategy === 'string' ? existingReport.next_phase_strategy : JSON.stringify(existingReport.next_phase_strategy || [], null, 2);
+    document.getElementById('ms-radar-scores').value = typeof existingReport.radar_scores === 'string' ? existingReport.radar_scores : JSON.stringify(existingReport.radar_scores || {});
     document.getElementById('ms-strengths').value = existingReport.strengths || '';
     document.getElementById('ms-improvements').value = existingReport.improvements || '';
     document.getElementById('ms-recommendation').value = existingReport.recommendation || '';
     document.getElementById('ms-message').value = existingReport.teacher_message || '';
 
-    // Set dimensional star ratings from existing report
-    var dims = [
-      { name: 'score_listening', val: existingReport.score_listening || 5 },
-      { name: 'score_speaking', val: existingReport.score_speaking || 5 },
-      { name: 'score_interaction', val: existingReport.score_interaction || 5 },
-      { name: 'score_pronunciation', val: existingReport.score_pronunciation || 5 }
-    ];
-    dims.forEach(function(item) {
-      var rating = document.querySelector('.ms-star-rating[data-name="' + item.name + '"]');
-      if (rating) {
-        rating.querySelectorAll('.star').forEach(function(s) {
-          if (parseInt(s.getAttribute('data-val')) <= item.val) s.classList.add('active');
-          else s.classList.remove('active');
-        });
-        var hidden = rating.querySelector('input[type="hidden"]');
-        if (hidden) hidden.value = item.val;
-      }
-    });
+    if (document.getElementById('ms-score-listening')) document.getElementById('ms-score-listening').value = existingReport.score_listening || 5;
+    if (document.getElementById('ms-score-speaking')) document.getElementById('ms-score-speaking').value = existingReport.score_speaking || 5;
+    if (document.getElementById('ms-score-interaction')) document.getElementById('ms-score-interaction').value = existingReport.score_interaction || 5;
+    if (document.getElementById('ms-score-pronunciation')) document.getElementById('ms-score-pronunciation').value = existingReport.score_pronunciation || 5;
 
-    if (submitBtn) submitBtn.textContent = '💾 Update Milestone Report';
+    if (submitBtn) submitBtn.innerHTML = '<span>💾</span> 更新阶段评估报告';
+    if (editSubmitBtn) editSubmitBtn.innerHTML = '<span>💾</span> 保存修改并更新';
   } else {
-    // New report: reset to default
-    ['score_listening', 'score_speaking', 'score_interaction', 'score_pronunciation'].forEach(function(dim) {
-      var rating = document.querySelector('.ms-star-rating[data-name="' + dim + '"]');
-      if (rating) {
-        rating.querySelectorAll('.star').forEach(function(s) { s.classList.add('active'); });
-        var hidden = rating.querySelector('input[type="hidden"]');
-        if (hidden) hidden.value = '5';
-      }
-    });
-
     document.getElementById('ms-total-lessons').value = defaultLessons;
     document.getElementById('ms-vocab-count').value = '';
     document.getElementById('ms-highlight-url').value = cls.fb_recording ? (parseRecordingInfo(cls.fb_recording)?.url || '') : '';
     document.getElementById('ms-summary').value = '';
     document.getElementById('ms-stage-growth-insights').value = '';
-    document.getElementById('ms-next-phase-strategy').value = '';
+    document.getElementById('ms-next-phase-strategy').value = '[]';
     document.getElementById('ms-radar-scores').value = '{}';
-    if(window.msRadarChart) { window.msRadarChart.destroy(); window.msRadarChart = null; }
+    if (window.msRadarChart) { window.msRadarChart.destroy(); window.msRadarChart = null; }
     document.getElementById('ms-strengths').value = '';
     document.getElementById('ms-improvements').value = '';
     document.getElementById('ms-recommendation').value = '';
     document.getElementById('ms-message').value = '';
 
-    if (submitBtn) submitBtn.textContent = '🎉 Submit Milestone Report';
+    if (document.getElementById('ms-score-listening')) document.getElementById('ms-score-listening').value = 5;
+    if (document.getElementById('ms-score-speaking')) document.getElementById('ms-score-speaking').value = 5;
+    if (document.getElementById('ms-score-interaction')) document.getElementById('ms-score-interaction').value = 5;
+    if (document.getElementById('ms-score-pronunciation')) document.getElementById('ms-score-pronunciation').value = 5;
+
+    if (submitBtn) submitBtn.innerHTML = '<span>🎉</span> 确认发布评估报告';
+    if (editSubmitBtn) editSubmitBtn.innerHTML = '<span>💾</span> 保存并发布报告';
   }
 
-  // Show stats card placeholder
-  document.getElementById('ms-stat-completed').textContent = (existingReport?.total_lessons_completed || defaultLessons) + ' lessons';
-  document.getElementById('ms-stat-vocab').textContent = existingReport?.vocabulary_count ? (existingReport.vocabulary_count + ' words') : 'Loading...';
-  document.getElementById('ms-stat-badge').textContent = info.badge || '-';
+  // Set stats badges
+  document.getElementById('ms-stat-completed').textContent = (existingReport?.total_lessons_completed || defaultLessons) + ' 课时';
+  document.getElementById('ms-stat-vocab').textContent = existingReport?.vocabulary_count ? (existingReport.vocabulary_count + ' 词') : '计算中...';
+  document.getElementById('ms-stat-badge').textContent = (existingReport && existingReport.badge_name) ? existingReport.badge_name : (info.badge || '-');
 
   var chipsBox = document.getElementById('ms-vocab-chips-box');
   if (chipsBox) chipsBox.classList.add('hidden');
@@ -2477,26 +2630,30 @@ async function openMilestoneReport(cls, m, reportType) {
   var notice = document.getElementById('ms-ai-status-notice');
   if (notice) { notice.classList.add('hidden'); notice.innerHTML = ''; }
   var btnText = document.getElementById('ms-ai-btn-text');
-  if (btnText) btnText.textContent = existingReport ? '✨ Regenerate with AI' : 'Auto-Generate with AI';
+  if (btnText) btnText.textContent = existingReport ? '一键重新智能诊断' : '一键智能生成评估';
   var btn = document.getElementById('ms-ai-generate-btn');
   if (btn) btn.disabled = false;
+
+  // Sync preview & set tab to preview
+  syncPreviewFromForm();
+  switchMilestoneTab('preview');
 
   document.getElementById('milestone-modal').classList.remove('hidden');
   document.getElementById('milestone-modal').classList.add('flex');
 
-  // Async fetch stats from backend to auto-populate if creating or vocab empty
+  // Async fetch stats from backend
   try {
     var statsRes = await apiGet('/progress-reports/stats/' + cls.student_id);
     var stats = statsRes.data || statsRes;
     if (stats) {
       if (stats.completed_count) {
-        document.getElementById('ms-stat-completed').textContent = stats.completed_count + ' lessons';
+        document.getElementById('ms-stat-completed').textContent = stats.completed_count + ' 课时';
         if (!existingReport && stats.completed_count >= defaultLessons) {
           document.getElementById('ms-total-lessons').value = stats.completed_count;
         }
       }
       if (stats.vocabulary_count !== undefined) {
-        document.getElementById('ms-stat-vocab').textContent = stats.vocabulary_count + ' words';
+        document.getElementById('ms-stat-vocab').textContent = stats.vocabulary_count + ' 词';
         if (!existingReport || !document.getElementById('ms-vocab-count').value) {
           document.getElementById('ms-vocab-count').value = stats.vocabulary_count;
         }
@@ -2507,13 +2664,13 @@ async function openMilestoneReport(cls, m, reportType) {
       }
     }
   } catch(e) {
-    if (!existingReport) document.getElementById('ms-stat-vocab').textContent = '~100+ words';
+    if (!existingReport) document.getElementById('ms-stat-vocab').textContent = '~100+ 词';
   }
 }
 
 async function generateMilestoneWithAI() {
   if (!milestoneClass) {
-    alert('Please select a class first.');
+    alert('请先选择对应课程。');
     return;
   }
 
@@ -2524,11 +2681,11 @@ async function generateMilestoneWithAI() {
 
   if (btn) btn.disabled = true;
   if (btnIcon) btnIcon.textContent = '⏳';
-  if (btnText) btnText.textContent = 'Analyzing Lessons with AI...';
+  if (btnText) btnText.textContent = 'AI 正在深度诊断课时学情...';
 
   if (notice) {
-    notice.className = 'rounded-xl p-3 mb-4 text-xs font-medium bg-purple-50 text-purple-800 border border-purple-200 flex items-center gap-2 animate-pulse';
-    notice.innerHTML = '<span class="animate-spin inline-block">🌀</span> AI (Nemotron 550B Ultra) is synthesizing historical lessons, vocabulary mastery, and pronunciation notes... (may take ~20-30s)';
+    notice.className = 'rounded-xl p-3 mb-3 text-xs font-medium bg-purple-50 text-purple-800 border border-purple-200 flex items-center gap-2 animate-pulse';
+    notice.innerHTML = '<span class="animate-spin inline-block">🌀</span> AI 大模型正在全面提炼历史课程记录、词汇留存、发音纠错及教学日志，生成五维能力图谱与教学规划... (约需15-25秒)';
     notice.classList.remove('hidden');
   }
 
@@ -2546,7 +2703,7 @@ async function generateMilestoneWithAI() {
 
     var data = res.data || res;
     if (!data || !data.summary) {
-      throw new Error(res.error?.message || 'Failed to generate report content');
+      throw new Error(res.error?.message || '生成评估内容失败');
     }
 
     // Fill form fields
@@ -2558,7 +2715,6 @@ async function generateMilestoneWithAI() {
     if (data.radar_scores) {
       var rScoresStr = typeof data.radar_scores === 'string' ? data.radar_scores : JSON.stringify(data.radar_scores);
       document.getElementById('ms-radar-scores').value = rScoresStr;
-      if (typeof renderRadarChart === 'function') renderRadarChart(rScoresStr);
     }
     if (data.strengths) document.getElementById('ms-strengths').value = data.strengths;
     if (data.improvements) document.getElementById('ms-improvements').value = data.improvements;
@@ -2567,11 +2723,11 @@ async function generateMilestoneWithAI() {
 
     if (data.total_lessons_completed) {
       document.getElementById('ms-total-lessons').value = data.total_lessons_completed;
-      document.getElementById('ms-stat-completed').textContent = data.total_lessons_completed + ' lessons';
+      document.getElementById('ms-stat-completed').textContent = data.total_lessons_completed + ' 课时';
     }
     if (data.vocabulary_count !== undefined) {
       document.getElementById('ms-vocab-count').value = data.vocabulary_count;
-      document.getElementById('ms-stat-vocab').textContent = data.vocabulary_count + ' words';
+      document.getElementById('ms-stat-vocab').textContent = data.vocabulary_count + ' 词';
     }
     if (data.badge_name) {
       document.getElementById('ms-badge-name').value = data.badge_name;
@@ -2579,41 +2735,31 @@ async function generateMilestoneWithAI() {
       document.getElementById('ms-stat-badge').textContent = data.badge_name;
     }
 
-    // Fill 4-star ratings
-    var ratings = [
-      { name: 'score_listening', val: data.score_listening || 5 },
-      { name: 'score_speaking', val: data.score_speaking || 5 },
-      { name: 'score_interaction', val: data.score_interaction || 5 },
-      { name: 'score_pronunciation', val: data.score_pronunciation || 4 }
-    ];
-    ratings.forEach(function(item) {
-      var ratingEl = document.querySelector('.ms-star-rating[data-name="' + item.name + '"]');
-      if (ratingEl) {
-        ratingEl.querySelectorAll('.star').forEach(function(s) {
-          if (parseInt(s.getAttribute('data-val')) <= item.val) s.classList.add('active');
-          else s.classList.remove('active');
-        });
-        var hiddenInput = ratingEl.querySelector('input[type="hidden"]');
-        if (hiddenInput) hiddenInput.value = item.val;
-      }
-    });
+    if (data.score_listening && document.getElementById('ms-score-listening')) document.getElementById('ms-score-listening').value = data.score_listening;
+    if (data.score_speaking && document.getElementById('ms-score-speaking')) document.getElementById('ms-score-speaking').value = data.score_speaking;
+    if (data.score_interaction && document.getElementById('ms-score-interaction')) document.getElementById('ms-score-interaction').value = data.score_interaction;
+    if (data.score_pronunciation && document.getElementById('ms-score-pronunciation')) document.getElementById('ms-score-pronunciation').value = data.score_pronunciation;
+
+    // Immediately sync to formal preview!
+    syncPreviewFromForm();
+    switchMilestoneTab('preview');
 
     if (notice) {
-      notice.className = 'rounded-xl p-3 mb-4 text-xs font-medium bg-green-50 text-green-800 border border-green-200 flex items-center justify-between gap-2';
-      notice.innerHTML = '<span>✨ <b>AI report generated successfully!</b> Based on ' + (data.total_lessons_completed || 10) + ' completed lessons and ' + (data.vocabulary_count || 0) + ' vocabulary items. Please review and feel free to edit.</span>' +
+      notice.className = 'rounded-xl p-3 mb-3 text-xs font-medium bg-green-50 text-green-800 border border-green-200 flex items-center justify-between gap-2';
+      notice.innerHTML = '<span>✨ <b>AI 评估报告生成成功！</b> 已根据 ' + (data.total_lessons_completed || 10) + ' 节已完成课时和 ' + (data.vocabulary_count || 0) + ' 个词汇提炼完成。如需修改个别文字，可点击上方「快速微调评语」。</span>' +
         '<button type="button" onclick="this.parentElement.classList.add(\'hidden\')" class="text-green-600 hover:text-green-800 font-bold shrink-0">✕</button>';
     }
 
-    if (btnText) btnText.textContent = '✨ Regenerate with AI';
+    if (btnText) btnText.textContent = '一键重新智能诊断';
     if (btnIcon) btnIcon.textContent = '⚡';
 
   } catch(err) {
     console.error('AI generation error:', err);
     if (notice) {
-      notice.className = 'rounded-xl p-3 mb-4 text-xs font-medium bg-red-50 text-red-800 border border-red-200';
-      notice.textContent = '❌ Generation failed: ' + err.message + '. You can still write the report manually or try again.';
+      notice.className = 'rounded-xl p-3 mb-3 text-xs font-medium bg-red-50 text-red-800 border border-red-200';
+      notice.textContent = '❌ 生成失败: ' + err.message + '。您可点击「快速微调评语」进行手动填写或重试。';
     }
-    if (btnText) btnText.textContent = 'Auto-Generate with AI';
+    if (btnText) btnText.textContent = '一键智能生成评估';
     if (btnIcon) btnIcon.textContent = '⚡';
   } finally {
     if (btn) btn.disabled = false;
@@ -2639,6 +2785,7 @@ function applyMilestoneTemplateTips() {
   if (!document.getElementById('ms-message').value && tips.message) {
     document.getElementById('ms-message').value = tips.message;
   }
+  syncPreviewFromForm();
 }
 
 function closeMilestoneModal() {
@@ -2646,27 +2793,14 @@ function closeMilestoneModal() {
   document.getElementById('milestone-modal').classList.remove('flex');
 }
 
-// Milestone star rating interaction (delegated)
-document.addEventListener('click', function(e) {
-  var star = e.target.closest('.ms-star-rating .star');
-  if (!star) return;
-  var rating = star.closest('.ms-star-rating');
-  var stars = rating.querySelectorAll('.star');
-  var selectedVal = parseInt(star.getAttribute('data-val'));
-  stars.forEach(function(s) {
-    if (parseInt(s.getAttribute('data-val')) <= selectedVal) s.classList.add('active');
-    else s.classList.remove('active');
-  });
-  var hidden = rating.querySelector('input[type="hidden"]');
-  if (hidden) hidden.value = selectedVal;
-});
-
 document.getElementById('milestone-form').addEventListener('submit', async function(e) {
   e.preventDefault();
   if (!milestoneClass) return;
 
   var submitBtn = document.getElementById('ms-submit-btn');
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving...'; }
+  var editSubmitBtn = document.getElementById('ms-edit-submit-btn');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '正在保存...'; }
+  if (editSubmitBtn) { editSubmitBtn.disabled = true; editSubmitBtn.textContent = '正在保存...'; }
 
   var teacherId = getTeacherId();
   var teacherName = '';
@@ -2679,6 +2813,16 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
   var reportType = milestoneData.reportType || (milestoneData.levelUp ? milestoneData.levelUp.reportType : milestoneType);
   var totalLessons = parseInt(document.getElementById('ms-total-lessons').value);
   var vocabCount = parseInt(document.getElementById('ms-vocab-count').value);
+
+  var radarData = null;
+  try {
+    radarData = JSON.parse(document.getElementById('ms-radar-scores').value || '{}');
+  } catch(e) {}
+
+  var scoreListening = radarData && radarData.listening_comprehension ? Math.max(1, Math.min(5, Math.round(radarData.listening_comprehension / 20))) : (parseInt(document.getElementById('ms-score-listening')?.value) || 5);
+  var scoreSpeaking = radarData && radarData.spontaneous_speaking ? Math.max(1, Math.min(5, Math.round(radarData.spontaneous_speaking / 20))) : (parseInt(document.getElementById('ms-score-speaking')?.value) || 5);
+  var scoreInteraction = radarData && radarData.classroom_engagement ? Math.max(1, Math.min(5, Math.round(radarData.classroom_engagement / 20))) : (parseInt(document.getElementById('ms-score-interaction')?.value) || 5);
+  var scorePronunciation = radarData && radarData.phonics ? Math.max(1, Math.min(5, Math.round(radarData.phonics / 20))) : (parseInt(document.getElementById('ms-score-pronunciation')?.value) || 5);
 
   var reportData = {
     student_id: milestoneClass.student_id,
@@ -2696,12 +2840,12 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
     teacher_message: document.getElementById('ms-message').value,
     from_level: milestoneData.levelUp ? milestoneData.levelUp.fromLevel : null,
     to_level: milestoneData.levelUp ? milestoneData.levelUp.toLevel : null,
-    total_lessons_completed: isNaN(totalLessons) ? 0 : totalLessons,
+    total_lessons_completed: isNaN(totalLessons) ? 10 : totalLessons,
     vocabulary_count: isNaN(vocabCount) ? 0 : vocabCount,
-    score_listening: parseInt(document.getElementById('ms-score-listening').value) || 5,
-    score_speaking: parseInt(document.getElementById('ms-score-speaking').value) || 5,
-    score_interaction: parseInt(document.getElementById('ms-score-interaction').value) || 5,
-    score_pronunciation: parseInt(document.getElementById('ms-score-pronunciation').value) || 5,
+    score_listening: scoreListening,
+    score_speaking: scoreSpeaking,
+    score_interaction: scoreInteraction,
+    score_pronunciation: scorePronunciation,
     highlight_recording_url: document.getElementById('ms-highlight-url').value.trim() || null,
     badge_name: document.getElementById('ms-badge-name').value.trim() || null,
     organization_id: milestoneClass.organization_id || null
@@ -2710,19 +2854,23 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
   try {
     if (window_currentMilestoneReportId) {
       await apiPatch('/progress-reports/' + window_currentMilestoneReportId, reportData);
-      alert('Milestone report updated successfully! 💾');
+      alert('阶段评估报告已成功更新！💾');
     } else {
       await apiPost('/progress-reports', reportData);
-      alert('Milestone report submitted successfully! 🎉');
+      alert('阶段评估报告已成功提交发布！🎉');
     }
     closeMilestoneModal();
     loadTeacherData();
   } catch(err) {
-    alert('Failed to save report: ' + err.message);
+    alert('保存报告失败: ' + err.message);
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.textContent = window_currentMilestoneReportId ? '💾 Update Milestone Report' : '🎉 Submit Milestone Report';
+      submitBtn.innerHTML = window_currentMilestoneReportId ? '<span>💾</span> 更新阶段评估报告' : '<span>🎉</span> 确认发布评估报告';
+    }
+    if (editSubmitBtn) {
+      editSubmitBtn.disabled = false;
+      editSubmitBtn.innerHTML = '<span>💾</span> 保存修改并更新';
     }
   }
 });
