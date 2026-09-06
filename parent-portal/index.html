@@ -1697,6 +1697,16 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function escapeAttr(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 // ===== Parse Recording Info / URL =====
 function parseRecordingInfo(text) {
   if (!text || typeof text !== 'string') return null;
