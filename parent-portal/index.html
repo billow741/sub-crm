@@ -1421,6 +1421,7 @@
         to { transform: translate(-50%, 0); opacity: 1; }
       }
       </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 <!-- PWA Install Banner -->
@@ -4174,7 +4175,8 @@ function renderAssessments(list) {
 
 function viewProgressReport(reportId) {
   var w = window.open('', '_blank', 'width=800,height=900');
-  w.document.write('<html><head><meta charset="UTF-8"><title>阶段成长评估报告</title><style>' + getReportPrintCSS() + '</style></head><body><div style="text-align:center;padding:60px;color:#94a3b8;">加载中...</div></body></html>');
+  w.document.write('<html><head><meta charset="UTF-8"><title>阶段成长评估报告</title><style>' + getReportPrintCSS() + '</style>  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head><body><div style="text-align:center;padding:60px;color:#94a3b8;">加载中...</div></body></html>');
   w.document.close();
 
   apiGet('/progress-reports/' + reportId).then(function(resp) {
@@ -4299,7 +4301,8 @@ function buildProgressReportHTML(r) {
 
 function viewAssessmentReport(assessmentId) {
   var w = window.open('', '_blank', 'width=800,height=900');
-  w.document.write('<html><head><meta charset="UTF-8"><title>评估报告</title><style>' + getReportPrintCSS() + '</style></head><body><div style="text-align:center;padding:60px;color:#94a3b8;">加载中...</div></body></html>');
+  w.document.write('<html><head><meta charset="UTF-8"><title>评估报告</title><style>' + getReportPrintCSS() + '</style>  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head><body><div style="text-align:center;padding:60px;color:#94a3b8;">加载中...</div></body></html>');
   w.document.close();
   
   apiGet('/assessments/' + assessmentId).then(function(resp) {

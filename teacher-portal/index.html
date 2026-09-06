@@ -5,7 +5,66 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SunnyBridge Teacher Portal</title>
   <link rel="icon" type="image/webp" href="sunblogo.webp">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com">
+  // Radar Chart Logic
+  window.msRadarChart = null;
+  function renderRadarChart(scoresJson) {
+    const canvas = document.getElementById('ms-radar-chart');
+    const emptyMsg = document.getElementById('ms-radar-empty');
+    if(!canvas) return;
+    
+    let scores = {};
+    try { scores = typeof scoresJson === 'string' ? JSON.parse(scoresJson) : scoresJson; } catch(e){}
+    
+    if(window.msRadarChart) { window.msRadarChart.destroy(); }
+    
+    if(!scores || Object.keys(scores).length === 0) {
+      emptyMsg.style.display = 'block';
+      canvas.style.display = 'none';
+      return;
+    }
+    
+    emptyMsg.style.display = 'none';
+    canvas.style.display = 'block';
+    
+    const ctx = canvas.getContext('2d');
+    window.msRadarChart = new Chart(ctx, {
+      type: 'radar',
+      data: {
+        labels: ['Phonics', 'Vocab Retention', 'Speaking', 'Listening', 'Engagement'],
+        datasets: [{
+          label: 'Capability Score',
+          data: [
+            scores.phonics || 0,
+            scores.vocabulary_retention || 0,
+            scores.spontaneous_speaking || 0,
+            scores.listening_comprehension || 0,
+            scores.classroom_engagement || 0
+          ],
+          backgroundColor: 'rgba(99, 102, 241, 0.2)',
+          borderColor: 'rgba(99, 102, 241, 1)',
+          pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+          pointBorderColor: '#fff',
+          pointHoverBackgroundColor: '#fff',
+          pointHoverBorderColor: 'rgba(99, 102, 241, 1)'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+          r: {
+            angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+            grid: { color: 'rgba(0, 0, 0, 0.1)' },
+            pointLabels: { font: { size: 9 }, color: '#64748b' },
+            ticks: { display: false, min: 0, max: 100, stepSize: 20 }
+          }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+</script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -33,6 +92,7 @@
     /* ── Assessment modal scroll ── */
     #assessment-modal { max-height: 90vh; overflow-y: auto; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
 <div id="app">
@@ -287,6 +347,35 @@
       </button>
     </div>
 
+
+    <!-- V2 Advanced Fields -->
+    <div class="border border-indigo-100 bg-indigo-50/30 rounded-xl p-4 space-y-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-indigo-600 text-lg">🧠</span>
+        <h3 class="font-bold text-slate-800 text-sm">AI Pedagogical Analysis</h3>
+      </div>
+      
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">🌱 Stage Growth Insights</label>
+        <textarea id="ms-stage-growth-insights" rows="3" class="w-full px-3 py-2 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="Deep pedagogical analysis..."></textarea>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">🎯 Next Phase Strategy (JSON)</label>
+          <textarea id="ms-next-phase-strategy" rows="6" class="w-full px-3 py-2 border border-indigo-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 bg-slate-50" placeholder="[{goal, rationale, action_plan}]"></textarea>
+        </div>
+        <div class="flex flex-col items-center justify-center bg-white border border-indigo-100 rounded-lg p-2">
+          <label class="block text-xs font-semibold text-gray-700 w-full mb-1">📊 Capability Radar</label>
+          <input type="hidden" id="ms-radar-scores" value="{}">
+          <div class="relative w-full aspect-square max-w-[200px]">
+            <canvas id="ms-radar-chart"></canvas>
+          </div>
+          <div id="ms-radar-empty" class="absolute text-xs text-gray-400">No radar data yet</div>
+        </div>
+      </div>
+    </div>
+    
     <div>
       <label class="block text-xs font-medium text-gray-700 mb-1">📝 Overall Assessment Summary</label>
       <textarea id="ms-summary" rows="3" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500" required></textarea>
@@ -810,7 +899,13 @@ async function apiPost(endpoint, data) {
   } catch (e) {
     throw new Error('Server error (' + res.status + '): ' + text.slice(0, 100));
   }
-  if (!res.ok) throw new Error(json.error?.message || json.message || ('Error ' + res.status));
+  if (!res.ok) {
+    var errorMsg = json.error?.message || json.message || ('Error ' + res.status);
+    if (json.error?.details && Array.isArray(json.error.details) && json.error.details.length > 0) {
+      errorMsg += ' (' + json.error.details.map(function(d){ return (d.field ? d.field + ': ' : '') + d.message; }).join('; ') + ')';
+    }
+    throw new Error(errorMsg);
+  }
   return json;
 }
 
@@ -2351,6 +2446,10 @@ async function openMilestoneReport(cls, m, reportType) {
     document.getElementById('ms-vocab-count').value = '';
     document.getElementById('ms-highlight-url').value = cls.fb_recording ? (parseRecordingInfo(cls.fb_recording)?.url || '') : '';
     document.getElementById('ms-summary').value = '';
+    document.getElementById('ms-stage-growth-insights').value = '';
+    document.getElementById('ms-next-phase-strategy').value = '';
+    document.getElementById('ms-radar-scores').value = '{}';
+    if(window.msRadarChart) { window.msRadarChart.destroy(); window.msRadarChart = null; }
     document.getElementById('ms-strengths').value = '';
     document.getElementById('ms-improvements').value = '';
     document.getElementById('ms-recommendation').value = '';
@@ -2421,16 +2520,20 @@ async function generateMilestoneWithAI() {
 
   if (notice) {
     notice.className = 'rounded-xl p-3 mb-4 text-xs font-medium bg-purple-50 text-purple-800 border border-purple-200 flex items-center gap-2 animate-pulse';
-    notice.innerHTML = '<span class="animate-spin inline-block">🌀</span> AI is synthesizing historical lessons, vocabulary mastery, and pronunciation notes...';
+    notice.innerHTML = '<span class="animate-spin inline-block">🌀</span> AI (Nemotron 550B Ultra) is synthesizing historical lessons, vocabulary mastery, and pronunciation notes... (may take ~20-30s)';
     notice.classList.remove('hidden');
   }
 
   try {
+    var sId = parseInt(milestoneClass.student_id, 10);
+    var cId = milestoneClass.id ? parseInt(milestoneClass.id, 10) : null;
+    var tId = currentTeacherId ? parseInt(currentTeacherId, 10) : null;
+
     var res = await apiPost('/progress-reports/ai-generate', {
-      student_id: milestoneClass.student_id,
+      student_id: sId,
       milestone_type: milestoneType,
-      class_id: milestoneClass.id,
-      teacher_id: currentTeacherId
+      class_id: cId,
+      teacher_id: tId
     });
 
     var data = res.data || res;

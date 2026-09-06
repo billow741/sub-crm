@@ -114,6 +114,9 @@ progressReports.get('/', async (c) => {
     score_pronunciation: r.score_pronunciation || 5,
     highlight_recording_url: r.highlight_recording_url,
     badge_name: r.badge_name,
+    stage_growth_insights: r.stage_growth_insights,
+    radar_scores: r.radar_scores,
+    next_phase_strategy: r.next_phase_strategy,
     status: r.status,
     organization_id: r.organization_id,
     created_at: r.created_at,
@@ -161,6 +164,9 @@ progressReports.get('/:id', validateParams(idParamSchema), async (c) => {
     score_pronunciation: r.score_pronunciation || 5,
     highlight_recording_url: r.highlight_recording_url,
     badge_name: r.badge_name,
+    stage_growth_insights: r.stage_growth_insights,
+    radar_scores: r.radar_scores,
+    next_phase_strategy: r.next_phase_strategy,
     status: r.status,
     created_at: r.created_at,
     updated_at: r.updated_at
@@ -169,10 +175,10 @@ progressReports.get('/:id', validateParams(idParamSchema), async (c) => {
 
 // AI 自动生成里程碑评估报告 Schema
 const aiGenerateSchema = z.object({
-  student_id: z.number().int().positive(),
+  student_id: z.coerce.number().int().positive(),
   milestone_type: z.enum(['milestone_10', 'milestone_30', 'milestone_60', 'milestone_100', 'level_up']),
-  class_id: z.number().int().positive().optional().nullable(),
-  teacher_id: z.number().int().positive().optional().nullable()
+  class_id: z.coerce.number().int().positive().optional().nullable(),
+  teacher_id: z.coerce.number().int().positive().optional().nullable()
 });
 
 progressReports.post('/ai-generate', validate(aiGenerateSchema), async (c) => {
@@ -296,42 +302,83 @@ progressReports.post('/ai-generate', validate(aiGenerateSchema), async (c) => {
     const preferredModel = c.req.header('x-llm-model') || c.env.LLM_MODEL || 'meta/llama-3.1-8b-instruct';
 
     if (apiKey) {
-      const systemPrompt = `You are a Senior ESL Pedagogical Director and Curriculum Specialist at SunnyBridge Academy, an elite 1-on-1 online English education school.
-Your task is to review a young student's comprehensive lesson logs across a multi-lesson milestone stage (${targetLessons} lessons) and generate an authoritative, evidence-based, inspiring Milestone Stage Assessment Report in English.
+      const systemPrompt = `You are a Senior ESL Pedagogical Director and Educational Psychologist at SunnyBridge Academy. 
+Your task is to analyze a student's milestone data and generate a highly professional, pedagogically sound Milestone Stage Assessment Report in JSON format.
 
-CRITICAL REQUIREMENTS:
-1. Ground your report strictly in the ACTUAL lesson data provided. Explicitly cite real vocabulary words, practiced sentence structures, and pronunciation correction patterns from the logs. Do NOT use generic, interchangeable boilerplate.
-2. The report must be written in professional, natural, encouraging English suitable for international teachers to review and share with parents.
-3. Return ONLY a valid JSON object with the following fields:
-- "summary": (2-3 paragraphs) A macro stage growth review analyzing the learning trajectory from Lesson 1 to Lesson ${actualCount || targetLessons}, highlighting changes in confidence, speaking pace, comprehension, and learning habits.
-- "strengths": (2-3 bullet points) Specific breakthroughs with concrete evidence (cite actual words, sentences, or phonics patterns mastered).
-- "improvements": (1-2 bullet points) Targeted areas to refine in the next stage (cite real pronunciation or grammatical patterns from logs).
-- "recommendation": (1-2 paragraphs) Clear curriculum pacing, next textbook goals, Cambridge YLE / CEFR benchmark roadmap, and daily listening routines.
-- "teacher_message": (1-2 paragraphs) An inspiring, warm closing note directly addressing the student and parents celebrating their milestone resilience and achievements.
-- "score_listening": (integer 1-5) Suggested rating based on class performance.
-- "score_speaking": (integer 1-5) Suggested rating based on speaking fluency.
-- "score_interaction": (integer 1-5) Suggested rating based on engagement.
-- "score_pronunciation": (integer 1-5) Suggested rating based on phonetic mastery.
-- "badge_name": (string) e.g. "${badgeName}"`;
+CRITICAL OBJECTIVE:
+Parents do not want a mere summary of past classes. They need "commercial delivery value" — a deep, macro-level analysis of their child's cognitive and linguistic growth, learning capabilities, and a personalized strategic roadmap for the next stage. 
 
-      const userPrompt = `Student Profile:
-- Name: ${displayName}
-- Grade/Age: ${student.grade || 'Primary'}
-- Stage: ${stageLabel}
-- Completed Lessons: ${actualCount || targetLessons} lessons
-- Textbooks Studied: ${textbooks.join(', ') || 'Core ESL Curriculum'}
-- Cumulative Unique Vocabulary (${allVocab.length} words): ${allVocab.slice(0, 35).join(', ')}
-- High-Frequency Core Words: ${frequentWords.slice(0, 15).join(', ')}
-- Practiced Sentence Structures:
+INSTRUCTIONS:
+1. Stage Growth Insights: Analyze the student's linguistic progress from an ESL pedagogy perspective. Do not just list words learned. Explain *how* they are developing (e.g., transitioning from single-word recall to spontaneous phrasing, improved phonemic awareness, cognitive connections).
+2. Learning Capability Radar: Evaluate the student across 5 key dimensions (Phonics, Vocabulary Retention, Spontaneous Speaking, Listening Comprehension, Classroom Engagement) using a 1-100 scale. Base this deeply on the teacher notes and pronunciation history.
+3. Next-Phase Personalized Strategy: Create 2 actionable, structured goals for the next milestone. Explicitly tie these goals to the student's current "improvements" (weaknesses) and provide an action plan.
+4. Tone: Authoritative, empathetic, and inspiring. Use professional pedagogical terminology (e.g., "scaffolding," "lexical retention") but explain it so parents understand the immense value of the tutoring.
+5. Strict JSON Output: You must return ONLY valid JSON matching the exact schema below. Do not output markdown code blocks, do not include any conversational text.
+
+JSON SCHEMA:
+{
+  "summary": "String. A high-level overview of the student's milestone progress and learning attitude.",
+  "stage_growth_insights": "String. Deep pedagogical analysis of cognitive and linguistic development. Show parents why this progress matters.",
+  "strengths": ["Array of Strings. 3-4 specific strengths citing actual data."],
+  "improvements": ["Array of Strings. 2-3 specific areas for improvement."],
+  "next_phase_strategy": [
+    {
+      "goal": "String. Specific actionable goal for the next stage.",
+      "rationale": "String. Why this goal is chosen based on the student's 'improvements' area.",
+      "action_plan": "String. What the teacher will do in class to achieve this."
+    }
+  ],
+  "radar_scores": {
+    "phonics": 0,
+    "vocabulary_retention": 0,
+    "spontaneous_speaking": 0,
+    "listening_comprehension": 0,
+    "classroom_engagement": 0
+  },
+  "recommendation": "String. General advice for parents to support learning at home.",
+  "teacher_message": "String. A warm, encouraging message directed directly to the student.",
+  "score_listening": 0,
+  "score_speaking": 0,
+  "score_interaction": 0,
+  "score_pronunciation": 0,
+  "badge_name": "String. A fun, descriptive title for the student (e.g., 'Phonics Master')."
+}`;
+
+      const userPrompt = `Please generate the JSON report based on the following student data.
+
+<student_profile>
+Name: ${displayName}
+Grade/Age: ${student.grade || 'Primary'}
+Stage: ${stageLabel}
+Completed Lessons: ${actualCount || targetLessons} lessons
+</student_profile>
+
+<curriculum_data>
+Textbooks Studied: ${textbooks.join(', ') || 'Core ESL Curriculum'}
+Cumulative Unique Vocabulary: ${allVocab.slice(0, 35).join(', ')}
+High-Frequency Core Words: ${frequentWords.slice(0, 15).join(', ')}
+Practiced Sentence Structures:
 ${practicedSentences.slice(0, 12).map(s => `- ${s}`).join('\n') || '- Interactive Q&A and target sentence frames'}
-- Pronunciation History & Corrections:
+</curriculum_data>
+
+<performance_data>
+Pronunciation History (Wrong -> Corrected):
 ${pronunciationHistory.slice(0, 8).map(p => `- Corrected "${p.wrong}" -> "${p.right}"`).join('\n') || '- Foundational phonics sounds drilled'}
-- Teacher Notes Timeline:
+
+Teacher Notes Timeline (Chronological):
 ${teacherNotes.slice(0, 6).map(n => `- [${n.date}] ${n.text}`).join('\n') || '- Smooth engagement in all sessions'}
+</performance_data>
 
-Generate the structured JSON report now:`;
+Remember: Output ONLY valid JSON matching the schema defined in the system prompt.`;
 
-      const candidateModels = [preferredModel, 'meta/llama-3.1-8b-instruct', 'meta/llama-3.3-70b-instruct', 'meta/llama-3.2-11b-vision-instruct'];
+      const candidateModels = [
+        preferredModel,
+        'nvidia/nemotron-3-ultra-550b-a55b',
+        'nvidia/nemotron-4-340b-instruct',
+        'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+        'meta/llama-3.2-11b-vision-instruct',
+        'meta/llama-3.1-8b-instruct'
+      ].filter((v, idx, arr) => v && arr.indexOf(v) === idx);
       for (const m of candidateModels) {
         try {
           const resp = await fetch(`${baseUrl}/chat/completions`, {
@@ -385,8 +432,35 @@ Generate the structured JSON report now:`;
 
     generatedData = {
       summary: `Over the course of completing ${actualCount || targetLessons} formal 1-on-1 English lessons, ${displayName} has demonstrated consistent growth, expanding communicative confidence and foundational comprehension. From initial guided responses, ${displayName} now navigates interactive classroom routines with high focus, having actively acquired over ${allVocab.length} cumulative vocabulary words across ${textbooks.length ? textbooks.join(', ') : 'our core curriculum'}.`,
-      strengths: `• Demonstrates solid retention of core vocabulary, readily recognizing and producing words such as ${vocabSample}.\n• Actively applies learned sentence structures (${sentSample}) during teacher-led guided conversations.\n• Shows enthusiastic classroom engagement and receptive phonics imitation during read-aloud activities.`,
-      improvements: `• Continue refining natural pronunciation flow and clarity on target sounds (e.g., sound precision in ${errSample}).\n• Encourage answering in full, multi-word sentences rather than single-word prompts to strengthen spontaneous expressive syntax.`,
+      stage_growth_insights: `The student is successfully transitioning from receptive vocabulary recognition to active spontaneous usage. They are demonstrating stronger phonemic awareness and can now connect individual sounds to construct full words independently.`,
+      strengths: [
+        `Demonstrates solid retention of core vocabulary, readily recognizing words such as ${vocabSample}.`,
+        `Actively applies learned sentence structures (${sentSample}) during teacher-led guided conversations.`,
+        `Shows enthusiastic classroom engagement and receptive phonics imitation during read-aloud activities.`
+      ],
+      improvements: [
+        `Continue refining natural pronunciation flow and clarity on target sounds (e.g., sound precision in ${errSample}).`,
+        `Encourage answering in full, multi-word sentences rather than single-word prompts to strengthen spontaneous syntax.`
+      ],
+      next_phase_strategy: [
+        {
+          goal: "Master short vowel precision and CVC blending.",
+          rationale: "Consistent phonics foundational skills reduce pronunciation errors and build reading confidence.",
+          action_plan: "Teacher will incorporate 3-minute phonics drills at the start of each session."
+        },
+        {
+          goal: "Transition to spontaneous full-sentence responses.",
+          rationale: "To move beyond single-word answers, structured scaffolding is required.",
+          action_plan: "Teacher will use the 'I say, you say' method with expanded sentence frames."
+        }
+      ],
+      radar_scores: {
+        phonics: 85,
+        vocabulary_retention: 90,
+        spontaneous_speaking: 80,
+        listening_comprehension: 95,
+        classroom_engagement: 90
+      },
       recommendation: `Advance to the subsequent curriculum units with structured daily 10-minute listening repetition. Reinforce sight words and target vocabulary from this stage to solidify Pre-A1/A1 conversational fluency.`,
       teacher_message: `Congratulations on reaching your ${targetLessons}-lesson milestone! Your positive attitude, resilience, and curiosity make every lesson a joy. We celebrate how far you have come and look forward to your continued brilliance!`,
       score_listening: 5,
@@ -412,8 +486,11 @@ Generate the structured JSON report now:`;
 
     return c.json(success({
       summary: normalizeParagraph(generatedData.summary),
+      stage_growth_insights: normalizeParagraph(generatedData.stage_growth_insights),
       strengths: normalizeBulletList(generatedData.strengths),
       improvements: normalizeBulletList(generatedData.improvements),
+      next_phase_strategy: JSON.stringify(generatedData.next_phase_strategy || []),
+      radar_scores: JSON.stringify(generatedData.radar_scores || {}),
       recommendation: normalizeParagraph(generatedData.recommendation),
       teacher_message: normalizeParagraph(generatedData.teacher_message),
       score_listening: parseInt(generatedData.score_listening) || 5,
@@ -434,10 +511,10 @@ Generate the structured JSON report now:`;
 
 // 创建阶段报告
 const reportSchema = z.object({
-  student_id: z.number().int().positive(),
-  class_id: z.number().int().positive().optional().nullable(),
+  student_id: z.coerce.number().int().positive(),
+  class_id: z.coerce.number().int().positive().optional().nullable(),
   report_type: z.enum(['milestone_10', 'milestone_30', 'milestone_60', 'milestone_100', 'level_up']),
-  teacher_id: z.number().int().positive().optional().nullable(),
+  teacher_id: z.coerce.number().int().positive().optional().nullable(),
   teacher_name: z.string().max(100).optional().nullable().transform(v => v || null),
   summary: z.string().optional().nullable().transform(v => v || null),
   strengths: z.string().optional().nullable().transform(v => v || null),
@@ -446,15 +523,18 @@ const reportSchema = z.object({
   teacher_message: z.string().optional().nullable().transform(v => v || null),
   from_level: z.string().optional().nullable().transform(v => v || null),
   to_level: z.string().optional().nullable().transform(v => v || null),
-  total_lessons_completed: z.number().int().min(0).optional().nullable(),
-  vocabulary_count: z.number().int().min(0).optional().nullable(),
-  score_listening: z.number().int().min(1).max(5).optional().nullable(),
-  score_speaking: z.number().int().min(1).max(5).optional().nullable(),
-  score_interaction: z.number().int().min(1).max(5).optional().nullable(),
-  score_pronunciation: z.number().int().min(1).max(5).optional().nullable(),
+  total_lessons_completed: z.coerce.number().int().min(0).optional().nullable(),
+  vocabulary_count: z.coerce.number().int().min(0).optional().nullable(),
+  score_listening: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  score_speaking: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  score_interaction: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  score_pronunciation: z.coerce.number().int().min(1).max(5).optional().nullable(),
   highlight_recording_url: z.string().optional().nullable().transform(v => v || null),
   badge_name: z.string().max(100).optional().nullable().transform(v => v || null),
-  organization_id: z.number().int().positive().optional().nullable()
+  stage_growth_insights: z.string().optional().nullable().transform(v => v || null),
+  radar_scores: z.string().optional().nullable().transform(v => v || null),
+  next_phase_strategy: z.string().optional().nullable().transform(v => v || null),
+  organization_id: z.coerce.number().int().positive().optional().nullable()
 });
 
 progressReports.post('/', validate(reportSchema), async (c) => {
@@ -474,9 +554,10 @@ progressReports.post('/', validate(reportSchema), async (c) => {
       total_lessons_completed, vocabulary_count,
       score_listening, score_speaking, score_interaction, score_pronunciation,
       highlight_recording_url, badge_name,
+      stage_growth_insights, radar_scores, next_phase_strategy,
       status, organization_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)
   `).bind(
     data.student_id,
     data.class_id || null,
@@ -498,6 +579,9 @@ progressReports.post('/', validate(reportSchema), async (c) => {
     data.score_pronunciation || 5,
     data.highlight_recording_url || null,
     data.badge_name || null,
+    data.stage_growth_insights || null,
+    data.radar_scores || null,
+    data.next_phase_strategy || null,
     data.organization_id || null
   ).run();
 
