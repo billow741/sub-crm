@@ -103,6 +103,38 @@ function setupNotifications() {
   loadNotifications(true);
 }
 
+function formatNotifyTime(dateStr) {
+  if (!dateStr) return '';
+  var str = String(dateStr).trim();
+  if (!str.includes('Z') && !str.includes('+')) {
+    str = str.replace(' ', 'T') + 'Z';
+  }
+  var date = new Date(str);
+  if (isNaN(date.getTime())) return dateStr;
+
+  var now = new Date();
+  var diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (diffSec < 60) return '刚刚';
+  if (diffSec < 3600) return Math.floor(diffSec / 60) + ' 分钟前';
+  
+  var isSameDay = (now.getFullYear() === date.getFullYear() &&
+                   now.getMonth() === date.getMonth() &&
+                   now.getDate() === date.getDate());
+  
+  var hours = String(date.getHours()).padStart(2, '0');
+  var mins = String(date.getMinutes()).padStart(2, '0');
+  
+  if (isSameDay) {
+    return '今天 ' + hours + ':' + mins;
+  }
+  
+  var year = date.getFullYear();
+  var month = String(date.getMonth() + 1).padStart(2, '0');
+  var day = String(date.getDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day + ' ' + hours + ':' + mins;
+}
+
 function safeEscape(text) {
   if (typeof escapeHtml === 'function') return escapeHtml(text);
   if (typeof spEsc === 'function') return spEsc(text);
@@ -154,7 +186,7 @@ async function loadNotifications(onlyCount = false) {
           <div style="flex:1;">
             <div style="font-size:13px; font-weight:600; color:#1e293b; margin-bottom:4px;">${safeEscape(n.title)}</div>
             <div style="font-size:12px; color:#475569; line-height:1.4;">${safeEscape(n.body)}</div>
-            <div style="font-size:11px; color:#94a3b8; margin-top:6px;">${new Date(n.created_at).toLocaleString()}</div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:6px;">${formatNotifyTime(n.created_at)}</div>
           </div>
           ${!n.is_read ? '<div style="width:8px; height:8px; background:#ef4444; border-radius:50%; margin-top:6px;"></div>' : ''}
         </div>

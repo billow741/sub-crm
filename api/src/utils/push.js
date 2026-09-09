@@ -20,7 +20,7 @@ export async function triggerPushNotification(DB, userType, userId, actionType, 
   try {
     // 1. Insert into notification history
     await DB.prepare(
-      'INSERT INTO notification_history (user_type, user_id, action_type, related_class_id, title, body, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)'
+      "INSERT INTO notification_history (user_type, user_id, action_type, related_class_id, title, body, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
     ).bind(userType, userId, actionType, relatedClassId, title, body).run();
 
     // 2. Fetch push subscriptions
