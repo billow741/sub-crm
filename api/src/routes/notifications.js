@@ -7,7 +7,7 @@ const notifications = new Hono();
 
 const subscribeSchema = z.object({
   user_type: z.enum(['parent', 'teacher']),
-  user_id: z.number().int().positive(),
+  user_id: z.coerce.number().int().positive(),
   subscription: z.object({
     endpoint: z.string().url(),
     keys: z.object({
@@ -57,7 +57,7 @@ notifications.get('/history', async (c) => {
     'SELECT * FROM notification_history WHERE user_type = ? AND user_id = ? ORDER BY created_at DESC LIMIT 50'
   ).bind(userType, parseInt(userId)).all();
 
-  return c.json(success({ data: results.results || [] }));
+  return c.json(success(results.results || []));
 });
 
 // Mark notification as read

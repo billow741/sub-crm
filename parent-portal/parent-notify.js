@@ -1,5 +1,17 @@
 // --- Notification System ---
-const PUBLIC_VAPID_KEY = "BOA2LGHT-fbTvPMpNOahcwDtsDJRMebMSXGf99sGONyOO7sE3_CkPPvl4sQxsP_dQK3rxt8feaJ4Ryfjt_e1hyo"; // Actual VAPID key
+const PUBLIC_VAPID_KEY = "BOA2LGHT-fbTvPMpNOahcwDtsDJRMebMSXGf99sGONyOO7sE3_CkPPvl4sQxsP_dQK3rxt8feaJ4Ryfjt_e1hyo";
+
+function getPortalApiBase() {
+  if (typeof API_BASE !== 'undefined') return API_BASE;
+  if (window.API_BASE) return window.API_BASE;
+  return 'https://api.sunnybridge.qzz.io/api/v1';
+}
+
+function getPortalApiKey() {
+  if (typeof API_KEY !== 'undefined') return API_KEY;
+  if (window.API_KEY) return window.API_KEY;
+  return '***';
+}
 
 function setupNotifications() {
   const bellBtn = document.getElementById('notify-bell-btn');
@@ -54,12 +66,12 @@ function setupNotifications() {
             applicationServerKey: PUBLIC_VAPID_KEY
           });
           
-          await fetch(`${API_BASE_URL}/notifications/subscribe`, {
+          await fetch(`${getPortalApiBase()}/notifications/subscribe`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': getPortalApiKey() },
             body: JSON.stringify({
               user_type: 'parent',
-              user_id: studentId,
+              user_id: parseInt(studentId, 10),
               subscription: subscription
             })
           });
@@ -71,7 +83,8 @@ function setupNotifications() {
         alert('推送通知权限被拒绝。');
       }
     } catch (e) {
-      console.error(e);
+      console.error('Subscribe push error:', e);
+      alert('开启推送失败: ' + (e.message || e));
     }
   });
   
@@ -90,13 +103,27 @@ function setupNotifications() {
   loadNotifications(true);
 }
 
+function safeEscape(text) {
+  if (typeof escapeHtml === 'function') return escapeHtml(text);
+  if (typeof spEsc === 'function') return spEsc(text);
+  var div = document.createElement('div');
+  div.textContent = text || '';
+  return div.innerHTML;
+}
+
 async function loadNotifications(onlyCount = false) {
   const studentId = getStudentId();
   if (!studentId) return;
   try {
     const res = await apiGet('/notifications/history?user_type=parent&user_id=' + studentId);
     let data = [];
-    if (res && res.data) data = res.data;
+    if (Array.isArray(res)) {
+      data = res;
+    } else if (res && Array.isArray(res.data)) {
+      data = res.data;
+    } else if (res && res.data && Array.isArray(res.data.data)) {
+      data = res.data.data;
+    }
     
     const unreadCount = data.filter(n => !n.is_read).length;
     const badge = document.getElementById('notify-badge');
@@ -110,6 +137,8 @@ async function loadNotifications(onlyCount = false) {
     if (onlyCount) return;
     
     const list = document.getElementById('notify-list');
+    if (!list) return;
+
     if (data.length === 0) {
       list.innerHTML = '<div style="padding:32px 16px; text-align:center; color:#94a3b8; font-size:12px;">暂无通知</div>';
       return;
@@ -123,8 +152,8 @@ async function loadNotifications(onlyCount = false) {
         <div style="display:flex; align-items:start; gap:10px;">
           <span style="font-size:18px; margin-top:2px;">${icon}</span>
           <div style="flex:1;">
-            <div style="font-size:13px; font-weight:600; color:#1e293b; margin-bottom:4px;">${escapeHtml(n.title)}</div>
-            <div style="font-size:12px; color:#475569; line-height:1.4;">${escapeHtml(n.body)}</div>
+            <div style="font-size:13px; font-weight:600; color:#1e293b; margin-bottom:4px;">${safeEscape(n.title)}</div>
+            <div style="font-size:12px; color:#475569; line-height:1.4;">${safeEscape(n.body)}</div>
             <div style="font-size:11px; color:#94a3b8; margin-top:6px;">${new Date(n.created_at).toLocaleString()}</div>
           </div>
           ${!n.is_read ? '<div style="width:8px; height:8px; background:#ef4444; border-radius:50%; margin-top:6px;"></div>' : ''}
@@ -140,9 +169,9 @@ async function loadNotifications(onlyCount = false) {
 
 window.markNotifyRead = async function(id) {
   try {
-    await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+    await fetch(`${getPortalApiBase()}/notifications/${id}/read`, {
       method: 'PATCH',
-      headers: { 'X-API-Key': API_KEY }
+      headers: { 'X-API-Key': getPortalApiKey() }
     });
     loadNotifications(); // Reload list
   } catch (e) {
@@ -151,4 +180,8 @@ window.markNotifyRead = async function(id) {
 };
 
 // Call setup on load
-document.addEventListener('DOMContentLoaded', setupNotifications);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupNotifications);
+} else {
+  setupNotifications();
+}
