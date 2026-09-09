@@ -779,9 +779,10 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
                             (data.start_time && data.start_time !== existing.start_time) ||
                             (data.teacher_id && data.teacher_id !== existing.teacher_id);
       
-      const sName = updated.student_name || '学生';
+      const studentInfo = await DB.prepare('SELECT name, english_name FROM students WHERE id = ?').bind(updated.student_id).first();
+      const sName = studentInfo?.english_name ? `${studentInfo.name} (${studentInfo.english_name})` : (studentInfo?.name || '学生');
       const subject = updated.subject || '英语';
-      const timeStr = `${updated.date} ${updated.start_time || ''}`;
+      const timeStr = `${updated.date} ${updated.start_time || ''}`.trim();
       
       if (isCancelled) {
         c.executionCtx.waitUntil(triggerPushNotification(DB, 'parent', updated.student_id, 'cancelled', '⚠️ 课程取消通知', `您原定于 ${existing.date} ${existing.start_time || ''} 的 ${subject} 课程已被取消。`, updated.id));
@@ -939,6 +940,42 @@ classes.delete('/:id', validateParams(idParamSchema), async (c) => {
         } catch (orgErr) {
           console.warn('恢复机构课时包警告:', orgErr.message);
         }
+      }
+    }
+
+    // ── 发送课程取消通知（无论排课还是待上课，被删除时向家长和老师推送取消提醒）──
+    if (cls && cls.status !== 'completed') {
+      try {
+        const studentInfo = await DB.prepare('SELECT name, english_name FROM students WHERE id = ?').bind(cls.student_id).first();
+        const sName = studentInfo?.english_name ? `${studentInfo.name} (${studentInfo.english_name})` : (studentInfo?.name || '学生');
+        const subject = cls.subject || '英语';
+        const timeStr = `${cls.date} ${cls.start_time || ''}`.trim();
+
+        if (cls.student_id) {
+          c.executionCtx.waitUntil(triggerPushNotification(
+            DB,
+            'parent',
+            cls.student_id,
+            'cancelled',
+            '⚠️ 课程取消通知',
+            `您原定于 ${timeStr} 的 ${subject} 课程已被取消。`,
+            parseInt(id)
+          ));
+        }
+
+        if (cls.teacher_id) {
+          c.executionCtx.waitUntil(triggerPushNotification(
+            DB,
+            'teacher',
+            cls.teacher_id,
+            'cancelled',
+            '⚠️ 课程取消通知',
+            `原定于 ${timeStr} 与 ${sName} 的课程已被取消。`,
+            parseInt(id)
+          ));
+        }
+      } catch (pushErr) {
+        console.warn('删除排课发送取消通知异常:', pushErr.message);
       }
     }
 
