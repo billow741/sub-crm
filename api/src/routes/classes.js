@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { classSchema, classUpdateSchema, validate, validateParams, idParamSchema, paginationSchema, validateQuery } from '../utils/validation.js';
 import { success, error, calculatePagination } from '../utils/response.js';
 import { createPublishedMilestoneReport } from './progressReports.js';
+import { triggerPushNotification } from '../utils/push.js';
 
 const classes = new Hono();
 
@@ -424,6 +425,21 @@ classes.post('/student/:student_id', validate(classSchema), async (c) => {
     await syncStudentTextbookProgress(DB, studentId, targetCode, targetUnit, targetLesson);
   }
 
+  // ── 推送排课通知 ──
+  if (classStatus === 'scheduled') {
+    const timeStr = `${newClass.date} ${newClass.start_time || ''}`;
+    const subject = newClass.subject || '英语';
+    const sName = newClass.student_name || '学生';
+    
+    // 通知家长
+    c.executionCtx.waitUntil(triggerPushNotification(DB, 'parent', studentId, 'scheduled', '📅 新课程安排', `SunnyBridge 为您安排了新课程：${subject}，时间：${timeStr}。`, newClass.id));
+    
+    // 通知老师
+    if (newClass.teacher_id) {
+      c.executionCtx.waitUntil(triggerPushNotification(DB, 'teacher', newClass.teacher_id, 'scheduled', '📅 新排课提醒', `您有新的课程安排。学生：${sName}，时间：${timeStr}。`, newClass.id));
+    }
+  }
+
   return c.json(success({
     id: newClass.id,
     student_id: newClass.student_id,
@@ -754,6 +770,33 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
 
     if (!updated) {
       updated = await DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
+    }
+
+    // ── 推送课程修改/取消通知 ──
+    try {
+      const isCancelled = newStatus === 'cancelled' && oldStatus !== 'cancelled';
+      const isTimeUpdated = (data.date && data.date !== existing.date) || 
+                            (data.start_time && data.start_time !== existing.start_time) ||
+                            (data.teacher_id && data.teacher_id !== existing.teacher_id);
+      
+      const sName = updated.student_name || '学生';
+      const subject = updated.subject || '英语';
+      const timeStr = `${updated.date} ${updated.start_time || ''}`;
+      
+      if (isCancelled) {
+        c.executionCtx.waitUntil(triggerPushNotification(DB, 'parent', updated.student_id, 'cancelled', '⚠️ 课程取消通知', `您原定于 ${existing.date} ${existing.start_time || ''} 的 ${subject} 课程已被取消。`, updated.id));
+        if (updated.teacher_id) {
+          c.executionCtx.waitUntil(triggerPushNotification(DB, 'teacher', updated.teacher_id, 'cancelled', '⚠️ 课程取消通知', `原定于 ${existing.date} ${existing.start_time || ''} 与 ${sName} 的课程已被取消。`, updated.id));
+        }
+      } else if (isTimeUpdated && newStatus === 'scheduled') {
+        c.executionCtx.waitUntil(triggerPushNotification(DB, 'parent', updated.student_id, 'updated', '⏰ 课程时间调整', `您的 ${subject} 课程已调整至 ${timeStr}，请注意查看。`, updated.id));
+        if (updated.teacher_id) {
+          c.executionCtx.waitUntil(triggerPushNotification(DB, 'teacher', updated.teacher_id, 'updated', '⏰ 课程时间调整', `学生 ${sName} 的课程已调整至 ${timeStr}。`, updated.id));
+        }
+        // If teacher changed, notify old teacher too? Keep it simple for now.
+      }
+    } catch (e) {
+      console.warn('推送课程修改通知异常:', e.message);
     }
 
     return c.json(success({

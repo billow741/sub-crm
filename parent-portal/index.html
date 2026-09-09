@@ -1447,6 +1447,12 @@
     </div>
   </div>
   <div id="today-date" class="sb-header__date"></div>
+  <div style="position:relative; margin-left:12px;">
+    <button id="notify-bell-btn" style="background:transparent; border:none; color:white; font-size:22px; cursor:pointer; position:relative; padding:4px;">
+      🔔
+      <span id="notify-badge" style="display:none; position:absolute; top:2px; right:0; background:#ef4444; color:white; font-size:10px; font-weight:bold; padding:2px 5px; border-radius:100px; line-height:1;"></span>
+    </button>
+  </div>
 </header>
 
 <div class="container">
@@ -4902,6 +4908,6 @@ function spShareCard(btn) {
   }
 })();
 </script>
-
+<script src="parent-notify.js"></script>
 </body>
 </html>

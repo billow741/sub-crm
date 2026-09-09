@@ -139,6 +139,12 @@
         </div>
         <div class="flex items-center gap-3">
           <div id="today-date" class="text-sm text-gray-500 hidden sm:block"></div>
+          <div style="position:relative; margin-right:8px;">
+            <button id="notify-bell-btn" style="background:transparent; border:none; color:#4b5563; font-size:22px; cursor:pointer; position:relative; padding:4px;">
+              🔔
+              <span id="notify-badge" style="display:none; position:absolute; top:-2px; right:-2px; background:#ef4444; color:white; font-size:10px; font-weight:bold; padding:2px 5px; border-radius:100px; line-height:1;"></span>
+            </button>
+          </div>
           <img src="sunblogo.webp" alt="SunnyBridge" class="w-8 h-8 object-contain">
         </div>
       </div>
@@ -3908,5 +3914,6 @@ async function checkExistingAssessment(classId, callback) {
 // ===== Escape HTML helper (already defined above, but exportble for report window) =====
 
 </script>
+<script src="teacher-notify.js"></script>
 </body>
 </html>
