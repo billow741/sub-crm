@@ -768,7 +768,7 @@ export default function Schedule() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">时间 (8am - 9pm) *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">时间 *</label>
                   <div className="grid grid-cols-2 gap-2">
                     <select
                       value={formData.time && formData.time.includes(':') ? formData.time.split(':')[0].padStart(2, '0') : '10'}
@@ -777,28 +777,28 @@ export default function Schedule() {
                         const m = (formData.time && formData.time.includes(':')) ? formData.time.split(':')[1] : '00';
                         setFormData({ ...formData, time: `${h}:${m}` });
                       }}
-                      className="w-full px-2.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white text-sm"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white text-sm"
                       required
                     >
                       {formData.time && formData.time.includes(':') && (parseInt(formData.time.split(':')[0]) < 8 || parseInt(formData.time.split(':')[0]) > 21) && (
                         <option value={formData.time.split(':')[0].padStart(2, '0')} disabled>
-                          ⚠️ {formData.time.split(':')[0]}:00 (超出8am-9pm)
+                          ⚠️ {formData.time.split(':')[0]}:00 (超出08:00-21:00)
                         </option>
                       )}
-                      <option value="08">08:00 (8 AM)</option>
-                      <option value="09">09:00 (9 AM)</option>
-                      <option value="10">10:00 (10 AM)</option>
-                      <option value="11">11:00 (11 AM)</option>
-                      <option value="12">12:00 (12 PM)</option>
-                      <option value="13">13:00 (1 PM)</option>
-                      <option value="14">14:00 (2 PM)</option>
-                      <option value="15">15:00 (3 PM)</option>
-                      <option value="16">16:00 (4 PM)</option>
-                      <option value="17">17:00 (5 PM)</option>
-                      <option value="18">18:00 (6 PM)</option>
-                      <option value="19">19:00 (7 PM)</option>
-                      <option value="20">20:00 (8 PM)</option>
-                      <option value="21">21:00 (9 PM)</option>
+                      <option value="08">08:00</option>
+                      <option value="09">09:00</option>
+                      <option value="10">10:00</option>
+                      <option value="11">11:00</option>
+                      <option value="12">12:00</option>
+                      <option value="13">13:00</option>
+                      <option value="14">14:00</option>
+                      <option value="15">15:00</option>
+                      <option value="16">16:00</option>
+                      <option value="17">17:00</option>
+                      <option value="18">18:00</option>
+                      <option value="19">19:00</option>
+                      <option value="20">20:00</option>
+                      <option value="21">21:00</option>
                     </select>
 
                     <select
