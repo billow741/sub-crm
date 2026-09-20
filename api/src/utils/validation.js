@@ -88,6 +88,12 @@ export const classSchema = z.object({
   fb_recording_status: z.string().optional().nullable().transform(v => v || 'none'),     // none | pending | processing | ready | failed
   fb_recording_duration: z.coerce.number().int().optional().nullable(),                   // 视频时长(秒)
   fb_recording_size: z.coerce.number().int().optional().nullable(),                       // 视频大小(字节)
+  // 课程五维核心能力评分 (1-5星/分，用于支撑里程碑报告雷达图真实计算)
+  fb_score_phonics: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  fb_score_vocab: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  fb_score_speaking: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  fb_score_listening: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  fb_score_engagement: z.coerce.number().int().min(1).max(5).optional().nullable(),
   // 教材页码引用 (用于家长端嵌入 PDF 页图, 配合 R2 page-img/<code>/<unit>/<page>)
   textbook_code: z.string().optional().nullable().transform(v => v || null),              // 如 EU-S
   unit_number: z.coerce.number().int().optional().nullable(),                             // 如 1

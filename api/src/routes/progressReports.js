@@ -266,7 +266,8 @@ export async function generateMilestoneReportData({ DB, env, student_id, milesto
   // Fetch up to targetLessons formal completed classes
   const classesResult = await DB.prepare(`
     SELECT id, date, start_time, textbook_code, unit_number, fb_unit, fb_lesson,
-           fb_vocab, fb_patterns, fb_grammar, fb_pronunciation_errors, fb_grammar_errors, fb_teacher_message, fb_homework
+           fb_vocab, fb_patterns, fb_grammar, fb_pronunciation_errors, fb_grammar_errors, fb_teacher_message, fb_homework,
+           fb_score_phonics, fb_score_vocab, fb_score_speaking, fb_score_listening, fb_score_engagement
     FROM classes
     WHERE student_id = ? AND status = 'completed' AND is_trial = 0
     ORDER BY date ASC, start_time ASC
@@ -276,7 +277,7 @@ export async function generateMilestoneReportData({ DB, env, student_id, milesto
   const classList = classesResult.results || [];
   const actualCount = classList.length;
 
-  // Extract vocabulary, frequencies, sentences, pronunciation history, teacher notes
+  // Extract vocabulary, frequencies, sentences, pronunciation history, teacher notes & 5-dimension ratings
   const wordFreqMap = {};
   const allVocabSet = new Set();
   const practicedSentences = [];
@@ -285,8 +286,22 @@ export async function generateMilestoneReportData({ DB, env, student_id, milesto
   const teacherNotes = [];
   const textbookSet = new Set();
 
+  const dimScores = {
+    phonics: [],
+    vocab: [],
+    speaking: [],
+    listening: [],
+    engagement: []
+  };
+
   classList.forEach(cls => {
     if (cls.textbook_code) textbookSet.add(cls.textbook_code);
+    if (cls.fb_score_phonics) dimScores.phonics.push(cls.fb_score_phonics);
+    if (cls.fb_score_vocab) dimScores.vocab.push(cls.fb_score_vocab);
+    if (cls.fb_score_speaking) dimScores.speaking.push(cls.fb_score_speaking);
+    if (cls.fb_score_listening) dimScores.listening.push(cls.fb_score_listening);
+    if (cls.fb_score_engagement) dimScores.engagement.push(cls.fb_score_engagement);
+
     if (cls.fb_vocab) {
       const words = cls.fb_vocab.split(/[\n,，、;；/]+/)
         .map(w => w.trim().toLowerCase())
@@ -342,6 +357,29 @@ export async function generateMilestoneReportData({ DB, env, student_id, milesto
   const displayName = student.english_name ? `${student.name} (${student.english_name})` : student.name;
   const textbooks = Array.from(textbookSet);
 
+  // Compute quantitative baseline scores from teacher's lesson evaluations (1-5 mapped to 60-100)
+  const calcDimAvg = (arr) => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+  const avgPhonics = calcDimAvg(dimScores.phonics);
+  const avgVocab = calcDimAvg(dimScores.vocab);
+  const avgSpeaking = calcDimAvg(dimScores.speaking);
+  const avgListening = calcDimAvg(dimScores.listening);
+  const avgEngagement = calcDimAvg(dimScores.engagement);
+
+  const to100Scale = (avg, fallback) => {
+    if (avg === null || isNaN(avg)) return fallback;
+    return Math.min(100, Math.max(60, Math.round(((avg - 1) / 4) * 40 + 60)));
+  };
+
+  const baseRadarScores = {
+    phonics: to100Scale(avgPhonics, 82),
+    vocabulary_retention: to100Scale(avgVocab, 85),
+    spontaneous_speaking: to100Scale(avgSpeaking, 78),
+    listening_comprehension: to100Scale(avgListening, 88),
+    classroom_engagement: to100Scale(avgEngagement, 92)
+  };
+
+  const hasTeacherScores = dimScores.phonics.length > 0 || dimScores.vocab.length > 0 || dimScores.speaking.length > 0;
+
   // Try calling LLM
   let generatedData = null;
   let isFromLLM = false;
@@ -360,7 +398,14 @@ Parents do not want a mere summary of past classes. They need "commercial delive
 
 INSTRUCTIONS:
 1. Stage Growth Insights: Analyze the student's linguistic progress from an ESL pedagogy perspective. Do not just list words learned. Explain *how* they are developing (e.g., transitioning from single-word recall to spontaneous phrasing, improved phonemic awareness, cognitive connections).
-2. Learning Capability Radar: Evaluate the student across 5 key dimensions (Phonics, Vocabulary Retention, Spontaneous Speaking, Listening Comprehension, Classroom Engagement) using a 60-100 scale. 60 = baseline entry level for a newly enrolled student; 80 = solid stage-appropriate mastery; 100 = exceptional, exceeds grade expectations. Scores MUST meaningfully differentiate the student's relative strengths vs. weaknesses — spread scores across at least a 15-point range. Base this deeply on the teacher notes and pronunciation history.
+2. Learning Capability Radar: Evaluate the student across 5 key dimensions (Phonics, Vocabulary Retention, Spontaneous Speaking, Listening Comprehension, Classroom Engagement) using a 60-100 scale.
+CRITICAL ANCHORING: You MUST anchor your radar_scores on the teacher's lesson-by-lesson quantitative evaluations. Use these calculated base scores as your foundation:
+- phonics: ~${baseRadarScores.phonics}
+- vocabulary_retention: ~${baseRadarScores.vocabulary_retention}
+- spontaneous_speaking: ~${baseRadarScores.spontaneous_speaking}
+- listening_comprehension: ~${baseRadarScores.listening_comprehension}
+- classroom_engagement: ~${baseRadarScores.classroom_engagement}
+You may adjust each dimension by only ±3 to ±5 points based on qualitative teacher notes and pronunciation error logs, but do NOT deviate significantly from these teacher-graded averages.
 3. Next-Phase Personalized Strategy: Create 2 actionable, structured goals for the next milestone. Explicitly tie these goals to the student's current "improvements" (weaknesses) and provide an action plan.
 4. Tone: Authoritative, empathetic, and inspiring. Use professional pedagogical terminology (e.g., "scaffolding," "lexical retention") but explain it so parents understand the immense value of the tutoring.
 5. Strict JSON Output: You must return ONLY valid JSON matching the exact schema below. Do not output markdown code blocks, do not include any conversational text.
@@ -402,6 +447,15 @@ Grade/Age: ${student.grade || 'Primary'}
 Stage: ${stageLabel}
 Completed Lessons: ${actualCount || targetLessons} lessons
 </student_profile>
+
+<teacher_quantitative_evaluations>
+Lesson Evaluation Coverage: ${hasTeacherScores ? `${dimScores.phonics.length} lessons evaluated` : 'Historical baseline calibration'}
+- Phonics Avg: ${avgPhonics ? avgPhonics.toFixed(1) + '/5' : 'Default'} -> Base Score: ${baseRadarScores.phonics}
+- Vocab Retention Avg: ${avgVocab ? avgVocab.toFixed(1) + '/5' : 'Default'} -> Base Score: ${baseRadarScores.vocabulary_retention}
+- Spontaneous Speaking Avg: ${avgSpeaking ? avgSpeaking.toFixed(1) + '/5' : 'Default'} -> Base Score: ${baseRadarScores.spontaneous_speaking}
+- Listening Comprehension Avg: ${avgListening ? avgListening.toFixed(1) + '/5' : 'Default'} -> Base Score: ${baseRadarScores.listening_comprehension}
+- Classroom Engagement Avg: ${avgEngagement ? avgEngagement.toFixed(1) + '/5' : 'Default'} -> Base Score: ${baseRadarScores.classroom_engagement}
+</teacher_quantitative_evaluations>
 
 <curriculum_data>
 Textbooks Studied: ${textbooks.join(', ') || 'Core ESL Curriculum'}
@@ -504,13 +558,7 @@ Remember: Output ONLY valid JSON matching the schema defined in the system promp
           action_plan: "Teacher will use the 'I say, you say' method with expanded sentence frames."
         }
       ],
-      radar_scores: {
-        phonics: 85,
-        vocabulary_retention: 90,
-        spontaneous_speaking: 80,
-        listening_comprehension: 95,
-        classroom_engagement: 90
-      },
+      radar_scores: baseRadarScores,
       recommendation: `Advance to the subsequent curriculum units with structured daily 10-minute listening repetition. Reinforce sight words and target vocabulary from this stage to solidify Pre-A1/A1 conversational fluency.`,
       teacher_message: `Congratulations on reaching your ${targetLessons}-lesson milestone! Your positive attitude, resilience, and curiosity make every lesson a joy. We celebrate how far you have come and look forward to your continued brilliance!`,
       score_listening: 5,
@@ -534,13 +582,26 @@ Remember: Output ONLY valid JSON matching the schema defined in the system promp
     return typeof val === 'string' ? val : '';
   };
 
+  let rawRadar = {};
+  try {
+    rawRadar = typeof generatedData.radar_scores === 'string' ? JSON.parse(generatedData.radar_scores) : (generatedData.radar_scores || {});
+  } catch(e) {}
+
+  const finalRadarScores = {
+    phonics: Math.min(100, Math.max(60, Number(rawRadar.phonics) || baseRadarScores.phonics)),
+    vocabulary_retention: Math.min(100, Math.max(60, Number(rawRadar.vocabulary_retention) || baseRadarScores.vocabulary_retention)),
+    spontaneous_speaking: Math.min(100, Math.max(60, Number(rawRadar.spontaneous_speaking) || baseRadarScores.spontaneous_speaking)),
+    listening_comprehension: Math.min(100, Math.max(60, Number(rawRadar.listening_comprehension) || baseRadarScores.listening_comprehension)),
+    classroom_engagement: Math.min(100, Math.max(60, Number(rawRadar.classroom_engagement) || baseRadarScores.classroom_engagement))
+  };
+
   return {
     summary: normalizeParagraph(generatedData.summary),
     stage_growth_insights: normalizeParagraph(generatedData.stage_growth_insights),
     strengths: normalizeBulletList(generatedData.strengths),
     improvements: normalizeBulletList(generatedData.improvements),
     next_phase_strategy: typeof generatedData.next_phase_strategy === 'string' ? generatedData.next_phase_strategy : JSON.stringify(generatedData.next_phase_strategy || []),
-    radar_scores: typeof generatedData.radar_scores === 'string' ? generatedData.radar_scores : JSON.stringify(generatedData.radar_scores || {}),
+    radar_scores: JSON.stringify(finalRadarScores),
     recommendation: normalizeParagraph(generatedData.recommendation),
     teacher_message: normalizeParagraph(generatedData.teacher_message),
     score_listening: parseInt(generatedData.score_listening) || 5,

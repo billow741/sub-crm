@@ -123,6 +123,11 @@ export default function TeacherPortal() {
       fb_patterns: cls.fb_patterns || '',
       fb_grammar: cls.fb_grammar || '',
       fb_teacher_message: cls.fb_teacher_message || '',
+      fb_score_phonics: cls.fb_score_phonics ?? 5,
+      fb_score_vocab: cls.fb_score_vocab ?? 5,
+      fb_score_speaking: cls.fb_score_speaking ?? 4,
+      fb_score_listening: cls.fb_score_listening ?? 5,
+      fb_score_engagement: cls.fb_score_engagement ?? 5,
       fb_homework: cls.fb_homework || '',
       fb_next_preview: cls.fb_next_preview || '',
       fb_recording: cls.fb_recording || '',
@@ -575,6 +580,48 @@ export default function TeacherPortal() {
                           </button>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* 📊 5-Dimension Competency Rating (五维核心能力即时评级) */}
+                  <div className="bg-gradient-to-br from-purple-50/70 via-white to-indigo-50/40 border border-purple-200 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                        <span className="w-1.5 h-4 bg-purple-600 rounded-full"></span> 📊 五维核心能力即时评级 (5-Dimension Rating)
+                      </div>
+                      <span className="text-[10px] text-purple-700 bg-purple-100 font-bold px-2 py-0.5 rounded-full">用于里程碑雷达图</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">为本节课学生表现快速打分 (1-5星)，数据将直接聚合计算为里程碑能力雷达图。</p>
+                    <div className="space-y-2">
+                      {[
+                        { key: 'fb_score_phonics', icon: '🔤', label: '自然拼读与发音 (Phonics & Pronunciation)', fallback: 5 },
+                        { key: 'fb_score_vocab', icon: '📚', label: '词汇掌握与留存 (Vocabulary Retention)', fallback: 5 },
+                        { key: 'fb_score_speaking', icon: '🗣️', label: '自发表达与开口 (Spontaneous Speaking)', fallback: 4 },
+                        { key: 'fb_score_listening', icon: '🎧', label: '听力理解与反应 (Listening Comprehension)', fallback: 5 },
+                        { key: 'fb_score_engagement', icon: '🌟', label: '课堂参与专注度 (Classroom Engagement)', fallback: 5 },
+                      ].map(dim => {
+                        const curScore = feedbackForm[dim.key] ?? dim.fallback;
+                        return (
+                          <div key={dim.key} className="bg-white p-2.5 px-3 rounded-lg border border-purple-100 flex items-center justify-between shadow-xs">
+                            <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                              <span>{dim.icon}</span> {dim.label}
+                            </span>
+                            <div className="flex items-center gap-1 cursor-pointer select-none">
+                              {[1, 2, 3, 4, 5].map(star => (
+                                <button
+                                  key={star}
+                                  type="button"
+                                  onClick={() => setFeedbackForm({ ...feedbackForm, [dim.key]: star })}
+                                  className={`text-xl transition-colors ${star <= curScore ? 'text-amber-400 hover:text-amber-500' : 'text-gray-200 hover:text-gray-300'}`}
+                                >
+                                  ★
+                                </button>
+                              ))}
+                              <span className="text-xs font-bold text-gray-500 ml-1.5 w-4">{curScore}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 

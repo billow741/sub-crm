@@ -709,6 +709,98 @@
     </div>
     <div id="fb-gram-errors" class="space-y-2"></div>
   </div>
+  <!-- 📊 5-Dimension Core Competency Rating (Quick 20s Rating for Milestone Radar) -->
+  <div class="border rounded-lg p-3.5 bg-gradient-to-br from-purple-50/70 via-white to-indigo-50/40 border-purple-200">
+    <div class="flex items-center justify-between mb-1">
+      <h3 class="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+        <span>📊</span> 5-Dimension Competency Rating
+      </h3>
+      <span class="text-[10px] text-purple-700 bg-purple-100/90 font-bold px-2 py-0.5 rounded-full">For Milestone Radar</span>
+    </div>
+    <div class="text-[11px] text-gray-500 mb-2.5">Rate student's performance today (1-5 stars). Feeds directly into the milestone progress radar report.</div>
+    <div class="space-y-2">
+      <!-- Phonics -->
+      <div class="bg-white p-2 px-3 rounded-lg border border-purple-100 flex items-center justify-between shadow-2xs">
+        <div class="flex items-center gap-1.5">
+          <span class="text-sm">🔤</span>
+          <span class="text-xs font-semibold text-gray-700">Phonics & Pronunciation</span>
+          <span class="text-[10px] text-gray-400">自然拼读与发音</span>
+        </div>
+        <div class="fb-star-rating" id="fb-star-phonics">
+          <input type="hidden" id="fb-score-phonics" value="5">
+          <span class="star active" data-val="1">★</span>
+          <span class="star active" data-val="2">★</span>
+          <span class="star active" data-val="3">★</span>
+          <span class="star active" data-val="4">★</span>
+          <span class="star active" data-val="5">★</span>
+        </div>
+      </div>
+      <!-- Vocab -->
+      <div class="bg-white p-2 px-3 rounded-lg border border-purple-100 flex items-center justify-between shadow-2xs">
+        <div class="flex items-center gap-1.5">
+          <span class="text-sm">📚</span>
+          <span class="text-xs font-semibold text-gray-700">Vocabulary Retention</span>
+          <span class="text-[10px] text-gray-400">词汇掌握与留存</span>
+        </div>
+        <div class="fb-star-rating" id="fb-star-vocab">
+          <input type="hidden" id="fb-score-vocab" value="5">
+          <span class="star active" data-val="1">★</span>
+          <span class="star active" data-val="2">★</span>
+          <span class="star active" data-val="3">★</span>
+          <span class="star active" data-val="4">★</span>
+          <span class="star active" data-val="5">★</span>
+        </div>
+      </div>
+      <!-- Speaking -->
+      <div class="bg-white p-2 px-3 rounded-lg border border-purple-100 flex items-center justify-between shadow-2xs">
+        <div class="flex items-center gap-1.5">
+          <span class="text-sm">🗣️</span>
+          <span class="text-xs font-semibold text-gray-700">Spontaneous Speaking</span>
+          <span class="text-[10px] text-gray-400">自发表达与开口</span>
+        </div>
+        <div class="fb-star-rating" id="fb-star-speaking">
+          <input type="hidden" id="fb-score-speaking" value="4">
+          <span class="star active" data-val="1">★</span>
+          <span class="star active" data-val="2">★</span>
+          <span class="star active" data-val="3">★</span>
+          <span class="star active" data-val="4">★</span>
+          <span class="star" data-val="5">★</span>
+        </div>
+      </div>
+      <!-- Listening -->
+      <div class="bg-white p-2 px-3 rounded-lg border border-purple-100 flex items-center justify-between shadow-2xs">
+        <div class="flex items-center gap-1.5">
+          <span class="text-sm">🎧</span>
+          <span class="text-xs font-semibold text-gray-700">Listening Comprehension</span>
+          <span class="text-[10px] text-gray-400">听力理解与反应</span>
+        </div>
+        <div class="fb-star-rating" id="fb-star-listening">
+          <input type="hidden" id="fb-score-listening" value="5">
+          <span class="star active" data-val="1">★</span>
+          <span class="star active" data-val="2">★</span>
+          <span class="star active" data-val="3">★</span>
+          <span class="star active" data-val="4">★</span>
+          <span class="star active" data-val="5">★</span>
+        </div>
+      </div>
+      <!-- Engagement -->
+      <div class="bg-white p-2 px-3 rounded-lg border border-purple-100 flex items-center justify-between shadow-2xs">
+        <div class="flex items-center gap-1.5">
+          <span class="text-sm">🌟</span>
+          <span class="text-xs font-semibold text-gray-700">Classroom Engagement</span>
+          <span class="text-[10px] text-gray-400">专注度与积极性</span>
+        </div>
+        <div class="fb-star-rating" id="fb-star-engagement">
+          <input type="hidden" id="fb-score-engagement" value="5">
+          <span class="star active" data-val="1">★</span>
+          <span class="star active" data-val="2">★</span>
+          <span class="star active" data-val="3">★</span>
+          <span class="star active" data-val="4">★</span>
+          <span class="star active" data-val="5">★</span>
+        </div>
+      </div>
+    </div>
+  </div>
   <!-- Summary sections -->
   <div class="border rounded-lg p-3 bg-purple-50">
     <h3 class="font-semibold text-gray-800 text-sm mb-3">📋 Summary</h3>
@@ -3061,6 +3153,20 @@ document.addEventListener('click', function(e) {
   if (hidden) hidden.value = selectedVal;
 });
 
+function setFbStar(id, val) {
+  var container = document.getElementById(id);
+  if (!container) return;
+  var score = (val !== undefined && val !== null && val !== '') ? parseInt(val, 10) : 5;
+  if (isNaN(score) || score < 1) score = 5;
+  var stars = container.querySelectorAll('.star');
+  stars.forEach(function(s) {
+    if (parseInt(s.getAttribute('data-val'), 10) <= score) s.classList.add('active');
+    else s.classList.remove('active');
+  });
+  var hidden = container.querySelector('input[type="hidden"]');
+  if (hidden) hidden.value = score;
+}
+
 // ===== Open Feedback Modal =====
 function openFeedback(cls) {
   selectedClass = cls;
@@ -3105,6 +3211,13 @@ function openFeedback(cls) {
   if (nextTbCodeEl) nextTbCodeEl.value = cls.next_textbook_code || cls.textbook_code || '';
   document.getElementById('fb-message').value = cls.fb_teacher_message || '';
   document.getElementById('fb-recording').value = cls.fb_recording || '';
+
+  // 5-Dimension Competency Ratings (1-5 stars)
+  setFbStar('fb-star-phonics', cls.fb_score_phonics !== undefined && cls.fb_score_phonics !== null ? cls.fb_score_phonics : 5);
+  setFbStar('fb-star-vocab', cls.fb_score_vocab !== undefined && cls.fb_score_vocab !== null ? cls.fb_score_vocab : 5);
+  setFbStar('fb-star-speaking', cls.fb_score_speaking !== undefined && cls.fb_score_speaking !== null ? cls.fb_score_speaking : 4);
+  setFbStar('fb-star-listening', cls.fb_score_listening !== undefined && cls.fb_score_listening !== null ? cls.fb_score_listening : 5);
+  setFbStar('fb-star-engagement', cls.fb_score_engagement !== undefined && cls.fb_score_engagement !== null ? cls.fb_score_engagement : 5);
 
   // Textbook pages (textbook + unit + page range)
   updateTextbookCustomDisplay(cls.textbook_code || '');
@@ -3508,6 +3621,12 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
     fb_teacher_message: document.getElementById('fb-message').value,
     fb_homework: document.getElementById('fb-homework').value,
     fb_next_preview: document.getElementById('fb-next').value,
+    // 5-Dimension Competency Scores (1-5 stars)
+    fb_score_phonics: parseInt(document.getElementById('fb-score-phonics')?.value || '5', 10),
+    fb_score_vocab: parseInt(document.getElementById('fb-score-vocab')?.value || '5', 10),
+    fb_score_speaking: parseInt(document.getElementById('fb-score-speaking')?.value || '4', 10),
+    fb_score_listening: parseInt(document.getElementById('fb-score-listening')?.value || '5', 10),
+    fb_score_engagement: parseInt(document.getElementById('fb-score-engagement')?.value || '5', 10),
     next_textbook_code: (document.getElementById('fb-next-tb-code')?.value || document.getElementById('fb-textbook-code').value || '').trim() || null,
     next_unit_number: document.getElementById('fb-next-unit-num')?.value ? parseInt(document.getElementById('fb-next-unit-num').value, 10) : null,
     next_page_from: document.getElementById('fb-next-page-from')?.value ? parseInt(document.getElementById('fb-next-page-from').value, 10) : null,
