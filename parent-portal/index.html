@@ -4359,12 +4359,12 @@ function renderStudyProfile(student, allClasses) {
   }
 
   // === 目标里程碑进度计算（严格基于正式课，体验课不计入） ===
-  var nextMilestone = 10;
-  if (regularLessons >= 10 && regularLessons < 30) nextMilestone = 30;
+  var nextMilestone = 8;
+  if (regularLessons >= 8 && regularLessons < 30) nextMilestone = 30;
   else if (regularLessons >= 30 && regularLessons < 60) nextMilestone = 60;
   else if (regularLessons >= 60) nextMilestone = Math.ceil((regularLessons + 1) / 10) * 10;
 
-  var prevMilestone = nextMilestone === 10 ? 0 : (nextMilestone === 30 ? 10 : 30);
+  var prevMilestone = nextMilestone === 8 ? 0 : (nextMilestone === 30 ? 8 : (nextMilestone === 60 ? 30 : 60));
   var diffTotal = nextMilestone - prevMilestone;
   var diffDone = regularLessons - prevMilestone;
   var pct = Math.min(100, Math.max(0, Math.round((diffDone / diffTotal) * 100)));
