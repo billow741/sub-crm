@@ -697,9 +697,10 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
                       class_id: existing.id,
                       teacher_id: existing.teacher_id,
                       teacher_name: existing.teacher_name,
-                      organization_id: existing.organization_id
+                      organization_id: existing.organization_id,
+                      status: 'scheduled'
                     });
-                    console.log(`[AutoMilestone] ${reportType} report published successfully for student ${existing.student_id}`);
+                    console.log(`[AutoMilestone] ${reportType} report scheduled successfully for student ${existing.student_id}`);
                   } catch (genErr) {
                     console.error(`[AutoMilestone] Auto generation failed for student ${existing.student_id}:`, genErr);
                   }

@@ -255,23 +255,39 @@
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2.5 text-xs">
       <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
-        <span class="text-gray-400 block mb-0.5">📚 已完成课时</span>
+        <span class="text-gray-400 block mb-0.5">📚 Completed Lessons</span>
         <span id="ms-stat-completed" class="font-bold text-slate-800 text-sm">-</span>
       </div>
       <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
-        <span class="text-gray-400 block mb-0.5">🔤 累计掌握词汇</span>
+        <span class="text-gray-400 block mb-0.5">🔤 Vocabulary Mastered</span>
         <span id="ms-stat-vocab" class="font-bold text-slate-800 text-sm">-</span>
       </div>
       <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
-        <span class="text-gray-400 block mb-0.5">🏆 阶段荣誉徽章</span>
+        <span class="text-gray-400 block mb-0.5">🏆 Milestone Badge</span>
         <span id="ms-stat-badge" class="font-bold text-indigo-700 text-sm">-</span>
       </div>
     </div>
     <!-- Sample Vocab Chips -->
     <div id="ms-vocab-chips-box" class="hidden mt-2 pt-2 border-t border-slate-200 text-xs">
-      <span class="text-gray-500 font-medium">重点掌握词汇样例: </span>
+      <span class="text-gray-500 font-medium">Key Vocabulary Samples: </span>
       <span id="ms-vocab-chips" class="text-slate-700 font-mono text-[11px]"></span>
     </div>
+  </div>
+
+  <!-- ⏳ Scheduled Release Status & Countdown Banner -->
+  <div id="ms-scheduled-status-banner" class="hidden rounded-xl p-3 mb-3 bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+    <div class="flex items-center gap-2">
+      <span class="text-base shrink-0">⏳</span>
+      <div>
+        <span class="font-bold">Scheduled Delayed Release:</span>
+        <span> Auto-publishes to parents in </span>
+        <b id="ms-countdown-text" class="text-amber-800 font-black">24 hours</b>
+        <span class="text-[11px] text-amber-700 block sm:inline mt-0.5 sm:mt-0">(Review and fine-tune comments anytime before release)</span>
+      </div>
+    </div>
+    <button type="button" onclick="publishMilestoneNow()" id="ms-banner-publish-btn" class="cursor-pointer px-3.5 py-1.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold text-xs rounded-lg shadow-xs shrink-0 flex items-center justify-center gap-1.5 transition">
+      <span>🚀</span> Publish to Parents Now
+    </button>
   </div>
 
   <!-- AI Milestone Assistant Bar -->
@@ -282,17 +298,17 @@
       </div>
       <div>
         <div class="font-extrabold text-xs sm:text-sm text-purple-950 flex items-center gap-2">
-          <span>AI 智能教研阶段评估助手</span>
+          <span>AI Pedagogical Assessment Engine</span>
           <span class="text-[10px] px-2 py-0.2 rounded-full bg-purple-200 text-purple-800 font-bold tracking-wide">Nemotron 550B Ultra</span>
         </div>
         <p class="text-[11px] text-purple-800/80 mt-0.5 leading-relaxed">
-          一键自动深度提炼阶段全课时学情数据、五维能力雷达评分、下阶段教研定制策略及综合评语。
+          Synthesizes multi-lesson academic data, 5-dimension capability radar scores, next-phase action plan, and personalized guidance.
         </p>
       </div>
     </div>
     <button type="button" id="ms-ai-generate-btn" onclick="generateMilestoneWithAI()" class="cursor-pointer px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-1.5 shrink-0">
       <span id="ms-ai-btn-icon">⚡</span>
-      <span id="ms-ai-btn-text">一键智能生成评估</span>
+      <span id="ms-ai-btn-text">Regenerate Assessment</span>
     </button>
   </div>
 
@@ -303,14 +319,14 @@
   <div class="flex items-center justify-between border-b border-gray-200 pb-2.5 mb-3.5">
     <div class="flex items-center gap-2">
       <button type="button" id="ms-tab-preview" onclick="switchMilestoneTab('preview')" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all bg-purple-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5">
-        <span>📄</span> 正式报告预览
+        <span>📄</span> Report Preview
       </button>
       <button type="button" id="ms-tab-edit" onclick="switchMilestoneTab('edit')" class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer flex items-center gap-1.5">
-        <span>✏️</span> 快速微调评语
+        <span>✏️</span> Edit Comments
       </button>
     </div>
     <div class="text-[11px] text-slate-400">
-      数据与家长端/官方报告实时对齐
+      Live sync with Parent Portal
     </div>
   </div>
 
@@ -321,7 +337,7 @@
       <div id="ms-pv-insights-box" class="p-4 rounded-xl bg-gradient-to-br from-indigo-50/70 to-purple-50/50 border border-indigo-100/90 shadow-2xs">
         <div class="flex items-center gap-2 mb-2">
           <span class="text-base">🌟</span>
-          <span class="text-xs font-bold text-indigo-900">智能教研学情宏观洞察 (Pedagogical Growth Insights)</span>
+          <span class="text-xs font-bold text-indigo-900">Pedagogical Growth Insights</span>
         </div>
         <div id="ms-pv-insights" class="text-xs text-indigo-950 leading-relaxed whitespace-pre-wrap"></div>
       </div>
@@ -331,16 +347,16 @@
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
             <span class="text-base">📊</span>
-            <span class="text-xs font-bold text-purple-900">五维核心能力雷达评估 (Capability Radar)</span>
+            <span class="text-xs font-bold text-purple-900">5-Dimension Core Competency Radar</span>
           </div>
-          <span class="text-[11px] font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">100分制评估</span>
+          <span class="text-[11px] font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">100-Point Standard</span>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
           <div class="flex flex-col items-center justify-center p-2 bg-white rounded-xl border border-purple-100/60 shadow-2xs">
             <div class="relative w-full aspect-square max-w-[210px] flex items-center justify-center">
               <canvas id="ms-radar-chart"></canvas>
             </div>
-            <div id="ms-radar-empty" class="text-xs text-gray-400 mt-2">暂无雷达数据</div>
+            <div id="ms-radar-empty" class="text-xs text-gray-400 mt-2">No radar data available</div>
           </div>
           <div id="ms-radar-dim-bars" class="space-y-2 text-xs">
             <!-- Populated dynamically with 5 dimension bars -->
@@ -352,7 +368,7 @@
       <div id="ms-pv-strategy-box" class="p-4 rounded-xl bg-emerald-50/50 border border-emerald-100 shadow-2xs">
         <div class="flex items-center gap-2 mb-3">
           <span class="text-base">🎯</span>
-          <span class="text-xs font-bold text-emerald-900">下阶段定制教学战略 (Next Phase Strategy)</span>
+          <span class="text-xs font-bold text-emerald-900">Next-Phase Strategic Action Plan</span>
         </div>
         <div id="ms-strategy-cards-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <!-- Populated dynamically from next_phase_strategy JSON -->
@@ -363,7 +379,7 @@
       <div class="space-y-3">
         <div class="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl shadow-2xs">
           <div class="text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
-            <span>📝</span> 总体评估总结 (Overall Summary)
+            <span>📝</span> Overall Assessment Summary
           </div>
           <div id="ms-pv-summary" class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap"></div>
         </div>
@@ -371,13 +387,13 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="p-3 bg-emerald-50/40 border border-emerald-200/70 rounded-xl shadow-2xs">
             <div class="text-xs font-bold text-emerald-900 mb-1 flex items-center gap-1">
-              <span>💪</span> 亮点与优势 (Strengths)
+              <span>💪</span> Key Strengths & Highlights
             </div>
             <div id="ms-pv-strengths" class="text-xs text-emerald-950 leading-relaxed whitespace-pre-wrap"></div>
           </div>
           <div class="p-3 bg-amber-50/40 border border-amber-200/70 rounded-xl shadow-2xs">
             <div class="text-xs font-bold text-amber-900 mb-1 flex items-center gap-1">
-              <span>📈</span> 需提升与重点关注 (Areas for Improvement)
+              <span>📈</span> Areas for Growth & Support
             </div>
             <div id="ms-pv-improvements" class="text-xs text-amber-950 leading-relaxed whitespace-pre-wrap"></div>
           </div>
@@ -385,21 +401,21 @@
 
         <div class="p-3.5 bg-indigo-50/30 border border-indigo-100 rounded-xl shadow-2xs">
           <div class="text-xs font-bold text-indigo-900 mb-1 flex items-center gap-1">
-            <span>🎯</span> 下阶段建议 (Recommendation)
+            <span>🎯</span> Next-Step Recommendations
           </div>
           <div id="ms-pv-recommendation" class="text-xs text-indigo-950 leading-relaxed whitespace-pre-wrap"></div>
         </div>
 
         <div class="p-3.5 bg-purple-50/30 border border-purple-100 rounded-xl shadow-2xs">
           <div class="text-xs font-bold text-purple-900 mb-1 flex items-center gap-1">
-            <span>💌</span> 教师致家长寄语 (Teacher's Message)
+            <span>💌</span> Teacher's Message to Parents
           </div>
           <div id="ms-pv-message" class="text-xs text-purple-950 leading-relaxed whitespace-pre-wrap"></div>
         </div>
 
         <div id="ms-pv-video-container" class="hidden p-3 bg-blue-50/50 border border-blue-200 rounded-xl flex items-center justify-between">
-          <span class="text-xs text-blue-900 font-medium">📹 阶段高光实录回放：</span>
-          <a id="ms-pv-video-link" href="#" target="_blank" class="text-xs text-blue-700 font-bold underline hover:text-blue-900">点击观看回放视频 ↗</a>
+          <span class="text-xs text-blue-900 font-medium">📹 Milestone Lesson Highlight Video:</span>
+          <a id="ms-pv-video-link" href="#" target="_blank" class="text-xs text-blue-700 font-bold underline hover:text-blue-900">Watch Recording ↗</a>
         </div>
       </div>
     </div>
@@ -408,37 +424,37 @@
     <div id="ms-edit-pane" class="hidden space-y-3.5">
       <div class="bg-amber-50/60 border border-amber-200 rounded-lg p-2.5 text-[11px] text-amber-800 flex items-center gap-2">
         <span>💡</span>
-        <span>提示：您可以在此处微调 AI 诊断的洞察与评语。修改后可切换至「正式报告预览」查看效果，确认无误后点击下方保存。</span>
+        <span>Note: You can fine-tune the AI-generated pedagogical insights and teacher comments below. Switch to "Report Preview" to verify anytime before saving or publishing.</span>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-gray-700 mb-1">🌟 智能教研学情宏观洞察 (Pedagogical Growth Insights)</label>
-        <textarea id="ms-stage-growth-insights" rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white" placeholder="深入教研学情宏观剖析..."></textarea>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">🌟 Pedagogical Growth Insights</label>
+        <textarea id="ms-stage-growth-insights" rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white" placeholder="Comprehensive pedagogical analysis and learning observations..."></textarea>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-gray-700 mb-1">📝 总体评估总结 (Overall Summary)</label>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">📝 Overall Assessment Summary</label>
         <textarea id="ms-summary" rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white" required></textarea>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs font-semibold text-gray-700 mb-1">💪 亮点优势 (Strengths)</label>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">💪 Key Strengths & Highlights</label>
           <textarea id="ms-strengths" rows="2" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
         </div>
         <div>
-          <label class="block text-xs font-semibold text-gray-700 mb-1">📈 需提升项 (Areas for Improvement)</label>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">📈 Areas for Growth & Support</label>
           <textarea id="ms-improvements" rows="2" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
         </div>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-gray-700 mb-1">🎯 下阶段建议 (Recommendation)</label>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">🎯 Next-Step Recommendations</label>
         <textarea id="ms-recommendation" rows="2" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-gray-700 mb-1">💌 教师致家长寄语 (Teacher's Message)</label>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">💌 Teacher's Message to Parents</label>
         <textarea id="ms-message" rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white"></textarea>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-gray-700 mb-1">📹 阶段高光实录链接 (可选)</label>
-        <input type="text" id="ms-highlight-url" placeholder="https://... (VOOV 或云端录像链接)" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white">
+        <label class="block text-xs font-semibold text-gray-700 mb-1">📹 Lesson Highlight Recording URL (Optional)</label>
+        <input type="text" id="ms-highlight-url" placeholder="https://... (Class recording or video URL)" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 bg-white">
       </div>
     </div>
 
@@ -454,25 +470,31 @@
     <input type="hidden" id="ms-score-pronunciation" value="5">
 
     <!-- Action Bar in Preview Mode -->
-    <div id="ms-preview-actions" class="flex items-center gap-3 pt-3 border-t border-gray-100">
-      <button type="button" onclick="closeMilestoneModal()" class="flex-1 px-4 py-2.5 border rounded-xl hover:bg-gray-50 text-xs sm:text-sm font-medium text-gray-700 cursor-pointer">
-        关闭
+    <div id="ms-preview-actions" class="flex items-center gap-2.5 pt-3 border-t border-gray-100 flex-wrap sm:flex-nowrap">
+      <button type="button" onclick="closeMilestoneModal()" class="px-4 py-2.5 border rounded-xl hover:bg-gray-50 text-xs sm:text-sm font-medium text-gray-700 cursor-pointer">
+        Close
       </button>
-      <button type="button" onclick="switchMilestoneTab('edit')" class="flex-1 px-4 py-2.5 border border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl font-bold transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
-        <span>✏️</span> 调整/微调评语
+      <button type="button" onclick="switchMilestoneTab('edit')" class="px-4 py-2.5 border border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl font-bold transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
+        <span>✏️</span> Edit Comments
       </button>
-      <button type="submit" id="ms-submit-btn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-xl font-bold shadow-md hover:from-orange-600 hover:to-amber-700 transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
-        <span>🎉</span> 确认发布/更新报告
+      <button type="submit" id="ms-submit-btn" class="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-md transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
+        <span>💾</span> Save Changes
+      </button>
+      <button type="button" onclick="publishMilestoneNow()" id="ms-publish-preview-btn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl font-bold shadow-md transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
+        <span>🚀</span> Publish to Parents Now
       </button>
     </div>
 
     <!-- Action Bar in Edit Mode -->
-    <div id="ms-edit-actions" class="hidden flex items-center gap-3 pt-3 border-t border-gray-100">
-      <button type="button" onclick="switchMilestoneTab('preview')" class="flex-1 px-4 py-2.5 border rounded-xl hover:bg-gray-50 text-xs sm:text-sm font-medium text-gray-700 cursor-pointer flex items-center justify-center gap-1.5">
-        <span>👁️</span> 返回正式预览
+    <div id="ms-edit-actions" class="hidden flex items-center gap-2.5 pt-3 border-t border-gray-100 flex-wrap sm:flex-nowrap">
+      <button type="button" onclick="switchMilestoneTab('preview')" class="px-4 py-2.5 border rounded-xl hover:bg-gray-50 text-xs sm:text-sm font-medium text-gray-700 cursor-pointer flex items-center justify-center gap-1.5">
+        <span>👁️</span> Back to Preview
       </button>
-      <button type="submit" id="ms-edit-submit-btn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold shadow-md hover:from-purple-700 hover:to-indigo-700 transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
-        <span>💾</span> 保存修改并更新
+      <button type="submit" id="ms-edit-submit-btn" class="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-md transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
+        <span>💾</span> Save Changes
+      </button>
+      <button type="button" onclick="publishMilestoneNow()" id="ms-publish-edit-btn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl font-bold shadow-md transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5">
+        <span>🚀</span> Publish to Parents Now
       </button>
     </div>
   </form>
@@ -2061,7 +2083,7 @@ if (c.is_trial) {
       html += '</div>';
     } else if (!isGrad) {
       html += '<button onclick="openMilestoneForTodayClass(' + i + ')" class="cursor-pointer mt-2 w-full py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-all">';
-      html += '  <span>🏆</span> Write Milestone Report (' + formatMilestoneShortLabel(c.milestone_type) + ')';
+      html += '  <span>🏆</span> Review Milestone Assessment (' + formatMilestoneShortLabel(c.milestone_type) + ')';
       html += '</button>';
     }
   }
@@ -2353,7 +2375,7 @@ function renderMilestoneReminderBanner(pendingList) {
     html += '    </div>';
     html += '  </div>';
     html += '  <button type="button" onclick="openMilestoneFromPending(' + idx + ')" class="cursor-pointer px-4 py-1.5 bg-white text-orange-700 hover:bg-orange-50 rounded-lg text-xs font-bold shadow-md transition-transform hover:scale-105 shrink-0 flex items-center justify-center gap-1.5">';
-    html += '    <span>✍️</span> Write Report Now';
+    html += '    <span>👁️</span> Review & Fine-Tune';
     html += '  </button>';
     html += '</div>';
   });
@@ -2460,10 +2482,10 @@ function renderNextPhaseStrategyCards(strategyJson) {
       html += '<div class="font-bold text-emerald-800 text-xs flex items-center gap-1.5"><span>🎯</span> ' + escapeHtml(st.goal) + '</div>';
     }
     if (st.rationale) {
-      html += '<div class="text-[11px] text-slate-600 leading-relaxed"><b class="text-slate-700">教研依据:</b> ' + escapeHtml(st.rationale) + '</div>';
+      html += '<div class="text-[11px] text-slate-600 leading-relaxed"><b class="text-slate-700">Rationale:</b> ' + escapeHtml(st.rationale) + '</div>';
     }
     if (st.action_plan) {
-      html += '<div class="text-[11px] text-emerald-900 bg-emerald-50/80 p-2 rounded-lg leading-relaxed"><b class="text-emerald-800">落地动作:</b> ' + escapeHtml(st.action_plan) + '</div>';
+      html += '<div class="text-[11px] text-emerald-900 bg-emerald-50/80 p-2 rounded-lg leading-relaxed"><b class="text-emerald-800">Action Plan:</b> ' + escapeHtml(st.action_plan) + '</div>';
     }
     html += '</div>';
   });
@@ -2490,19 +2512,19 @@ function syncPreviewFromForm() {
   }
 
   var sumEl = document.getElementById('ms-pv-summary');
-  if (sumEl) sumEl.textContent = summary || '暂无总体评估总结，可点击上方「一键智能生成评估」自动生成。';
+  if (sumEl) sumEl.textContent = summary || 'No overall assessment summary available yet. Click "Regenerate Assessment" above to generate automatically.';
 
   var strEl = document.getElementById('ms-pv-strengths');
-  if (strEl) strEl.textContent = strengths || '暂无亮点记录';
+  if (strEl) strEl.textContent = strengths || 'No strengths recorded yet';
 
   var impEl = document.getElementById('ms-pv-improvements');
-  if (impEl) impEl.textContent = improvements || '暂无改进建议';
+  if (impEl) impEl.textContent = improvements || 'No improvement areas recorded yet';
 
   var recEl = document.getElementById('ms-pv-recommendation');
-  if (recEl) recEl.textContent = recommendation || '暂无下阶段建议';
+  if (recEl) recEl.textContent = recommendation || 'No recommendations recorded yet';
 
   var msgEl = document.getElementById('ms-pv-message');
-  if (msgEl) msgEl.textContent = message || '暂无教师寄语';
+  if (msgEl) msgEl.textContent = message || 'No teacher message recorded yet';
 
   var vidBox = document.getElementById('ms-pv-video-container');
   var vidLink = document.getElementById('ms-pv-video-link');
@@ -2557,10 +2579,16 @@ async function openMilestoneReport(cls, m, reportType) {
   var existingReport = getMilestoneReportForClass(cls, reportType);
   window_currentMilestoneReportId = existingReport ? existingReport.id : null;
 
-  var info = MILESTONE_INFO[reportType] || { title: '阶段教学综合评估', desc: '', color: '#6366F1', badge: '🏅 阶段荣誉', lessons: 10, tips: {} };
+  var info = MILESTONE_INFO[reportType] || { title: 'Milestone Stage Pedagogical Assessment', desc: '', color: '#6366F1', badge: '🏅 Milestone Honor', lessons: 10, tips: {} };
   var banner = document.getElementById('milestone-banner');
   if (banner) banner.style.background = info.color || '#6366F1';
-  document.getElementById('ms-banner-title').textContent = existingReport ? (info.title + ' (已归档评估)') : info.title;
+  
+  var statusSuffix = '';
+  if (existingReport) {
+    if (existingReport.status === 'scheduled') statusSuffix = ' (Pending Review · Auto-publishing in 24h)';
+    else statusSuffix = ' (Published)';
+  }
+  document.getElementById('ms-banner-title').textContent = existingReport ? (info.title + statusSuffix) : info.title;
   document.getElementById('ms-banner-desc').textContent = info.desc;
 
   var studentText = '<b>' + escapeHtml(formatStudentName(cls)) + '</b> · ' + cls.date;
@@ -2568,16 +2596,56 @@ async function openMilestoneReport(cls, m, reportType) {
     studentText += ' · <span class="text-purple-700 font-semibold">' + escapeHtml(milestoneData.levelUp.fromLevel) + ' ➔ ' + escapeHtml(milestoneData.levelUp.toLevel) + '</span>';
   }
   document.getElementById('ms-student-summary').innerHTML = studentText;
-  document.getElementById('ms-badge-pill').textContent = (existingReport && existingReport.badge_name) ? existingReport.badge_name : (info.badge || '🏅 阶段荣誉');
+  document.getElementById('ms-badge-pill').textContent = (existingReport && existingReport.badge_name) ? existingReport.badge_name : (info.badge || '🏅 Milestone Honor');
   document.getElementById('ms-badge-name').value = (existingReport && existingReport.badge_name) ? existingReport.badge_name : (info.badge || '');
+
+  // ⏳ Scheduled Release Status & Countdown
+  var statusBanner = document.getElementById('ms-scheduled-status-banner');
+  var countdownEl = document.getElementById('ms-countdown-text');
+  var publishPreviewBtn = document.getElementById('ms-publish-preview-btn');
+  var publishEditBtn = document.getElementById('ms-publish-edit-btn');
+
+  if (existingReport && existingReport.status === 'scheduled') {
+    if (statusBanner) {
+      statusBanner.className = 'rounded-xl p-3 mb-3 bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5';
+      statusBanner.classList.remove('hidden');
+    }
+    var remainingText = '24 hours';
+    if (existingReport.scheduled_publish_at) {
+      var targetMs = new Date(existingReport.scheduled_publish_at).getTime();
+      var diffMs = targetMs - Date.now();
+      if (diffMs > 0) {
+        var h = Math.floor(diffMs / (1000 * 60 * 60));
+        var m = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        remainingText = h + 'h ' + m + 'm';
+      } else {
+        remainingText = 'shortly (processing)';
+      }
+    }
+    if (countdownEl) countdownEl.textContent = remainingText;
+    if (publishPreviewBtn) publishPreviewBtn.style.display = 'inline-flex';
+    if (publishEditBtn) publishEditBtn.style.display = 'inline-flex';
+  } else if (existingReport && existingReport.status === 'published') {
+    if (statusBanner) {
+      statusBanner.className = 'rounded-xl p-3 mb-3 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center justify-between';
+      statusBanner.innerHTML = '<div class="flex items-center gap-2"><span class="text-base">✅</span> <span><b>Published:</b> This milestone assessment is live and accessible to parents.</span></div>';
+      statusBanner.classList.remove('hidden');
+    }
+    if (publishPreviewBtn) publishPreviewBtn.style.display = 'none';
+    if (publishEditBtn) publishEditBtn.style.display = 'none';
+  } else {
+    if (statusBanner) statusBanner.classList.add('hidden');
+    if (publishPreviewBtn) publishPreviewBtn.style.display = 'inline-flex';
+    if (publishEditBtn) publishEditBtn.style.display = 'inline-flex';
+  }
 
   var defaultLessons = info.lessons || (milestoneData.completedCount || 10);
   var tips = info.tips || {};
-  document.getElementById('ms-summary').placeholder = tips.summary || '阶段综合评估分析...';
-  document.getElementById('ms-strengths').placeholder = tips.strengths || '孩子在此阶段展现出的核心优势与亮点...';
-  document.getElementById('ms-improvements').placeholder = tips.improvements || '下阶段需重点突破的薄弱点与关注点...';
-  document.getElementById('ms-recommendation').placeholder = tips.recommendation || '下阶段教材与教研规划建议...';
-  document.getElementById('ms-message').placeholder = tips.message || '致家长的阶段暖心寄语与配合建议...';
+  document.getElementById('ms-summary').placeholder = tips.summary || 'Comprehensive stage evaluation and learning habit analysis...';
+  document.getElementById('ms-strengths').placeholder = tips.strengths || 'Core strengths and outstanding performance observed in class...';
+  document.getElementById('ms-improvements').placeholder = tips.improvements || 'Key focus areas for improvement in the next stage...';
+  document.getElementById('ms-recommendation').placeholder = tips.recommendation || 'Curriculum recommendations and pedagogical guidance...';
+  document.getElementById('ms-message').placeholder = tips.message || 'Heartwarming message to parents with encouragement and support...';
 
   var submitBtn = document.getElementById('ms-submit-btn');
   var editSubmitBtn = document.getElementById('ms-edit-submit-btn');
@@ -2600,8 +2668,8 @@ async function openMilestoneReport(cls, m, reportType) {
     if (document.getElementById('ms-score-interaction')) document.getElementById('ms-score-interaction').value = existingReport.score_interaction || 5;
     if (document.getElementById('ms-score-pronunciation')) document.getElementById('ms-score-pronunciation').value = existingReport.score_pronunciation || 5;
 
-    if (submitBtn) submitBtn.innerHTML = '<span>💾</span> 更新阶段评估报告';
-    if (editSubmitBtn) editSubmitBtn.innerHTML = '<span>💾</span> 保存修改并更新';
+    if (submitBtn) submitBtn.innerHTML = '<span>💾</span> Save Changes';
+    if (editSubmitBtn) editSubmitBtn.innerHTML = '<span>💾</span> Save Changes';
   } else {
     document.getElementById('ms-total-lessons').value = defaultLessons;
     document.getElementById('ms-vocab-count').value = '';
@@ -2621,13 +2689,13 @@ async function openMilestoneReport(cls, m, reportType) {
     if (document.getElementById('ms-score-interaction')) document.getElementById('ms-score-interaction').value = 5;
     if (document.getElementById('ms-score-pronunciation')) document.getElementById('ms-score-pronunciation').value = 5;
 
-    if (submitBtn) submitBtn.innerHTML = '<span>🎉</span> 确认发布评估报告';
-    if (editSubmitBtn) editSubmitBtn.innerHTML = '<span>💾</span> 保存并发布报告';
+    if (submitBtn) submitBtn.innerHTML = '<span>💾</span> Save Changes';
+    if (editSubmitBtn) editSubmitBtn.innerHTML = '<span>💾</span> Save Changes';
   }
 
   // Set stats badges
-  document.getElementById('ms-stat-completed').textContent = (existingReport?.total_lessons_completed || defaultLessons) + ' 课时';
-  document.getElementById('ms-stat-vocab').textContent = existingReport?.vocabulary_count ? (existingReport.vocabulary_count + ' 词') : '计算中...';
+  document.getElementById('ms-stat-completed').textContent = (existingReport?.total_lessons_completed || defaultLessons) + ' Lessons';
+  document.getElementById('ms-stat-vocab').textContent = existingReport?.vocabulary_count ? (existingReport.vocabulary_count + ' Words') : 'Calculating...';
   document.getElementById('ms-stat-badge').textContent = (existingReport && existingReport.badge_name) ? existingReport.badge_name : (info.badge || '-');
 
   var chipsBox = document.getElementById('ms-vocab-chips-box');
@@ -2636,7 +2704,7 @@ async function openMilestoneReport(cls, m, reportType) {
   var notice = document.getElementById('ms-ai-status-notice');
   if (notice) { notice.classList.add('hidden'); notice.innerHTML = ''; }
   var btnText = document.getElementById('ms-ai-btn-text');
-  if (btnText) btnText.textContent = existingReport ? '一键重新智能诊断' : '一键智能生成评估';
+  if (btnText) btnText.textContent = existingReport ? 'Regenerate Assessment' : 'Generate Assessment';
   var btn = document.getElementById('ms-ai-generate-btn');
   if (btn) btn.disabled = false;
 
@@ -2653,13 +2721,13 @@ async function openMilestoneReport(cls, m, reportType) {
     var stats = statsRes.data || statsRes;
     if (stats) {
       if (stats.completed_count) {
-        document.getElementById('ms-stat-completed').textContent = stats.completed_count + ' 课时';
+        document.getElementById('ms-stat-completed').textContent = stats.completed_count + ' Lessons';
         if (!existingReport && stats.completed_count >= defaultLessons) {
           document.getElementById('ms-total-lessons').value = stats.completed_count;
         }
       }
       if (stats.vocabulary_count !== undefined) {
-        document.getElementById('ms-stat-vocab').textContent = stats.vocabulary_count + ' 词';
+        document.getElementById('ms-stat-vocab').textContent = stats.vocabulary_count + ' Words';
         if (!existingReport || !document.getElementById('ms-vocab-count').value) {
           document.getElementById('ms-vocab-count').value = stats.vocabulary_count;
         }
@@ -2670,13 +2738,13 @@ async function openMilestoneReport(cls, m, reportType) {
       }
     }
   } catch(e) {
-    if (!existingReport) document.getElementById('ms-stat-vocab').textContent = '~100+ 词';
+    if (!existingReport) document.getElementById('ms-stat-vocab').textContent = '~100+ Words';
   }
 }
 
 async function generateMilestoneWithAI() {
   if (!milestoneClass) {
-    alert('请先选择对应课程。');
+    alert('Please select a corresponding class first.');
     return;
   }
 
@@ -2687,11 +2755,11 @@ async function generateMilestoneWithAI() {
 
   if (btn) btn.disabled = true;
   if (btnIcon) btnIcon.textContent = '⏳';
-  if (btnText) btnText.textContent = 'AI 正在深度诊断课时学情...';
+  if (btnText) btnText.textContent = 'AI is analyzing lesson academic records...';
 
   if (notice) {
     notice.className = 'rounded-xl p-3 mb-3 text-xs font-medium bg-purple-50 text-purple-800 border border-purple-200 flex items-center gap-2 animate-pulse';
-    notice.innerHTML = '<span class="animate-spin inline-block">🌀</span> AI 大模型正在全面提炼历史课程记录、词汇留存、发音纠错及教学日志，生成五维能力图谱与教学规划... (约需15-25秒)';
+    notice.innerHTML = '<span class="animate-spin inline-block">🌀</span> AI model is synthesizing multi-lesson history, vocabulary retention, and pronunciation records... (~15-25s)';
     notice.classList.remove('hidden');
   }
 
@@ -2709,7 +2777,7 @@ async function generateMilestoneWithAI() {
 
     var data = res.data || res;
     if (!data || !data.summary) {
-      throw new Error(res.error?.message || '生成评估内容失败');
+      throw new Error(res.error?.message || 'Failed to generate assessment content');
     }
 
     // Fill form fields
@@ -2729,11 +2797,11 @@ async function generateMilestoneWithAI() {
 
     if (data.total_lessons_completed) {
       document.getElementById('ms-total-lessons').value = data.total_lessons_completed;
-      document.getElementById('ms-stat-completed').textContent = data.total_lessons_completed + ' 课时';
+      document.getElementById('ms-stat-completed').textContent = data.total_lessons_completed + ' Lessons';
     }
     if (data.vocabulary_count !== undefined) {
       document.getElementById('ms-vocab-count').value = data.vocabulary_count;
-      document.getElementById('ms-stat-vocab').textContent = data.vocabulary_count + ' 词';
+      document.getElementById('ms-stat-vocab').textContent = data.vocabulary_count + ' Words';
     }
     if (data.badge_name) {
       document.getElementById('ms-badge-name').value = data.badge_name;
@@ -2752,20 +2820,20 @@ async function generateMilestoneWithAI() {
 
     if (notice) {
       notice.className = 'rounded-xl p-3 mb-3 text-xs font-medium bg-green-50 text-green-800 border border-green-200 flex items-center justify-between gap-2';
-      notice.innerHTML = '<span>✨ <b>AI 评估报告生成成功！</b> 已根据 ' + (data.total_lessons_completed || 10) + ' 节已完成课时和 ' + (data.vocabulary_count || 0) + ' 个词汇提炼完成。如需修改个别文字，可点击上方「快速微调评语」。</span>' +
+      notice.innerHTML = '<span>✨ <b>AI Assessment Generated!</b> Successfully synthesized from ' + (data.total_lessons_completed || 10) + ' lessons and ' + (data.vocabulary_count || 0) + ' words. Click "Edit Comments" if you wish to fine-tune.</span>' +
         '<button type="button" onclick="this.parentElement.classList.add(\'hidden\')" class="text-green-600 hover:text-green-800 font-bold shrink-0">✕</button>';
     }
 
-    if (btnText) btnText.textContent = '一键重新智能诊断';
+    if (btnText) btnText.textContent = 'Regenerate Assessment';
     if (btnIcon) btnIcon.textContent = '⚡';
 
   } catch(err) {
     console.error('AI generation error:', err);
     if (notice) {
       notice.className = 'rounded-xl p-3 mb-3 text-xs font-medium bg-red-50 text-red-800 border border-red-200';
-      notice.textContent = '❌ 生成失败: ' + err.message + '。您可点击「快速微调评语」进行手动填写或重试。';
+      notice.textContent = '❌ Generation failed: ' + err.message + '. You can write comments manually in "Edit Comments" or retry.';
     }
-    if (btnText) btnText.textContent = '一键智能生成评估';
+    if (btnText) btnText.textContent = 'Generate Assessment';
     if (btnIcon) btnIcon.textContent = '⚡';
   } finally {
     if (btn) btn.disabled = false;
@@ -2805,8 +2873,8 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
 
   var submitBtn = document.getElementById('ms-submit-btn');
   var editSubmitBtn = document.getElementById('ms-edit-submit-btn');
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '正在保存...'; }
-  if (editSubmitBtn) { editSubmitBtn.disabled = true; editSubmitBtn.textContent = '正在保存...'; }
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving...'; }
+  if (editSubmitBtn) { editSubmitBtn.disabled = true; editSubmitBtn.textContent = 'Saving...'; }
 
   var teacherId = getTeacherId();
   var teacherName = '';
@@ -2860,26 +2928,45 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
   try {
     if (window_currentMilestoneReportId) {
       await apiPatch('/progress-reports/' + window_currentMilestoneReportId, reportData);
-      alert('阶段评估报告已成功更新！💾');
+      alert('Milestone assessment report updated successfully! 💾');
     } else {
       await apiPost('/progress-reports', reportData);
-      alert('阶段评估报告已成功提交发布！🎉');
+      alert('Milestone assessment report saved successfully! 🎉');
     }
     closeMilestoneModal();
     loadTeacherData();
   } catch(err) {
-    alert('保存报告失败: ' + err.message);
+    alert('Failed to save report: ' + err.message);
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.innerHTML = window_currentMilestoneReportId ? '<span>💾</span> 更新阶段评估报告' : '<span>🎉</span> 确认发布评估报告';
+      submitBtn.innerHTML = '<span>💾</span> Save Changes';
     }
     if (editSubmitBtn) {
       editSubmitBtn.disabled = false;
-      editSubmitBtn.innerHTML = '<span>💾</span> 保存修改并更新';
+      editSubmitBtn.innerHTML = '<span>💾</span> Save Changes';
     }
   }
 });
+
+// ===== Publish Milestone Immediately to Parents =====
+window.publishMilestoneNow = async function() {
+  if (!window_currentMilestoneReportId) {
+    alert('Please save the report first before publishing to parents.');
+    return;
+  }
+  if (!confirm('Are you ready to publish this milestone assessment report to the student\'s parents now?\n\nParents will receive an immediate celebratory push notification and gold achievement badge.')) {
+    return;
+  }
+  try {
+    var res = await apiPost('/progress-reports/' + window_currentMilestoneReportId + '/publish-now', {});
+    alert('🎉 Milestone assessment report published successfully to parents!');
+    closeMilestoneModal();
+    loadTeacherData();
+  } catch(err) {
+    alert('Failed to publish report: ' + (err.message || err));
+  }
+};
 
 // ===== Feedback star rating interaction (delegated) =====
 document.addEventListener('click', function(e) {

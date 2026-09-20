@@ -29,3 +29,8 @@ database_id = "e4457991-ecf6-47cf-a4f4-9ccf13a8b21d"
 [[r2_buckets]]
 binding = "TEXTBOOKS_R2"
 bucket_name = "sunnybridge-textbooks"
+
+# 定时调度 (Cron Triggers): 每 15 分钟扫描自动发布到期的阶段报告
+[triggers]
+crons = ["*/15 * * * *"]
+

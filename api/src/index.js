@@ -27,7 +27,7 @@ import authRoute from './routes/auth.js';
 import orgPackages from './routes/org-packages.js';
 import orgSettlements from './routes/org-settlements.js';
 import assessments from './routes/assessments.js';
-import progressReports from './routes/progressReports.js';
+import progressReports, { checkAndAutoPublishReports } from './routes/progressReports.js';
 import textbooks from './routes/textbooks.js';
 import classComplete from './routes/classComplete.js';
 import notifications from './routes/notifications.js';
@@ -100,4 +100,9 @@ app.route('/api/v1/notifications', notifications);
 // 404 处理
 app.notFound(notFound);
 
-export default app;
+export default {
+  fetch: app.fetch,
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(checkAndAutoPublishReports(env.DB));
+  }
+};

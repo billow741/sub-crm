@@ -53,12 +53,57 @@ progressReports.get('/stats/:student_id', async (c) => {
   }));
 });
 
+// 检查并自动发布到期的阶段报告 (Auto-publish scheduled reports)
+export async function checkAndAutoPublishReports(DB) {
+  try {
+    const expired = await DB.prepare(`
+      SELECT id, student_id, class_id, report_type 
+      FROM progress_reports 
+      WHERE status = 'scheduled' 
+        AND scheduled_publish_at IS NOT NULL 
+        AND datetime(scheduled_publish_at) <= datetime('now')
+    `).all();
+
+    if (!expired || !expired.results || expired.results.length === 0) {
+      return 0;
+    }
+
+    let publishedCount = 0;
+    for (const r of expired.results) {
+      await DB.prepare(`
+        UPDATE progress_reports 
+        SET status = 'published', updated_at = datetime('now') 
+        WHERE id = ?
+      `).bind(r.id).run();
+
+      publishedCount++;
+
+      try {
+        const milestoneNumber = (r.report_type || '').replace('milestone_', '');
+        const title = '🎉 智能教研阶段评估报告已生成！';
+        const body = `宝贝已顺利完成第 ${milestoneNumber || ''} 课时，基于大数据分析的五维能力雷达模型及进阶规划已全面出炉，点击查阅！`;
+        await triggerPushNotification(DB, 'parent', r.student_id, 'milestone_report', title, body, r.class_id || null);
+      } catch (pushErr) {
+        console.warn('[AutoPublish Push] failed for report ' + r.id, pushErr);
+      }
+    }
+    return publishedCount;
+  } catch (err) {
+    console.error('checkAndAutoPublishReports error:', err);
+    return 0;
+  }
+}
+
 // 获取学生的阶段报告
 progressReports.get('/', async (c) => {
   const DB = c.env.DB;
+  // 读时自动将到期的 scheduled 报告转换为 published
+  await checkAndAutoPublishReports(DB);
+
   const studentId = c.req.query('student_id');
   const teacherId = c.req.query('teacher_id');
   const classId = c.req.query('class_id');
+  const status = c.req.query('status');
   const page = c.req.query('page') || '1';
   const pageSize = c.req.query('page_size') || '50';
 
@@ -76,6 +121,10 @@ progressReports.get('/', async (c) => {
   if (classId) {
     whereClause += ' AND pr.class_id = ?';
     params.push(parseInt(classId));
+  }
+  if (status) {
+    whereClause += ' AND pr.status = ?';
+    params.push(status);
   }
 
   const countResult = await DB.prepare(`SELECT COUNT(*) as total FROM progress_reports pr ${whereClause}`).bind(...params).first();
@@ -119,6 +168,7 @@ progressReports.get('/', async (c) => {
     radar_scores: r.radar_scores,
     next_phase_strategy: r.next_phase_strategy,
     status: r.status,
+    scheduled_publish_at: r.scheduled_publish_at,
     organization_id: r.organization_id,
     created_at: r.created_at,
     updated_at: r.updated_at
@@ -517,6 +567,8 @@ export async function createPublishedMilestoneReport({
   teacher_id = null,
   teacher_name = null,
   organization_id = null,
+  status = 'scheduled',
+  scheduled_publish_at = null,
   headers = {}
 }) {
   const generated = await generateMilestoneReportData({
@@ -529,6 +581,13 @@ export async function createPublishedMilestoneReport({
     headers
   });
 
+  const finalStatus = status || 'scheduled';
+  let finalScheduledAt = scheduled_publish_at;
+  if (finalStatus === 'scheduled' && !finalScheduledAt) {
+    const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    finalScheduledAt = d.toISOString();
+  }
+
   const result = await DB.prepare(`
     INSERT INTO progress_reports (
       student_id, class_id, report_type, teacher_id, teacher_name,
@@ -538,9 +597,9 @@ export async function createPublishedMilestoneReport({
       score_listening, score_speaking, score_interaction, score_pronunciation,
       highlight_recording_url, badge_name,
       stage_growth_insights, radar_scores, next_phase_strategy,
-      status, organization_id
+      status, scheduled_publish_at, organization_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     student_id,
     class_id || null,
@@ -565,19 +624,33 @@ export async function createPublishedMilestoneReport({
     generated.stage_growth_insights || null,
     generated.radar_scores || null,
     generated.next_phase_strategy || null,
+    finalStatus,
+    finalScheduledAt || null,
     organization_id || null
   ).run();
 
-  try {
-    const milestoneNumber = (milestone_type || '').replace('milestone_', '');
-    const title = '🎉 智能教研阶段评估报告已生成！';
-    const body = `宝贝已顺利完成第 ${milestoneNumber || ''} 课时，基于大数据分析的五维能力雷达模型及进阶规划已全面出炉，点击查阅！`;
-    await triggerPushNotification(DB, 'parent', student_id, 'milestone_report', title, body, class_id);
-  } catch (pushErr) {
-    console.warn('[Milestone Notification] Push failed:', pushErr);
+  if (finalStatus === 'published') {
+    try {
+      const milestoneNumber = (milestone_type || '').replace('milestone_', '');
+      const title = '🎉 智能教研阶段评估报告已生成！';
+      const body = `宝贝已顺利完成第 ${milestoneNumber || ''} 课时，基于大数据分析的五维能力雷达模型及进阶规划已全面出炉，点击查阅！`;
+      await triggerPushNotification(DB, 'parent', student_id, 'milestone_report', title, body, class_id);
+    } catch (pushErr) {
+      console.warn('[Milestone Notification] Push failed:', pushErr);
+    }
+  } else if (finalStatus === 'scheduled' && teacher_id) {
+    // 延时发布模式下，给授课外教发送就绪待审通知 (全英文)
+    try {
+      const milestoneNumber = (milestone_type || '').replace('milestone_', '');
+      const title = `🏅 Milestone ${milestoneNumber} Assessment Ready`;
+      const body = `Pedagogical evaluation generated. Auto-publishes to parent in 24h. Click to review or fine-tune.`;
+      await triggerPushNotification(DB, 'teacher', teacher_id, 'milestone_report', title, body, class_id);
+    } catch (tErr) {
+      console.warn('[Teacher Notification] Push failed:', tErr);
+    }
   }
 
-  return { id: result.meta.last_row_id, reportData: generated };
+  return { id: result.meta.last_row_id, reportData: generated, status: finalStatus, scheduled_publish_at: finalScheduledAt };
 }
 
 progressReports.post('/ai-generate', validate(aiGenerateSchema), async (c) => {
@@ -735,4 +808,32 @@ progressReports.delete('/:id', validateParams(idParamSchema), async (c) => {
   return c.json(success({ id: parseInt(id) }));
 });
 
+// 立即向家长端发布阶段报告 (Publish to Parents Now)
+progressReports.post('/:id/publish-now', validateParams(idParamSchema), async (c) => {
+  const DB = c.env.DB;
+  const { id } = c.req.validatedParams;
+
+  const existing = await DB.prepare('SELECT * FROM progress_reports WHERE id = ?').bind(id).first();
+  if (!existing) return c.json(error('NOT_FOUND', 'Report not found'), 404);
+
+  await DB.prepare(`
+    UPDATE progress_reports 
+    SET status = 'published', scheduled_publish_at = datetime('now'), updated_at = datetime('now') 
+    WHERE id = ?
+  `).bind(id).run();
+
+  // 触发家长端通知推送
+  try {
+    const milestoneNumber = (existing.report_type || '').replace('milestone_', '');
+    const title = '🎉 智能教研阶段评估报告已生成！';
+    const body = `宝贝已顺利完成第 ${milestoneNumber || ''} 课时，基于大数据分析的五维能力雷达模型及进阶规划已全面出炉，点击查阅！`;
+    await triggerPushNotification(DB, 'parent', existing.student_id, 'milestone_report', title, body, existing.class_id || null);
+  } catch (pushErr) {
+    console.warn('[PublishNow Push] failed:', pushErr);
+  }
+
+  return c.json(success({ id: parseInt(id), status: 'published', message: 'Report published successfully to parents' }));
+});
+
 export default progressReports;
+

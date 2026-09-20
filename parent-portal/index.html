@@ -4601,8 +4601,8 @@ async function loadAssessments(studentId) {
     var data = resp.data && resp.data.data ? resp.data.data : (resp.data || []);
     window_allAssessments = data;
 
-    // 同时加载阶段报告
-    var prResp = await apiGet('/progress-reports?student_id=' + studentId + '&page_size=50');
+    // 同时加载已发布的阶段报告 (延时发布审核期内的报告对家长暂不可见)
+    var prResp = await apiGet('/progress-reports?student_id=' + studentId + '&status=published&page_size=50');
     var prData = prResp.data && prResp.data.data ? prResp.data.data : (prResp.data || []);
     window_progressReports = prData;
   } catch(e) { console.error('Assessments load error:', e); }
