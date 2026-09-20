@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { success, error, calculatePagination } from '../utils/response.js';
 import { validate, validateParams, idParamSchema } from '../utils/validation.js';
+import { triggerPushNotification } from '../utils/push.js';
 import { z } from 'zod';
 
 const progressReports = new Hono();
@@ -567,6 +568,15 @@ export async function createPublishedMilestoneReport({
     organization_id || null
   ).run();
 
+  try {
+    const milestoneNumber = (milestone_type || '').replace('milestone_', '');
+    const title = '🎉 智能教研阶段评估报告已生成！';
+    const body = `宝贝已顺利完成第 ${milestoneNumber || ''} 课时，基于大数据分析的五维能力雷达模型及进阶规划已全面出炉，点击查阅！`;
+    await triggerPushNotification(DB, 'parent', student_id, 'milestone_report', title, body, class_id);
+  } catch (pushErr) {
+    console.warn('[Milestone Notification] Push failed:', pushErr);
+  }
+
   return { id: result.meta.last_row_id, reportData: generated };
 }
 
@@ -677,6 +687,15 @@ progressReports.post('/', validate(reportSchema), async (c) => {
     data.next_phase_strategy || null,
     data.organization_id || null
   ).run();
+
+  try {
+    const milestoneNumber = (data.report_type || '').replace('milestone_', '');
+    const title = '🎉 智能教研阶段评估报告已发布！';
+    const body = `宝贝已完成阶段学习，专业阶段评估报告与进阶规划已发布，点击查阅！`;
+    await triggerPushNotification(DB, 'parent', data.student_id, 'milestone_report', title, body, data.class_id || null);
+  } catch (pushErr) {
+    console.warn('[Milestone Notification] Push failed:', pushErr);
+  }
 
   return c.json(success({ id: result.meta.last_row_id }), 201);
 });

@@ -179,12 +179,15 @@ async function loadNotifications(onlyCount = false) {
     let html = '';
     data.forEach(n => {
       const bg = n.is_read ? '#fff' : '#f0fdf4';
-      const icon = n.action_type === 'cancelled' ? '⚠️' : (n.action_type === 'updated' ? '⏰' : '📅');
-      html += `<div onclick="markNotifyRead(${n.id})" style="padding:12px 16px; border-bottom:1px solid #f1f5f9; background:${bg}; cursor:pointer; transition:background 0.2s;">
+      const icon = n.action_type === 'cancelled' ? '⚠️' : (n.action_type === 'updated' ? '⏰' : (n.action_type === 'milestone_report' ? '🏆' : '📅'));
+      html += `<div onclick="markNotifyRead(${n.id}, '${n.action_type || ''}')" style="padding:12px 16px; border-bottom:1px solid #f1f5f9; background:${bg}; cursor:pointer; transition:background 0.2s;">
         <div style="display:flex; align-items:start; gap:10px;">
           <span style="font-size:18px; margin-top:2px;">${icon}</span>
           <div style="flex:1;">
-            <div style="font-size:13px; font-weight:600; color:#1e293b; margin-bottom:4px;">${safeEscape(n.title)}</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="font-size:13px; font-weight:600; color:#1e293b; margin-bottom:4px;">${safeEscape(n.title)}</div>
+              ${n.action_type === 'milestone_report' ? '<span style="background:#F59E0B;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-bottom:4px;">报告</span>' : ''}
+            </div>
             <div style="font-size:12px; color:#475569; line-height:1.4;">${safeEscape(n.body)}</div>
             <div style="font-size:11px; color:#94a3b8; margin-top:6px;">${formatNotifyTime(n.created_at)}</div>
           </div>
@@ -199,13 +202,20 @@ async function loadNotifications(onlyCount = false) {
   }
 }
 
-window.markNotifyRead = async function(id) {
+window.markNotifyRead = async function(id, actionType) {
   try {
     await fetch(`${getPortalApiBase()}/notifications/${id}/read`, {
       method: 'PATCH',
       headers: { 'X-API-Key': getPortalApiKey() }
     });
     loadNotifications(); // Reload list
+    if (actionType === 'milestone_report') {
+      const modal = document.getElementById('notify-modal');
+      if (modal) modal.style.display = 'none';
+      if (typeof spSwitchTab === 'function') {
+        spSwitchTab('reports');
+      }
+    }
   } catch (e) {
     console.error(e);
   }

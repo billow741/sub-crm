@@ -981,10 +981,120 @@
       .sp-overview-num { font-size: 28px; font-weight: 800; color: var(--sb-blue); }
       .sp-overview-label { font-size: 12px; color: var(--sb-muted); margin-top: 4px; }
       .sp-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-      .sp-tab { padding: 8px 18px; border-radius: 100px; font-size: 13px; font-weight: 600; background: rgba(255,255,255,0.6); color: var(--sb-muted); border: 1px solid rgba(28,36,75,0.08); cursor: pointer; transition: all 0.15s; }
+      .sp-tab { padding: 8px 18px; border-radius: 100px; font-size: 13px; font-weight: 600; background: rgba(255,255,255,0.6); color: var(--sb-muted); border: 1px solid rgba(28,36,75,0.08); cursor: pointer; transition: all 0.15s; position: relative; }
       .sp-tab.active { background: var(--sb-blue); color: #fff; border-color: var(--sb-blue); }
       .sp-tab-content { display: none; }
       .sp-tab-content.active { display: block; }
+
+      /* ===== 醒目阶段评估提醒样式 ===== */
+      @keyframes pulseMilestoneGlow {
+        0%, 100% {
+          box-shadow: 0 4px 18px rgba(245, 166, 35, 0.22), 0 0 0 1px rgba(245, 166, 35, 0.3);
+          transform: translateY(0);
+        }
+        50% {
+          box-shadow: 0 8px 26px rgba(245, 166, 35, 0.38), 0 0 0 2px rgba(245, 166, 35, 0.55);
+          transform: translateY(-1px);
+        }
+      }
+      @keyframes badgeBreathPulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.12); opacity: 0.85; }
+      }
+      .sp-milestone-gold-banner {
+        background: linear-gradient(135deg, #FFFDF8 0%, #FFF8ED 50%, #FEF3C7 100%);
+        border: 1px solid #FCD34D;
+        border-radius: 14px;
+        padding: 14px 16px;
+        margin: 0 0 16px 0;
+        position: relative;
+        animation: pulseMilestoneGlow 3s infinite ease-in-out;
+        transition: all 0.35s ease;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .sp-milestone-gold-banner.dismissed {
+        opacity: 0;
+        max-height: 0;
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .sp-milestone-gold-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #F59E0B, #EA580C);
+        color: #fff;
+        font-size: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 3px 10px rgba(234, 88, 12, 0.25);
+        flex-shrink: 0;
+      }
+      .sp-milestone-gold-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 16px;
+        background: linear-gradient(135deg, #F59E0B, #EA580C);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 12.5px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(234, 88, 12, 0.25);
+        transition: transform 0.15s, opacity 0.15s;
+      }
+      .sp-milestone-gold-btn:hover {
+        opacity: 0.95;
+        transform: translateY(-1px);
+      }
+      .sp-milestone-gold-btn:active {
+        transform: translateY(1px);
+      }
+      .sp-milestone-gold-close {
+        position: absolute;
+        top: 8px;
+        right: 10px;
+        background: none;
+        border: none;
+        font-size: 15px;
+        font-weight: 700;
+        color: #D97706;
+        opacity: 0.6;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        line-height: 1;
+      }
+      .sp-milestone-gold-close:hover {
+        opacity: 1;
+        background: rgba(245, 158, 11, 0.12);
+      }
+      .report-tab-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        font-size: 10px;
+        font-weight: 800;
+        color: #fff;
+        background: linear-gradient(135deg, #EF4444, #F97316);
+        border-radius: 100px;
+        animation: badgeBreathPulse 1.8s infinite ease-in-out;
+        line-height: 1.3;
+        box-shadow: 0 1px 4px rgba(239, 68, 68, 0.35);
+        vertical-align: middle;
+      }
+      .report-card-highlight {
+        outline: 2px solid #F59E0B !important;
+        box-shadow: 0 0 22px rgba(245, 158, 11, 0.35) !important;
+        animation: pulseMilestoneGlow 2.5s infinite ease-in-out;
+      }
       .sp-card { background: rgba(255,255,255,0.72); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 16px; padding: 18px 16px; margin-bottom: 12px; box-shadow: 0 2px 12px rgba(28,36,75,0.05); position: relative; }
       .sp-card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px; }
       .sp-card-date { font-size: 14px; font-weight: 600; color: var(--sb-dark); }
@@ -1593,11 +1703,33 @@
   <!-- ===== 3. 学习记录 Tabs & 课程历史 ===== -->
   <section id="sp-section" class="sp-section">
 
+    <!-- 🌟 智能教研阶段评估报告专属醒目横幅 (Gold Achievement Banner) -->
+    <div id="sp-milestone-gold-banner" class="sp-milestone-gold-banner" style="display:none;">
+      <div class="sp-milestone-gold-icon">🏆</div>
+      <div style="flex:1;min-width:0;padding-right:12px;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="font-weight:800;color:#451A03;font-size:14px;" id="sp-milestone-gold-title">🎉 智能教研阶段评估报告已生成！</span>
+          <span style="background:#F59E0B;color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;box-shadow:0 1px 2px rgba(245,158,11,0.3);">NEW</span>
+        </div>
+        <p style="font-size:12px;color:#92400E;margin-top:4px;line-height:1.5;" id="sp-milestone-gold-text">
+          宝贝已顺利完成阶段课时，基于大数据分析的五维能力雷达模型及进阶规划已全面出炉。
+        </p>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button type="button" id="sp-milestone-gold-btn" class="sp-milestone-gold-btn">
+            <span>👉 立即查阅报告</span>
+            <span style="font-size:10px;">➔</span>
+          </button>
+          <span style="font-size:11px;color:#B45309;">含词汇掌握率、听说雷达评分</span>
+        </div>
+      </div>
+      <button type="button" id="sp-milestone-gold-close" class="sp-milestone-gold-close" title="暂不提醒">✕</button>
+    </div>
+
     <!-- Tabs -->
     <div class="sp-tabs">
       <div class="sp-tab active" onclick="spSwitchTab('history')">📋 上课记录</div>
       <div class="sp-tab" onclick="spSwitchTab('homework')">📚 课本与作业</div>
-      <div class="sp-tab" onclick="spSwitchTab('reports')">📈 成长报告</div>
+      <div class="sp-tab" id="sp-tab-btn-reports" onclick="spSwitchTab('reports')">📈 成长报告 <span id="sp-reports-badge" class="report-tab-badge" style="display:none;">NEW</span></div>
       <div class="sp-tab" onclick="spSwitchTab('timeline')">🗺️ 学习轨迹</div>
     </div>
 
@@ -2037,6 +2169,7 @@ async function loadStudentData() {
     var studentResp = await apiGet('/students/' + studentId);
     var student = (studentResp && studentResp.data) ? studentResp.data : studentResp;
     if (!student) throw new Error('未找到学员信息');
+    window_currentStudent = student;
 
     var sNameEl = document.getElementById('student-name');
     if (sNameEl) sNameEl.textContent = (student.name || '') + ' 的学习情况';
@@ -2818,8 +2951,24 @@ function spSwitchTab(tab) {
   if (btns[map[tab]]) btns[map[tab]].classList.add('active');
   var content = document.getElementById('sp-tab-' + tab);
   if (content) content.classList.add('active');
-  if (tab === 'reports' && typeof renderProgressReportRadars === 'function' && window_progressReports) {
-    setTimeout(function() { renderProgressReportRadars(window_progressReports); }, 80);
+
+  if (tab === 'reports') {
+    // 查阅成长报告 Tab 时标记已读并平滑隐藏横幅与角标
+    if (window_activeUnviewedMilestoneId && window_currentStudent) {
+      localStorage.setItem('sb_viewed_milestone_' + window_currentStudent.id + '_' + window_activeUnviewedMilestoneId, '1');
+      window_activeUnviewedMilestoneId = null;
+    }
+    var banner = document.getElementById('sp-milestone-gold-banner');
+    if (banner) {
+      banner.classList.add('dismissed');
+      setTimeout(function() { banner.style.display = 'none'; }, 350);
+    }
+    var badge = document.getElementById('sp-reports-badge');
+    if (badge) badge.style.display = 'none';
+
+    if (typeof renderProgressReportRadars === 'function' && window_progressReports) {
+      setTimeout(function() { renderProgressReportRadars(window_progressReports); }, 80);
+    }
   }
 }
 
@@ -3887,6 +4036,9 @@ function renderStudyProfile(student, allClasses) {
   var assessments = window_allAssessments || [];
   var progressReports = window_progressReports || [];
 
+  // 阶段评估报告醒目提醒逻辑
+  handleMilestoneAlert(student, progressReports);
+
   var REPORT_TYPE_INFO = {
     milestone_10: { icon: '🥉', label: '第 10 课时 · 智能教研阶段评估', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
     milestone_30: { icon: '🥈', label: '第 30 课时 · 智能教研阶段评估', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' },
@@ -3913,7 +4065,8 @@ function renderStudyProfile(student, allClasses) {
       var collapseId = 'pr-body-' + r.id;
       var typeInfo = REPORT_TYPE_INFO[r.report_type] || { icon: '📋', label: '智能教研阶段评估', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' };
       
-      rpHtml += '<div class="sp-card" style="border-left:4px solid ' + typeInfo.color + ';border-radius:14px;box-shadow:0 4px 20px rgba(28,36,75,0.05);margin-bottom:14px;padding:18px 20px;">';
+      var isUnviewedPr = (window_activeUnviewedMilestoneId === r.id);
+      rpHtml += '<div class="sp-card" id="pr-card-' + r.id + '" style="border-left:4px solid ' + typeInfo.color + ';border-radius:14px;box-shadow:0 4px 20px rgba(28,36,75,0.05);margin-bottom:14px;padding:18px 20px;' + (isUnviewedPr ? 'border:1px solid #F59E0B;box-shadow:0 0 16px rgba(245,158,11,0.25);' : '') + '">';
       
       // Header Summary (Clickable to toggle)
       rpHtml += '<div class="sp-card-summary" onclick="toggleCollapse(\'' + collapseId + '\')">';
@@ -3924,6 +4077,9 @@ function renderStudyProfile(student, allClasses) {
       rpHtml += '<span style="font-size:13px;font-weight:700;color:' + typeInfo.color + ';">' + typeInfo.label + '</span>';
       if (r.badge_name) {
         rpHtml += '<span style="font-size:11px;padding:1px 8px;background:rgba(245,166,35,0.2);color:#D97706;border-radius:10px;font-weight:700;">' + spEsc(r.badge_name) + '</span>';
+      }
+      if (isUnviewedPr) {
+        rpHtml += '<span style="font-size:10px;padding:1px 6px;background:linear-gradient(135deg,#EF4444,#F97316);color:#fff;border-radius:10px;font-weight:800;margin-left:6px;box-shadow:0 1px 3px rgba(239,68,68,0.3);">NEW</span>';
       }
       rpHtml += '</div>';
       rpHtml += '<div style="font-size:12px;color:var(--sb-muted);margin-top:2px;">评定机制: <b style="color:var(--sb-dark);">教学大数据与智能教研客观诊断</b> · 授课外教: <b style="color:var(--sb-dark);">' + spEsc(r.teacher_name || '-') + '</b> · 评估日期: ' + ((r.created_at || '').substring(0, 10)) + '</div>';
@@ -4220,10 +4376,19 @@ function renderStudyProfile(student, allClasses) {
   var mDescEl = document.getElementById('sp-milestone-desc');
 
   if (mTitleEl && mPctEl && mBarEl && mDescEl) {
-    mTitleEl.textContent = '🎯 阶段目标: 第 ' + nextMilestone + ' 节正式课能力进阶评估';
-    mPctEl.textContent = pct + '% (正式课 ' + regularLessons + '/' + nextMilestone + ' 节)';
-    mBarEl.style.width = pct + '%';
-    mDescEl.textContent = '💡 体验课不计入阶段评估。当前已完成 ' + regularLessons + ' 节正式课，还需 ' + leftLessons + ' 节课即可达成下一里程碑，解锁专属能力大考评估！';
+    if (pct >= 100 || (nextMilestone && regularLessons >= nextMilestone)) {
+      mTitleEl.innerHTML = '🎉 <b>已达成里程碑: 第 ' + nextMilestone + ' 节课阶段评估已就绪</b>';
+      mPctEl.innerHTML = '<span style="color:#10B981;font-weight:700;">100% 达成</span>';
+      mBarEl.style.width = '100%';
+      mBarEl.style.background = 'linear-gradient(90deg, #10B981, #059669)';
+      mDescEl.innerHTML = '✨ 恭喜宝贝达成第 ' + nextMilestone + ' 节里程碑！智能教研大数据评估报告与雷达模型已出具，请查阅成长报告。';
+    } else {
+      mTitleEl.textContent = '🎯 阶段目标: 第 ' + nextMilestone + ' 节正式课能力进阶评估';
+      mPctEl.textContent = pct + '% (正式课 ' + regularLessons + '/' + nextMilestone + ' 节)';
+      mBarEl.style.width = pct + '%';
+      mBarEl.style.background = 'linear-gradient(90deg,var(--sb-accent),var(--sb-orange))';
+      mDescEl.textContent = '💡 体验课不计入阶段评估。当前已完成 ' + regularLessons + ' 节正式课，还需 ' + leftLessons + ' 节课即可达成下一里程碑，解锁专属能力大考评估！';
+    }
   }
 
   // === Tab: 学习轨迹 (only milestones) ===
@@ -4328,6 +4493,103 @@ document.getElementById('feedback-modal').addEventListener('click', function(e) 
 document.getElementById('today-date').textContent = new Date().toLocaleDateString('zh-CN', {
   year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
 });
+
+// ===== 阶段评估醒目提醒机制 =====
+var window_currentStudent = null;
+var window_activeUnviewedMilestoneId = null;
+
+function handleMilestoneAlert(student, progressReports) {
+  var banner = document.getElementById('sp-milestone-gold-banner');
+  var badge = document.getElementById('sp-reports-badge');
+  if (!progressReports || !Array.isArray(progressReports) || progressReports.length === 0) {
+    if (banner) banner.style.display = 'none';
+    if (badge) badge.style.display = 'none';
+    window_activeUnviewedMilestoneId = null;
+    return;
+  }
+
+  // 取最新的一份阶段报告
+  var latest = progressReports[0];
+  var sId = student ? student.id : (typeof getStudentId === 'function' ? getStudentId() : '0');
+  var storageKey = 'sb_viewed_milestone_' + sId + '_' + latest.id;
+  var dismissedKey = 'sb_dismissed_milestone_' + sId + '_' + latest.id;
+
+  var isViewed = !!localStorage.getItem(storageKey);
+  var isDismissed = !!sessionStorage.getItem(dismissedKey);
+
+  if (!isViewed) {
+    window_activeUnviewedMilestoneId = latest.id;
+    if (badge) badge.style.display = 'inline-block';
+  } else {
+    window_activeUnviewedMilestoneId = null;
+    if (badge) badge.style.display = 'none';
+  }
+
+  if (!isViewed && !isDismissed && banner) {
+    var lessonNum = latest.total_lessons_completed || 10;
+    var typeMatch = (latest.report_type || '').match(/milestone_(\d+)/);
+    if (typeMatch) lessonNum = typeMatch[1];
+
+    var bannerText = document.getElementById('sp-milestone-gold-text');
+    if (bannerText) {
+      bannerText.innerHTML = '宝贝已顺利完成 <b>第 ' + lessonNum + ' 课时</b>，基于大数据分析的五维能力雷达模型及进阶规划已全面出炉。';
+    }
+    banner.style.display = 'flex';
+    banner.classList.remove('dismissed');
+
+    var btn = document.getElementById('sp-milestone-gold-btn');
+    if (btn) {
+      btn.onclick = function() {
+        openMilestoneReport(latest.id);
+      };
+    }
+
+    var closeBtn = document.getElementById('sp-milestone-gold-close');
+    if (closeBtn) {
+      closeBtn.onclick = function() {
+        sessionStorage.setItem(dismissedKey, '1');
+        banner.classList.add('dismissed');
+        setTimeout(function() { banner.style.display = 'none'; }, 350);
+      };
+    }
+  } else if (banner) {
+    banner.style.display = 'none';
+  }
+}
+
+function openMilestoneReport(reportId) {
+  // 1. 切换到成长报告 Tab
+  spSwitchTab('reports');
+
+  // 2. 标记已读
+  var sId = window_currentStudent ? window_currentStudent.id : (typeof getStudentId === 'function' ? getStudentId() : '0');
+  if (reportId && sId) {
+    localStorage.setItem('sb_viewed_milestone_' + sId + '_' + reportId, '1');
+  }
+  window_activeUnviewedMilestoneId = null;
+
+  var banner = document.getElementById('sp-milestone-gold-banner');
+  if (banner) {
+    banner.classList.add('dismissed');
+    setTimeout(function() { banner.style.display = 'none'; }, 350);
+  }
+  var badge = document.getElementById('sp-reports-badge');
+  if (badge) badge.style.display = 'none';
+
+  // 3. 滚动并高亮目标卡片
+  setTimeout(function() {
+    var card = document.getElementById('pr-card-' + reportId);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('report-card-highlight');
+      setTimeout(function() { card.classList.remove('report-card-highlight'); }, 4000);
+    }
+    var body = document.getElementById('pr-body-' + reportId);
+    if (body && body.classList.contains('collapsed')) {
+      toggleCollapse('pr-body-' + reportId);
+    }
+  }, 120);
+}
 
 // ===== 初始化 =====
 loadStudentData();
