@@ -2894,7 +2894,7 @@ function renderProgressReportRadars(reports) {
       window_prRadarCharts[r.id] = new Chart(canvas.getContext('2d'), {
         type: 'radar',
         data: {
-          labels: ['自然拼读', '词汇留存', '自发表达', '听力理解', '课堂参与'],
+          labels: ['自然拼读\nPhonics', '词汇留存\nVocab', '自发表达\nSpeaking', '听力理解\nListening', '课堂参与\nEngagement'],
           datasets: [{
             label: '能力评估',
             data: [
@@ -2904,13 +2904,14 @@ function renderProgressReportRadars(reports) {
               scores.listening_comprehension || 0,
               scores.classroom_engagement || 0
             ],
-            backgroundColor: 'rgba(99, 102, 241, 0.25)',
+            backgroundColor: 'rgba(99, 102, 241, 0.22)',
             borderColor: 'rgba(99, 102, 241, 0.95)',
-            borderWidth: 2,
+            borderWidth: 2.5,
             pointBackgroundColor: 'rgba(99, 102, 241, 1)',
             pointBorderColor: '#fff',
-            pointRadius: 4,
-            pointHoverRadius: 6
+            pointBorderWidth: 2,
+            pointRadius: 5,
+            pointHoverRadius: 7
           }]
         },
         options: {
@@ -2918,12 +2919,24 @@ function renderProgressReportRadars(reports) {
           maintainAspectRatio: true,
           scales: {
             r: {
-              angleLines: { color: 'rgba(0, 0, 0, 0.08)' },
-              grid: { color: 'rgba(0, 0, 0, 0.08)' },
-              pointLabels: { font: { size: 11, weight: '600' }, color: '#4B5563' },
-              ticks: { display: false, min: 0, max: 100, stepSize: 20 },
-              suggestedMin: 0,
-              suggestedMax: 100
+              min: 0,
+              max: 100,
+              angleLines: { color: 'rgba(0,0,0,0.10)', lineWidth: 1 },
+              grid: { color: 'rgba(0,0,0,0.08)', lineWidth: 1 },
+              pointLabels: {
+                font: { size: 10, weight: '700', family: '-apple-system,BlinkMacSystemFont,sans-serif' },
+                color: '#374151',
+                padding: 6
+              },
+              ticks: {
+                display: true,
+                count: 5,
+                backdropColor: 'transparent',
+                color: '#9CA3AF',
+                font: { size: 8 },
+                stepSize: 20,
+                callback: function(val) { return val === 0 ? '' : val; }
+              }
             }
           },
           plugins: {
@@ -4151,7 +4164,7 @@ function renderStudyProfile(student, allClasses) {
         rpHtml += '</div>';
 
         rpHtml += '<div style="display:flex;flex-direction:column;gap:12px;align-items:center;">';
-        rpHtml += '<div style="width:100%;max-width:260px;aspect-ratio:1/1;margin:0 auto;position:relative;">';
+        rpHtml += '<div style="width:100%;max-width:300px;aspect-ratio:1/1;margin:0 auto;position:relative;">';
         rpHtml += '<canvas id="pr-radar-canvas-' + r.id + '"></canvas>';
         rpHtml += '</div>';
 

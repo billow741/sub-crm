@@ -46,13 +46,16 @@
               scores.listening_comprehension || 0,
               scores.classroom_engagement || 0
             ],
-            backgroundColor: 'rgba(124, 58, 237, 0.22)',
+            backgroundColor: 'rgba(124, 58, 237, 0.18)',
             borderColor: 'rgba(124, 58, 237, 1)',
             pointBackgroundColor: 'rgba(124, 58, 237, 1)',
             pointBorderColor: '#fff',
+            pointBorderWidth: 2,
             pointHoverBackgroundColor: '#fff',
             pointHoverBorderColor: 'rgba(124, 58, 237, 1)',
-            borderWidth: 2
+            borderWidth: 2.5,
+            pointRadius: 5,
+            pointHoverRadius: 7
           }]
         },
         options: {
@@ -60,10 +63,24 @@
           maintainAspectRatio: true,
           scales: {
             r: {
-              angleLines: { color: 'rgba(0, 0, 0, 0.08)' },
-              grid: { color: 'rgba(0, 0, 0, 0.08)' },
-              pointLabels: { font: { size: 10, weight: 'bold' }, color: '#4B5563' },
-              ticks: { display: false, min: 0, max: 100, stepSize: 20 }
+              min: 0,
+              max: 100,
+              angleLines: { color: 'rgba(0, 0, 0, 0.08)', lineWidth: 1 },
+              grid: { color: 'rgba(0, 0, 0, 0.08)', lineWidth: 1 },
+              pointLabels: {
+                font: { size: 10, weight: 'bold', family: '-apple-system,BlinkMacSystemFont,sans-serif' },
+                color: '#4B5563',
+                padding: 6
+              },
+              ticks: {
+                display: true,
+                count: 5,
+                backdropColor: 'transparent',
+                color: '#9CA3AF',
+                font: { size: 8 },
+                stepSize: 20,
+                callback: function(val) { return val === 0 ? '' : val; }
+              }
             }
           },
           plugins: { legend: { display: false } }

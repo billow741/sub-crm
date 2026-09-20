@@ -360,7 +360,7 @@ Parents do not want a mere summary of past classes. They need "commercial delive
 
 INSTRUCTIONS:
 1. Stage Growth Insights: Analyze the student's linguistic progress from an ESL pedagogy perspective. Do not just list words learned. Explain *how* they are developing (e.g., transitioning from single-word recall to spontaneous phrasing, improved phonemic awareness, cognitive connections).
-2. Learning Capability Radar: Evaluate the student across 5 key dimensions (Phonics, Vocabulary Retention, Spontaneous Speaking, Listening Comprehension, Classroom Engagement) using a 1-100 scale. Base this deeply on the teacher notes and pronunciation history.
+2. Learning Capability Radar: Evaluate the student across 5 key dimensions (Phonics, Vocabulary Retention, Spontaneous Speaking, Listening Comprehension, Classroom Engagement) using a 60-100 scale. 60 = baseline entry level for a newly enrolled student; 80 = solid stage-appropriate mastery; 100 = exceptional, exceeds grade expectations. Scores MUST meaningfully differentiate the student's relative strengths vs. weaknesses — spread scores across at least a 15-point range. Base this deeply on the teacher notes and pronunciation history.
 3. Next-Phase Personalized Strategy: Create 2 actionable, structured goals for the next milestone. Explicitly tie these goals to the student's current "improvements" (weaknesses) and provide an action plan.
 4. Tone: Authoritative, empathetic, and inspiring. Use professional pedagogical terminology (e.g., "scaffolding," "lexical retention") but explain it so parents understand the immense value of the tutoring.
 5. Strict JSON Output: You must return ONLY valid JSON matching the exact schema below. Do not output markdown code blocks, do not include any conversational text.
