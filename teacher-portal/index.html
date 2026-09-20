@@ -2244,18 +2244,18 @@ var milestoneType = null;
 var milestoneData = null;
 
 var MILESTONE_INFO = {
-  milestone_10: { 
-    title: '🥉 10 Lessons Milestone (Rising Star)!', 
-    desc: 'The student has completed 10 lessons! Write an introductory adaptation report focusing on learning habits, engagement, and initial phonics/sight words.', 
+  milestone_8: { 
+    title: '🥉 8 Lessons Milestone (Rising Star)!', 
+    desc: 'The student has completed 8 lessons! Write an introductory adaptation report focusing on learning habits, engagement, and initial phonics/sight words.', 
     color: '#10B981',
     badge: '🥉 Rising Star',
-    lessons: 10,
+    lessons: 8,
     tips: {
       summary: 'Student has adapted smoothly to the 1-on-1 English environment, demonstrating curiosity, high enthusiasm, and responsive engagement.',
       strengths: 'Willing to speak and imitate teacher pronunciation; remembers high-frequency vocabulary quickly; attentive in interactive activities.',
       improvements: 'Encourage complete sentence responses rather than single words; practice attentive listening to teacher instructions.',
       recommendation: 'Continue building letter-sound phonics and foundational sight words; reinforce with short audio and chant repetition.',
-      message: 'Congratulations on reaching 10 lessons! Your child has shown wonderful enthusiasm and adapted beautifully to English learning!'
+      message: 'Congratulations on reaching 8 lessons! Your child has shown wonderful enthusiasm and adapted beautifully to English learning!'
     }
   },
   milestone_30: { 
@@ -2317,7 +2317,7 @@ var MILESTONE_INFO = {
 
 // ===== Helper Functions for Milestone & Reminders =====
 function formatMilestoneShortLabel(type) {
-  if (type === 'milestone_10') return '10 Lessons';
+  if (type === 'milestone_8') return '8 Lessons';
   if (type === 'milestone_30') return '30 Lessons';
   if (type === 'milestone_60') return '60 Lessons';
   if (type === 'milestone_100') return '100 Lessons';
@@ -2356,7 +2356,7 @@ function renderMilestoneReminderBanner(pendingList) {
   pendingList.forEach(function(c, idx) {
     var info = MILESTONE_INFO[c.milestone_type] || {};
     var badgeName = info.badge || formatMilestoneShortLabel(c.milestone_type);
-    var icon = c.milestone_type === 'milestone_10' ? '🥉'
+    var icon = c.milestone_type === 'milestone_8' ? '🥉'
              : c.milestone_type === 'milestone_30' ? '🥈'
              : c.milestone_type === 'milestone_60' ? '🥇'
              : c.milestone_type === 'milestone_100' ? '💎' : '🏅';

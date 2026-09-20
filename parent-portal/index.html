@@ -4040,7 +4040,7 @@ function renderStudyProfile(student, allClasses) {
   handleMilestoneAlert(student, progressReports);
 
   var REPORT_TYPE_INFO = {
-    milestone_10: { icon: '🥉', label: '第 10 课时 · 智能教研阶段评估', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
+    milestone_8: { icon: '🥉', label: '第 8 课时 · 智能教研阶段评估', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
     milestone_30: { icon: '🥈', label: '第 30 课时 · 智能教研阶段评估', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' },
     milestone_60: { icon: '🥇', label: '第 60 课时 · 智能教研阶段评估', color: '#E26B31', bg: 'rgba(226,107,49,0.08)' },
     milestone_100: { icon: '💎', label: '第 100 课时 · 智能教研阶段评估', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' },
@@ -4056,7 +4056,7 @@ function renderStudyProfile(student, allClasses) {
   rpHtml += '</div>';
 
   if (progressReports.length === 0) {
-    rpHtml += '<div class="sp-card" style="text-align:center;padding:24px;color:var(--sb-muted);font-size:13px;background:#FAFCFF;border:1px dashed #D3E2F2;border-radius:14px;">🌱 学习进行中，完成第 10、30、60、100 节课或晋升等级时，智能教研系统将自动出具全量大数据阶段评估报告</div>';
+    rpHtml += '<div class="sp-card" style="text-align:center;padding:24px;color:var(--sb-muted);font-size:13px;background:#FAFCFF;border:1px dashed #D3E2F2;border-radius:14px;">🌱 学习进行中，完成第 8、30、60、100 节课或晋升等级时，智能教研系统将自动出具全量大数据阶段评估报告</div>';
   } else {
     var prCounter = 0;
     progressReports.forEach(function(r) {
@@ -4634,7 +4634,7 @@ function buildProgressReportHTML(r) {
   }
 
   var typeLabels = {
-    milestone_10: '第 10 课时 · 智能教研阶段评估报告',
+    milestone_8: '第 8 课时 · 智能教研阶段评估报告',
     milestone_30: '第 30 课时 · 智能教研阶段评估报告',
     milestone_60: '第 60 课时 · 智能教研阶段评估报告',
     milestone_100: '第 100 课时 · 智能教研阶段评估报告',

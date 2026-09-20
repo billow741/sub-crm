@@ -227,7 +227,7 @@ progressReports.get('/:id', validateParams(idParamSchema), async (c) => {
 // AI 自动生成里程碑评估报告 Schema
 const aiGenerateSchema = z.object({
   student_id: z.coerce.number().int().positive(),
-  milestone_type: z.enum(['milestone_10', 'milestone_30', 'milestone_60', 'milestone_100', 'level_up']),
+  milestone_type: z.enum(['milestone_8', 'milestone_30', 'milestone_60', 'milestone_100', 'level_up']),
   class_id: z.coerce.number().int().positive().optional().nullable(),
   teacher_id: z.coerce.number().int().positive().optional().nullable()
 });
@@ -243,9 +243,9 @@ export async function generateMilestoneReportData({ DB, env, student_id, milesto
   }
 
   // Determine target lesson count
-  let targetLessons = 10;
+  let targetLessons = 8;
   let badgeName = '🥉 Rising Star';
-  let stageLabel = '10 Lessons Adaptation & Habit Stage';
+  let stageLabel = '8 Lessons Adaptation & Habit Stage';
   if (milestone_type === 'milestone_30') {
     targetLessons = 30;
     badgeName = '🥈 Steady Leaper';
@@ -689,7 +689,7 @@ progressReports.post('/ai-generate', validate(aiGenerateSchema), async (c) => {
 const reportSchema = z.object({
   student_id: z.coerce.number().int().positive(),
   class_id: z.coerce.number().int().positive().optional().nullable(),
-  report_type: z.enum(['milestone_10', 'milestone_30', 'milestone_60', 'milestone_100', 'level_up']),
+  report_type: z.enum(['milestone_8', 'milestone_30', 'milestone_60', 'milestone_100', 'level_up']),
   teacher_id: z.coerce.number().int().positive().optional().nullable(),
   teacher_name: z.string().max(100).optional().nullable().transform(v => v || null),
   summary: z.string().optional().nullable().transform(v => v || null),

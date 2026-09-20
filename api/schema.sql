@@ -475,7 +475,7 @@ CREATE TABLE IF NOT EXISTS progress_reports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER NOT NULL,
   class_id INTEGER,
-  report_type TEXT NOT NULL CHECK (report_type IN ('milestone_10', 'milestone_30', 'milestone_60', 'milestone_100', 'level_up')),
+  report_type TEXT NOT NULL CHECK (report_type IN ('milestone_8', 'milestone_30', 'milestone_60', 'milestone_100', 'level_up')),
   teacher_id INTEGER,
   teacher_name TEXT,
   summary TEXT,
