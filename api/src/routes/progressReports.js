@@ -710,6 +710,8 @@ const reportSchema = z.object({
   stage_growth_insights: z.string().optional().nullable().transform(v => v || null),
   radar_scores: z.string().optional().nullable().transform(v => v || null),
   next_phase_strategy: z.string().optional().nullable().transform(v => v || null),
+  status: z.enum(['draft', 'scheduled', 'published']).optional().default('scheduled'),
+  scheduled_publish_at: z.string().optional().nullable(),
   organization_id: z.coerce.number().int().positive().optional().nullable()
 });
 
@@ -722,6 +724,13 @@ progressReports.post('/', validate(reportSchema), async (c) => {
     return c.json(error('STUDENT_GRADUATED', 'The student has graduated. Milestone reports cannot be generated for graduated students.'), 400);
   }
 
+  const finalStatus = data.status || 'scheduled';
+  let finalScheduledAt = data.scheduled_publish_at;
+  if (finalStatus === 'scheduled' && !finalScheduledAt) {
+    const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    finalScheduledAt = d.toISOString();
+  }
+
   const result = await DB.prepare(`
     INSERT INTO progress_reports (
       student_id, class_id, report_type, teacher_id, teacher_name,
@@ -731,9 +740,9 @@ progressReports.post('/', validate(reportSchema), async (c) => {
       score_listening, score_speaking, score_interaction, score_pronunciation,
       highlight_recording_url, badge_name,
       stage_growth_insights, radar_scores, next_phase_strategy,
-      status, organization_id
+      status, scheduled_publish_at, organization_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     data.student_id,
     data.class_id || null,
@@ -758,19 +767,23 @@ progressReports.post('/', validate(reportSchema), async (c) => {
     data.stage_growth_insights || null,
     data.radar_scores || null,
     data.next_phase_strategy || null,
+    finalStatus,
+    finalScheduledAt || null,
     data.organization_id || null
   ).run();
 
-  try {
-    const milestoneNumber = (data.report_type || '').replace('milestone_', '');
-    const title = '🎉 智能教研阶段评估报告已发布！';
-    const body = `宝贝已完成阶段学习，专业阶段评估报告与进阶规划已发布，点击查阅！`;
-    await triggerPushNotification(DB, 'parent', data.student_id, 'milestone_report', title, body, data.class_id || null);
-  } catch (pushErr) {
-    console.warn('[Milestone Notification] Push failed:', pushErr);
+  if (finalStatus === 'published') {
+    try {
+      const milestoneNumber = (data.report_type || '').replace('milestone_', '');
+      const title = '🎉 智能教研阶段评估报告已发布！';
+      const body = `宝贝已完成阶段学习，专业阶段评估报告与进阶规划已发布，点击查阅！`;
+      await triggerPushNotification(DB, 'parent', data.student_id, 'milestone_report', title, body, data.class_id || null);
+    } catch (pushErr) {
+      console.warn('[Milestone Notification] Push failed:', pushErr);
+    }
   }
 
-  return c.json(success({ id: result.meta.last_row_id }), 201);
+  return c.json(success({ id: result.meta.last_row_id, status: finalStatus, scheduled_publish_at: finalScheduledAt }), 201);
 });
 
 // 更新报告

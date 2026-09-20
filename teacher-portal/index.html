@@ -2577,6 +2577,23 @@ async function openMilestoneReport(cls, m, reportType) {
   milestoneData = m || {};
 
   var existingReport = getMilestoneReportForClass(cls, reportType);
+  if (!existingReport && cls && (cls.student_id || cls.id)) {
+    try {
+      var checkUrl = '/progress-reports?' + (cls.id ? ('class_id=' + cls.id) : ('student_id=' + cls.student_id)) + '&page_size=20';
+      var checkRes = await apiGet(checkUrl);
+      var checkList = checkRes.data && checkRes.data.data ? checkRes.data.data : (checkRes.data || []);
+      var match = checkList.find(function(r) { 
+        return (cls.id && r.class_id === cls.id) || (r.report_type === reportType); 
+      });
+      if (match) {
+        existingReport = match;
+        if (cls.id) window_progressReportsByClassId[cls.id] = match;
+        if (cls.student_id && match.report_type) {
+          window_progressReportsByStudentAndType[cls.student_id + '_' + match.report_type] = match;
+        }
+      }
+    } catch(e) {}
+  }
   window_currentMilestoneReportId = existingReport ? existingReport.id : null;
 
   var info = MILESTONE_INFO[reportType] || { title: 'Milestone Stage Pedagogical Assessment', desc: '', color: '#6366F1', badge: '🏅 Milestone Honor', lessons: 10, tips: {} };
@@ -2926,26 +2943,59 @@ document.getElementById('milestone-form').addEventListener('submit', async funct
   };
 
   try {
+    var savedId = window_currentMilestoneReportId;
     if (window_currentMilestoneReportId) {
       await apiPatch('/progress-reports/' + window_currentMilestoneReportId, reportData);
-      alert('Milestone assessment report updated successfully! 💾');
     } else {
-      await apiPost('/progress-reports', reportData);
-      alert('Milestone assessment report saved successfully! 🎉');
+      var postRes = await apiPost('/progress-reports', reportData);
+      savedId = (postRes.data && postRes.data.id) ? postRes.data.id : (postRes.id || null);
+      window_currentMilestoneReportId = savedId;
     }
-    closeMilestoneModal();
+
+    // Immediately cache in memory so subsequent views never encounter an empty state
+    reportData.id = savedId;
+    if (milestoneClass && milestoneClass.id) {
+      window_progressReportsByClassId[milestoneClass.id] = reportData;
+    }
+    if (milestoneClass && milestoneClass.student_id && reportType) {
+      window_progressReportsByStudentAndType[milestoneClass.student_id + '_' + reportType] = reportData;
+    }
+
+    // Synchronize preview
+    syncPreviewFromForm();
+    switchMilestoneTab('preview');
+
+    // Show saved feedback on buttons
+    if (submitBtn) submitBtn.innerHTML = '<span>✅</span> Saved Successfully!';
+    if (editSubmitBtn) editSubmitBtn.innerHTML = '<span>✅</span> Saved Successfully!';
+
+    // Show notice in modal
+    var notice = document.getElementById('ms-ai-status-notice');
+    if (notice) {
+      notice.className = 'rounded-xl p-3 mb-3 text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center justify-between gap-2';
+      notice.innerHTML = '<span>💾 <b>Assessment changes saved successfully!</b> You can review preview below or click "Publish to Parents Now".</span>' +
+        '<button type="button" onclick="this.parentElement.classList.add(\'hidden\')" class="text-emerald-600 hover:text-emerald-800 font-bold shrink-0">✕</button>';
+      notice.classList.remove('hidden');
+    }
+
+    // Ensure publish button is visible
+    var pubPreviewBtn = document.getElementById('ms-publish-preview-btn');
+    var pubEditBtn = document.getElementById('ms-publish-edit-btn');
+    if (pubPreviewBtn) pubPreviewBtn.style.display = 'inline-flex';
+    if (pubEditBtn) pubEditBtn.style.display = 'inline-flex';
+
+    setTimeout(function() {
+      if (submitBtn) submitBtn.innerHTML = '<span>💾</span> Save Changes';
+      if (editSubmitBtn) editSubmitBtn.innerHTML = '<span>💾</span> Save Changes';
+    }, 2500);
+
+    // Refresh background list quietly without closing modal
     loadTeacherData();
   } catch(err) {
     alert('Failed to save report: ' + err.message);
   } finally {
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = '<span>💾</span> Save Changes';
-    }
-    if (editSubmitBtn) {
-      editSubmitBtn.disabled = false;
-      editSubmitBtn.innerHTML = '<span>💾</span> Save Changes';
-    }
+    if (submitBtn) submitBtn.disabled = false;
+    if (editSubmitBtn) editSubmitBtn.disabled = false;
   }
 });
 
@@ -2961,6 +3011,17 @@ window.publishMilestoneNow = async function() {
   try {
     var res = await apiPost('/progress-reports/' + window_currentMilestoneReportId + '/publish-now', {});
     alert('🎉 Milestone assessment report published successfully to parents!');
+    
+    // Update local cache status
+    if (milestoneClass && window_progressReportsByClassId[milestoneClass.id]) {
+      window_progressReportsByClassId[milestoneClass.id].status = 'published';
+    }
+    if (milestoneClass && milestoneClass.student_id && milestoneType) {
+      if (window_progressReportsByStudentAndType[milestoneClass.student_id + '_' + milestoneType]) {
+        window_progressReportsByStudentAndType[milestoneClass.student_id + '_' + milestoneType].status = 'published';
+      }
+    }
+
     closeMilestoneModal();
     loadTeacherData();
   } catch(err) {
