@@ -665,7 +665,7 @@ classes.patch('/:id', validateParams(idParamSchema), validate(classUpdateSchema)
     // ── 里程碑自动检测（排除已结课/graduated状态学员）──
     let milestone = null;
     try {
-      if (!isTrialUpdate && newStatus === 'completed' && oldStatus !== 'completed') {
+      if (!isTrialUpdate && newStatus === 'completed' && (oldStatus !== 'completed' || existing.milestone_type)) {
         const student = await DB.prepare('SELECT id, status FROM students WHERE id = ?').bind(existing.student_id).first();
         if (student && student.status !== 'graduated') {
           const completedCount = await DB.prepare(

@@ -477,12 +477,11 @@ Remember: Output ONLY valid JSON matching the schema defined in the system promp
 
       const candidateModels = [
         preferredModel,
-        'nvidia/nemotron-3-ultra-550b-a55b',
-        'nvidia/nemotron-4-340b-instruct',
-        'nvidia/llama-3.1-nemotron-ultra-253b-v1',
         'meta/llama-3.2-11b-vision-instruct',
-        'meta/llama-3.1-8b-instruct'
-      ].filter((v, idx, arr) => v && arr.indexOf(v) === idx);
+        'meta/llama-3.1-8b-instruct',
+        'nvidia/llama-3.1-nemotron-70b-instruct'
+      ].filter((v, idx, arr) => v && arr.indexOf(v) === idx && !v.includes('550b'));
+
       for (const m of candidateModels) {
         try {
           const resp = await fetch(`${baseUrl}/chat/completions`, {
@@ -499,7 +498,8 @@ Remember: Output ONLY valid JSON matching the schema defined in the system promp
               ],
               temperature: 0.3,
               max_tokens: 2048
-            })
+            }),
+            signal: AbortSignal.timeout(15000)
           });
 
           if (resp.ok) {
