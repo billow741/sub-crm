@@ -561,3 +561,20 @@ export function saveData(data) {
     return false;
   }
 }
+
+// ============================================
+// 潜在客户/全渠道预约线索 (Leads)
+// ============================================
+export const leadOps = {
+  async getAll(limit = 50, offset = 0) {
+    const res = await request(`/leads?limit=${limit}&offset=${offset}`);
+    return res?.data || [];
+  },
+  async create(data) {
+    return request('/leads', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+};
+

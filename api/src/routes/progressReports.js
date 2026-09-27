@@ -315,8 +315,9 @@ export async function generateMilestoneReportData({ DB, env, student_id, milesto
     if (sentenceRaw.trim()) {
       const sents = sentenceRaw.split(/[\n;；]+/).map(s => s.trim()).filter(s => s.length > 3);
       sents.forEach(s => {
-        if (!practicedSentences.includes(s) && practicedSentences.length < 25) {
-          practicedSentences.push(s);
+        const cleanS = s.length > 120 ? s.slice(0, 117) + '...' : s;
+        if (!practicedSentences.includes(cleanS) && practicedSentences.length < 20) {
+          practicedSentences.push(cleanS);
         }
       });
     }
@@ -345,7 +346,8 @@ export async function generateMilestoneReportData({ DB, env, student_id, milesto
       } catch(e) {}
     }
     if (cls.fb_teacher_message && cls.fb_teacher_message.trim().length > 5) {
-      teacherNotes.push({ date: cls.date, text: cls.fb_teacher_message.trim() });
+      const cleanNote = cls.fb_teacher_message.trim().slice(0, 350);
+      teacherNotes.push({ date: cls.date, text: cleanNote });
     }
   });
 
@@ -356,6 +358,19 @@ export async function generateMilestoneReportData({ DB, env, student_id, milesto
 
   const displayName = student.english_name ? `${student.name} (${student.english_name})` : student.name;
   const textbooks = Array.from(textbookSet);
+
+  // Determine CEFR Proficiency Level
+  const rawLevel = (student.grade || '').trim() || (classList.find(c => c.fb_lesson_level)?.fb_lesson_level || '').trim();
+  let cefrLevel = 'B1';
+  if (/B2/i.test(rawLevel)) cefrLevel = 'B2';
+  else if (/B1/i.test(rawLevel)) cefrLevel = 'B1';
+  else if (/A2/i.test(rawLevel)) cefrLevel = 'A2';
+  else if (/A1/i.test(rawLevel)) cefrLevel = 'A1';
+  else if (/C1/i.test(rawLevel)) cefrLevel = 'C1';
+  else if (rawLevel) cefrLevel = rawLevel;
+
+  const isIntermediateOrAbove = ['B1', 'B2', 'C1', 'C2'].includes(cefrLevel);
+  const studentAge = student.age ? `${student.age} years old` : 'Adolescent / Middle School';
 
   // Compute quantitative baseline scores from teacher's lesson evaluations (1-5 mapped to 60-100)
   const calcDimAvg = (arr) => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
@@ -371,11 +386,11 @@ export async function generateMilestoneReportData({ DB, env, student_id, milesto
   };
 
   const baseRadarScores = {
-    phonics: to100Scale(avgPhonics, 82),
-    vocabulary_retention: to100Scale(avgVocab, 85),
-    spontaneous_speaking: to100Scale(avgSpeaking, 78),
-    listening_comprehension: to100Scale(avgListening, 88),
-    classroom_engagement: to100Scale(avgEngagement, 92)
+    phonics: to100Scale(avgPhonics, 88),
+    vocabulary_retention: to100Scale(avgVocab, 90),
+    spontaneous_speaking: to100Scale(avgSpeaking, 82),
+    listening_comprehension: to100Scale(avgListening, 90),
+    classroom_engagement: to100Scale(avgEngagement, 95)
   };
 
   const hasTeacherScores = dimScores.phonics.length > 0 || dimScores.vocab.length > 0 || dimScores.speaking.length > 0;
@@ -383,44 +398,52 @@ export async function generateMilestoneReportData({ DB, env, student_id, milesto
   // Try calling LLM
   let generatedData = null;
   let isFromLLM = false;
+  let usedModel = null;
 
   try {
     const baseUrl = (headers && headers['x-llm-base-url']) || (env && env.LLM_BASE_URL) || 'https://integrate.api.nvidia.com/v1';
     const apiKey = (headers && headers['x-llm-api-key']) || (env && env.LLM_API_KEY);
-    const preferredModel = (headers && headers['x-llm-model']) || (env && env.LLM_MODEL) || 'nvidia/nemotron-3-ultra-550b-a55b';
+    let preferredModel = (headers && headers['x-llm-model']) || (env && env.LLM_MODEL) || 'nvidia/nemotron-3-ultra-550b-a55b';
+    if (preferredModel.includes('550b') || preferredModel.includes('nemotron-3-ultra')) {
+      preferredModel = 'nvidia/nemotron-3-ultra-550b-a55b';
+    }
 
     if (apiKey) {
-      const systemPrompt = `You are a Senior ESL Pedagogical Director and Educational Psychologist at SunnyBridge Academy. 
-Your task is to analyze a student's milestone data and generate a highly professional, pedagogically sound Milestone Stage Assessment Report in JSON format.
+      const systemPrompt = `You are a Senior Cambridge/CEFR ESL Pedagogical Director and Educational Psychologist at SunnyBridge Academy.
+Your task is to analyze a student's milestone lesson logs and generate an authoritative, evidence-based, inspiring Milestone Stage Assessment Report in JSON format.
 
-CRITICAL OBJECTIVE:
-Parents do not want a mere summary of past classes. They need "commercial delivery value" — a deep, macro-level analysis of their child's cognitive and linguistic growth, learning capabilities, and a personalized strategic roadmap for the next stage. 
+CRITICAL LEVEL AWARENESS & PEDAGOGICAL GROUNDING:
+1. Strict CEFR Alignment: Calibrate your analysis strictly to CEFR ${cefrLevel} (${isIntermediateOrAbove ? 'Intermediate/Upper-Intermediate' : 'Foundational'}) level and chronological age (${studentAge}).
+2. NEGATIVE CONSTRAINTS (STRICTLY ENFORCED):
+${isIntermediateOrAbove ? `   - NEVER use early-childhood or beginner ESL terms such as "sight words", "CVC blending", "letter sounds", "Pre-A1/A1 fluency", or "alphabet phonics".
+   - At CEFR ${cefrLevel}, "Phonics/Pronunciation" evaluates: multi-syllabic stress patterns (e.g. stress precision on words like "nutritious", "carbohydrate"), sentence rhythm, connected speech, and articulation clarity.
+   - At CEFR ${cefrLevel}, learning focuses on: paragraph-level written cohesion, reading topic-sentence analysis, academic listening note-taking (shorthand vs verbatim transcription), and elaborating spontaneous speaking responses with descriptive clauses and reasons.` : `   - Calibrate strictly to foundational phonemic awareness and sentence frames appropriate for early stages.`}
+3. Evidence-Based Analysis: Quote the student's actual curriculum (${textbooks.join(', ') || 'CECS'}), actual acquired vocabulary, and specific teacher observations from the lesson records.
 
-INSTRUCTIONS:
-1. Stage Growth Insights: Analyze the student's linguistic progress from an ESL pedagogy perspective. Do not just list words learned. Explain *how* they are developing (e.g., transitioning from single-word recall to spontaneous phrasing, improved phonemic awareness, cognitive connections).
-2. Learning Capability Radar: Evaluate the student across 5 key dimensions (Phonics, Vocabulary Retention, Spontaneous Speaking, Listening Comprehension, Classroom Engagement) using a 60-100 scale.
-CRITICAL ANCHORING: You MUST anchor your radar_scores on the teacher's lesson-by-lesson quantitative evaluations. Use these calculated base scores as your foundation:
+RADAR SCORE CALIBRATION (Scale 60-100):
+Anchor your radar_scores strictly on the calculated base scores from the teacher's lesson evaluations:
 - phonics: ~${baseRadarScores.phonics}
 - vocabulary_retention: ~${baseRadarScores.vocabulary_retention}
 - spontaneous_speaking: ~${baseRadarScores.spontaneous_speaking}
 - listening_comprehension: ~${baseRadarScores.listening_comprehension}
 - classroom_engagement: ~${baseRadarScores.classroom_engagement}
-You may adjust each dimension by only ±3 to ±5 points based on qualitative teacher notes and pronunciation error logs, but do NOT deviate significantly from these teacher-graded averages.
-3. Next-Phase Personalized Strategy: Create 2 actionable, structured goals for the next milestone. Explicitly tie these goals to the student's current "improvements" (weaknesses) and provide an action plan.
-4. Tone: Authoritative, empathetic, and inspiring. Use professional pedagogical terminology (e.g., "scaffolding," "lexical retention") but explain it so parents understand the immense value of the tutoring.
-5. Strict JSON Output: You must return ONLY valid JSON matching the exact schema below. Do not output markdown code blocks, do not include any conversational text.
+You may adjust each dimension by only ±2 to ±4 points based on qualitative feedback, maintaining high fidelity to teacher ratings.
 
-JSON SCHEMA:
+CRITICAL FORMAT & SPEED CONSTRAINTS:
+- Do NOT output reasoning or <think> tags.
+- Start directly with '{' and output ONLY valid JSON matching the schema below.
+
+OUTPUT JSON SCHEMA:
 {
-  "summary": "String. A high-level overview of the student's milestone progress and learning attitude.",
-  "stage_growth_insights": "String. Deep pedagogical analysis of cognitive and linguistic development. Show parents why this progress matters.",
-  "strengths": ["Array of Strings. 3-4 specific strengths citing actual data."],
-  "improvements": ["Array of Strings. 2-3 specific areas for improvement."],
+  "summary": "String (80-100 words). High-level overview celebrating the student's milestone progress at CEFR ${cefrLevel}.",
+  "stage_growth_insights": "String (80-110 words). Deep pedagogical analysis of cognitive and linguistic milestones achieved at this CEFR stage.",
+  "strengths": ["Array of 3 Strings. Detailed strengths citing actual lesson evidence (e.g., written paragraph structure, audio comprehension, specific vocabulary)."],
+  "improvements": ["Array of 2-3 Strings. Realistic pedagogical growth areas grounded in teacher observations (e.g., shorthand note-taking, elaborating answers with descriptive clauses)."],
   "next_phase_strategy": [
     {
-      "goal": "String. Specific actionable goal for the next stage.",
-      "rationale": "String. Why this goal is chosen based on the student's 'improvements' area.",
-      "action_plan": "String. What the teacher will do in class to achieve this."
+      "goal": "String. Actionable goal for the next stage tailored to CEFR ${cefrLevel}.",
+      "rationale": "String. Pedagogical rationale directly referencing the student's improvement points.",
+      "action_plan": "String. Concrete classroom instruction method to be used by the teacher."
     }
   ],
   "radar_scores": {
@@ -430,26 +453,27 @@ JSON SCHEMA:
     "listening_comprehension": 0,
     "classroom_engagement": 0
   },
-  "recommendation": "String. General advice for parents to support learning at home.",
-  "teacher_message": "String. A warm, encouraging message directed directly to the student.",
+  "recommendation": "String (50-70 words). High-value, level-appropriate home learning recommendations. NO kindergarten/sight word advice.",
+  "teacher_message": "String (50-70 words). Inspiring, mature message encouraging the student at their stage.",
   "score_listening": 0,
   "score_speaking": 0,
   "score_interaction": 0,
   "score_pronunciation": 0,
-  "badge_name": "String. A fun, descriptive title for the student (e.g., 'Phonics Master')."
+  "badge_name": "String. An inspiring title matching their level (e.g., '${isIntermediateOrAbove ? 'B1 Academic Pioneer' : 'Language Star'}')."
 }`;
 
-      const userPrompt = `Please generate the JSON report based on the following student data.
+      const userPrompt = `Generate the JSON milestone report for this student:
 
 <student_profile>
 Name: ${displayName}
-Grade/Age: ${student.grade || 'Primary'}
-Stage: ${stageLabel}
-Completed Lessons: ${actualCount || targetLessons} lessons
+Age: ${studentAge}
+Target Proficiency Level: CEFR ${cefrLevel} (${isIntermediateOrAbove ? 'Intermediate' : 'Foundational'})
+Milestone Stage: ${stageLabel} (${actualCount || targetLessons} lessons completed)
+Curriculum Track: ${textbooks.join(', ') || 'CECS'}
 </student_profile>
 
 <teacher_quantitative_evaluations>
-Lesson Evaluation Coverage: ${hasTeacherScores ? `${dimScores.phonics.length} lessons evaluated` : 'Historical baseline calibration'}
+Coverage: ${hasTeacherScores ? `${dimScores.phonics.length} lessons evaluated` : 'Historical baseline calibration'}
 - Phonics Avg: ${avgPhonics ? avgPhonics.toFixed(1) + '/5' : 'Default'} -> Base Score: ${baseRadarScores.phonics}
 - Vocab Retention Avg: ${avgVocab ? avgVocab.toFixed(1) + '/5' : 'Default'} -> Base Score: ${baseRadarScores.vocabulary_retention}
 - Spontaneous Speaking Avg: ${avgSpeaking ? avgSpeaking.toFixed(1) + '/5' : 'Default'} -> Base Score: ${baseRadarScores.spontaneous_speaking}
@@ -459,31 +483,30 @@ Lesson Evaluation Coverage: ${hasTeacherScores ? `${dimScores.phonics.length} le
 
 <curriculum_data>
 Textbooks Studied: ${textbooks.join(', ') || 'Core ESL Curriculum'}
-Cumulative Unique Vocabulary: ${allVocab.slice(0, 35).join(', ')}
-High-Frequency Core Words: ${frequentWords.slice(0, 15).join(', ')}
+Core Vocabulary Sample: ${allVocab.slice(0, 20).join(', ')}
 Practiced Sentence Structures:
-${practicedSentences.slice(0, 12).map(s => `- ${s}`).join('\n') || '- Interactive Q&A and target sentence frames'}
+${practicedSentences.slice(0, 6).map(s => `- ${s}`).join('\n') || '- Interactive academic discussion'}
 </curriculum_data>
 
 <performance_data>
 Pronunciation History (Wrong -> Corrected):
-${pronunciationHistory.slice(0, 8).map(p => `- Corrected "${p.wrong}" -> "${p.right}"`).join('\n') || '- Foundational phonics sounds drilled'}
+${pronunciationHistory.slice(0, 5).map(p => `- Corrected "${p.wrong}" -> "${p.right}"`).join('\n') || '- Clear pronunciation and stress'}
 
-Teacher Notes Timeline (Chronological):
-${teacherNotes.slice(0, 6).map(n => `- [${n.date}] ${n.text}`).join('\n') || '- Smooth engagement in all sessions'}
+Teacher Notes Timeline:
+${(teacherNotes.length > 4 ? teacherNotes.slice(-4) : teacherNotes).map(n => `- [${n.date}] ${n.text}`).join('\n') || '- High engagement in all sessions'}
 </performance_data>
 
-Remember: Output ONLY valid JSON matching the schema defined in the system prompt.`;
+Output ONLY the JSON object.`;
 
       const candidateModels = [
         preferredModel,
-        'meta/llama-3.2-11b-vision-instruct',
-        'meta/llama-3.1-8b-instruct',
-        'nvidia/llama-3.1-nemotron-70b-instruct'
-      ].filter((v, idx, arr) => v && arr.indexOf(v) === idx && !v.includes('550b'));
+        'nvidia/nemotron-3-ultra-550b-a55b'
+      ].filter((v, idx, arr) => v && arr.indexOf(v) === idx && !v.includes('llama-3.2') && !v.includes('llama-3.1'));
 
       for (const m of candidateModels) {
         try {
+          const timeoutMs = 50000;
+          console.log(`[Milestone AI] Calling model ${m} (timeout ${timeoutMs}ms)...`);
           const resp = await fetch(`${baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -496,29 +519,46 @@ Remember: Output ONLY valid JSON matching the schema defined in the system promp
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt }
               ],
-              temperature: 0.3,
-              max_tokens: 2048
+              temperature: 0.1,
+              max_tokens: 900
             }),
-            signal: AbortSignal.timeout(15000)
+            signal: AbortSignal.timeout(timeoutMs)
           });
 
           if (resp.ok) {
             const data = await resp.json();
-            const rawContent = data.choices?.[0]?.message?.content || '';
+            const choiceMsg = data.choices?.[0]?.message;
+            const rawContent = (choiceMsg?.content && choiceMsg.content.trim()) || choiceMsg?.reasoning_content || '';
             const fenceMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
             const target = fenceMatch ? fenceMatch[1] : rawContent;
-            const jsonMatch = target.match(/\{[\s\S]*\}/);
+            const cleanText = target.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
-              if (parsed.summary && parsed.strengths) {
-                generatedData = parsed;
-                isFromLLM = true;
-                break;
+              try {
+                const parsed = JSON.parse(jsonMatch[0]);
+                if (parsed.summary && (parsed.strengths || parsed.stage_growth_insights)) {
+                  generatedData = parsed;
+                  isFromLLM = true;
+                  usedModel = m;
+                  console.log(`[Milestone AI] Successfully generated report using ${m}`);
+                  break;
+                } else {
+                  usedModel = `MISSING_FIELDS_${Object.keys(parsed).join(',')}`;
+                }
+              } catch (pe) {
+                usedModel = `JSON_PARSE_ERR_${pe.message}_RAW_${cleanText.slice(0, 60)}`;
               }
+            } else {
+              usedModel = `NO_JSON_FOUND_${cleanText.slice(0, 80)}`;
             }
+          } else {
+            const errText = await resp.text();
+            console.warn(`[Milestone AI] Model ${m} returned HTTP ${resp.status}:`, errText);
+            usedModel = `HTTP_${resp.status}_${errText.slice(0, 100)}`;
           }
         } catch(e) {
-          console.warn(`LLM model ${m} failed:`, e.message);
+          console.warn(`[Milestone AI] Model ${m} failed:`, e.message);
+          usedModel = `EXCEPTION_${e.message}`;
         }
       }
     }
@@ -528,45 +568,81 @@ Remember: Output ONLY valid JSON matching the schema defined in the system promp
 
   // Fallback heuristic generator if LLM was unreachable or invalid
   if (!generatedData) {
-    const vocabSample = frequentWords.slice(0, 5).join(', ') || allVocab.slice(0, 5).join(', ') || 'essential everyday words';
-    const sentSample = practicedSentences.slice(0, 2).join('; ') || 'target unit conversation patterns';
+    const vocabSample = frequentWords.slice(0, 5).join(', ') || allVocab.slice(0, 5).join(', ') || 'target academic terms';
+    const sentSample = practicedSentences.slice(0, 2).join('; ') || 'structured topic responses';
     const errSample = pronunciationHistory.length > 0
       ? pronunciationHistory.slice(0, 3).map(e => `"${e.right}"`).join(', ')
-      : 'vowel length and consonant endings';
+      : 'multisyllabic word stress';
 
-    generatedData = {
-      summary: `Over the course of completing ${actualCount || targetLessons} formal 1-on-1 English lessons, ${displayName} has demonstrated consistent growth, expanding communicative confidence and foundational comprehension. From initial guided responses, ${displayName} now navigates interactive classroom routines with high focus, having actively acquired over ${allVocab.length} cumulative vocabulary words across ${textbooks.length ? textbooks.join(', ') : 'our core curriculum'}.`,
-      stage_growth_insights: `The student is successfully transitioning from receptive vocabulary recognition to active spontaneous usage. They are demonstrating stronger phonemic awareness and can now connect individual sounds to construct full words independently.`,
-      strengths: [
-        `Demonstrates solid retention of core vocabulary, readily recognizing words such as ${vocabSample}.`,
-        `Actively applies learned sentence structures (${sentSample}) during teacher-led guided conversations.`,
-        `Shows enthusiastic classroom engagement and receptive phonics imitation during read-aloud activities.`
-      ],
-      improvements: [
-        `Continue refining natural pronunciation flow and clarity on target sounds (e.g., sound precision in ${errSample}).`,
-        `Encourage answering in full, multi-word sentences rather than single-word prompts to strengthen spontaneous syntax.`
-      ],
-      next_phase_strategy: [
-        {
-          goal: "Master short vowel precision and CVC blending.",
-          rationale: "Consistent phonics foundational skills reduce pronunciation errors and build reading confidence.",
-          action_plan: "Teacher will incorporate 3-minute phonics drills at the start of each session."
-        },
-        {
-          goal: "Transition to spontaneous full-sentence responses.",
-          rationale: "To move beyond single-word answers, structured scaffolding is required.",
-          action_plan: "Teacher will use the 'I say, you say' method with expanded sentence frames."
-        }
-      ],
-      radar_scores: baseRadarScores,
-      recommendation: `Advance to the subsequent curriculum units with structured daily 10-minute listening repetition. Reinforce sight words and target vocabulary from this stage to solidify Pre-A1/A1 conversational fluency.`,
-      teacher_message: `Congratulations on reaching your ${targetLessons}-lesson milestone! Your positive attitude, resilience, and curiosity make every lesson a joy. We celebrate how far you have come and look forward to your continued brilliance!`,
-      score_listening: 5,
-      score_speaking: 5,
-      score_interaction: 5,
-      score_pronunciation: 4,
-      badge_name: badgeName
-    };
+    if (isIntermediateOrAbove) {
+      generatedData = {
+        summary: `Over the course of completing ${actualCount || targetLessons} formal 1-on-1 English lessons, ${displayName} has demonstrated impressive academic and communicative growth at the CEFR ${cefrLevel} level. From structured guided discussions, ${displayName} now analyzes complex informational topics with confidence, actively integrating over ${allVocab.length} cumulative vocabulary words across ${textbooks.length ? textbooks.join(', ') : 'the CECS curriculum'}.`,
+        stage_growth_insights: `The student is demonstrating advanced linguistic synthesis, progressing from sentence-level comprehension to paragraph-level structural writing and main idea extraction. In listening, they comprehend authentic discussions effectively, and are now optimizing active note-taking techniques.`,
+        strengths: [
+          `Demonstrates strong structural writing capability, producing multi-paragraph texts with clear organization and accurate grammar.`,
+          `Quickly identifies central themes and topic sentences during analytical reading tasks.`,
+          `Actively acquires and retains domain-specific intermediate vocabulary, including terms like ${vocabSample}.`
+        ],
+        improvements: [
+          `Develop shorthand note-taking strategies during fast-paced authentic audio listening instead of attempting verbatim transcription.`,
+          `Expand spontaneous conversational responses by incorporating more descriptive adjectives and causal explanations.`
+        ],
+        next_phase_strategy: [
+          {
+            goal: "Master shorthand note-taking for fast-paced audio comprehension.",
+            rationale: "To avoid cognitive overload during authentic listening, key idea abbreviation is essential.",
+            action_plan: "Teacher will introduce bullet-point note-taking drills using real-world audio excerpts."
+          },
+          {
+            goal: "Enhance spoken discourse with descriptive elaboration.",
+            rationale: "Transitioning from direct short answers to extended opinions strengthens B1 conversational depth.",
+            action_plan: "Teacher will implement follow-up prompting (why/how) and introduce targeted descriptive adjectives."
+          }
+        ],
+        radar_scores: baseRadarScores,
+        recommendation: `Support CEFR ${cefrLevel} progress at home by encouraging 15 minutes of authentic English listening (podcasts or radio) and practicing 3-bullet shorthand summaries. Read graded articles and discuss opinions together.`,
+        teacher_message: `Congratulations on reaching your ${targetLessons}-lesson milestone! Your intellectual curiosity, analytical thinking, and writing achievements at the ${cefrLevel} level are truly exceptional. Keep striving forward!`,
+        score_listening: 5,
+        score_speaking: 4,
+        score_interaction: 5,
+        score_pronunciation: 5,
+        badge_name: `${cefrLevel} Academic Pioneer`
+      };
+    } else {
+      generatedData = {
+        summary: `Over the course of completing ${actualCount || targetLessons} formal 1-on-1 English lessons, ${displayName} has demonstrated consistent growth, expanding communicative confidence and foundational comprehension. Having actively acquired over ${allVocab.length} cumulative vocabulary words across ${textbooks.length ? textbooks.join(', ') : 'our core curriculum'}.`,
+        stage_growth_insights: `The student is successfully transitioning from receptive vocabulary recognition to active spontaneous usage, demonstrating strong classroom engagement and phonemic awareness.`,
+        strengths: [
+          `Demonstrates solid retention of core vocabulary, readily recognizing words such as ${vocabSample}.`,
+          `Actively applies learned sentence structures (${sentSample}) during teacher-led guided conversations.`,
+          `Shows enthusiastic classroom engagement and receptive imitation during interactive activities.`
+        ],
+        improvements: [
+          `Continue refining natural pronunciation flow and clarity on target sounds (e.g., sound precision in ${errSample}).`,
+          `Encourage answering in full sentences rather than single-word prompts to strengthen spontaneous syntax.`
+        ],
+        next_phase_strategy: [
+          {
+            goal: "Consolidate phonemic precision and sentence frames.",
+            rationale: "Consistent phonics and sentence patterns build strong communicative confidence.",
+            action_plan: "Teacher will incorporate targeted conversational sentence drills at the start of each session."
+          },
+          {
+            goal: "Transition to spontaneous full-sentence responses.",
+            rationale: "To move beyond single-word answers, structured scaffolding is required.",
+            action_plan: "Teacher will use guided prompt framing to elicit complete thoughts."
+          }
+        ],
+        radar_scores: baseRadarScores,
+        recommendation: `Advance to the subsequent curriculum units with structured daily 10-minute listening repetition and targeted vocabulary review.`,
+        teacher_message: `Congratulations on reaching your ${targetLessons}-lesson milestone! Your positive attitude, resilience, and curiosity make every lesson a joy. Keep up the wonderful work!`,
+        score_listening: 5,
+        score_speaking: 5,
+        score_interaction: 5,
+        score_pronunciation: 4,
+        badge_name: badgeName
+      };
+    }
   }
 
   const normalizeBulletList = (val) => {
@@ -612,7 +688,8 @@ Remember: Output ONLY valid JSON matching the schema defined in the system promp
     total_lessons_completed: actualCount || targetLessons,
     vocabulary_count: allVocab.length,
     sample_words: frequentWords.slice(0, 25),
-    is_llm: isFromLLM
+    is_llm: isFromLLM,
+    model_used: usedModel
   };
 }
 

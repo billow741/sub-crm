@@ -14,6 +14,7 @@ export {
   teacherPaymentOps,
   courseOps,
   settingsOps,
+  leadOps,
   getStats,
   getTodayClasses,
   searchAll,
@@ -22,3 +23,4 @@ export {
   loadData,
   saveData,
 } from './api';
+
