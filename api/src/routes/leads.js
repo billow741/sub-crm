@@ -40,6 +40,39 @@ leads.get('/', async (c) => {
   }
 });
 
+// 2. 删除单条线索
+leads.delete('/:id', async (c) => {
+  try {
+    const DB = c.env.DB;
+    const id = c.req.param('id');
+    await DB.prepare('DELETE FROM leads WHERE id = ?').bind(id).run();
+    return c.json({ success: true, message: '线索已删除' });
+  } catch (err) {
+    console.error('[leads:delete] Error:', err.message);
+    return c.json({ success: false, error: { message: '删除失败' } }, 500);
+  }
+});
+
+// 3. 清理指定线索（支持按 ID 列表或批量清理测试数据）
+leads.post('/clear', async (c) => {
+  try {
+    const DB = c.env.DB;
+    const body = await c.req.json().catch(() => ({}));
+    const { ids } = body;
+    if (Array.isArray(ids) && ids.length > 0) {
+      const placeholders = ids.map(() => '?').join(',');
+      await DB.prepare(`DELETE FROM leads WHERE id IN (${placeholders})`).bind(...ids).run();
+      return c.json({ success: true, message: `已成功删除 ${ids.length} 条线索` });
+    }
+    // 默认清除标记为测试的数据
+    await DB.prepare("DELETE FROM leads WHERE name LIKE '%测试%' OR name LIKE '%Test%' OR source LIKE '%测试%' OR source LIKE '%联调%' OR phone = '13800138000'").run();
+    return c.json({ success: true, message: '测试线索已清除' });
+  } catch (err) {
+    console.error('[leads:clear] Error:', err.message);
+    return c.json({ success: false, error: { message: '清除失败' } }, 500);
+  }
+});
+
 // 2. 提交预约/交流申请表单（公开接口，官网与小程序统一对接）
 leads.post('/', async (c) => {
   try {

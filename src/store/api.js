@@ -575,6 +575,17 @@ export const leadOps = {
       method: 'POST',
       body: JSON.stringify(data)
     });
+  },
+  async delete(id) {
+    return request(`/leads/${id}`, {
+      method: 'DELETE'
+    });
+  },
+  async clear(ids = null) {
+    return request('/leads/clear', {
+      method: 'POST',
+      body: JSON.stringify({ ids })
+    });
   }
 };
 

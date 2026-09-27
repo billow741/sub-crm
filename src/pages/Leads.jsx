@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Phone, MessageSquare, ExternalLink, UserPlus, RefreshCw, Mail, CheckCircle2, Clock } from 'lucide-react';
+import { Search, Phone, MessageSquare, ExternalLink, UserPlus, RefreshCw, Mail, CheckCircle2, Clock, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { leadOps } from '../store';
 import { Card, CardContent } from '../components/ui/Card';
@@ -63,6 +63,30 @@ export default function Leads() {
     navigate(`/students?action=add&name=${encodeURIComponent(lead.name)}&phone=${encodeURIComponent(lead.phone)}&notes=${encodeURIComponent(`来源: ${lead.source || '留资'} | 意向: ${lead.course || ''} | 备注: ${lead.message || ''}`)}`);
   };
 
+  const handleDelete = async (lead) => {
+    if (!window.confirm(`确定要删除客户【${lead.name}】的预约线索吗？此操作不可撤销。`)) {
+      return;
+    }
+    try {
+      await leadOps.delete(lead.id);
+      setLeads(prev => prev.filter(l => l.id !== lead.id));
+    } catch {
+      alert('删除失败，请稍后重试');
+    }
+  };
+
+  const handleClearTestLeads = async () => {
+    if (!window.confirm('确定要清除所有测试线索吗？\n（将清除姓名或来源中带有“测试 / Test / 联调”的记录）')) {
+      return;
+    }
+    try {
+      await leadOps.clear();
+      fetchLeads();
+    } catch {
+      alert('清除失败，请稍后重试');
+    }
+  };
+
   // 统计数据
   const totalCount = leads.length;
   const weappCount = leads.filter(l => (l.source || '').includes('小程序')).length;
@@ -95,6 +119,17 @@ export default function Leads() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClearTestLeads}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-gray-500 hover:text-red-600 hover:border-red-200"
+            title="一键清除包含测试/Test字样的线索"
+          >
+            <Trash2 size={14} />
+            清除测试数据
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -254,15 +289,24 @@ export default function Leads() {
                           {formatManilaTime(lead.created_at)}
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => handleConvertToStudent(lead)}
-                            className="inline-flex items-center gap-1 text-xs"
-                          >
-                            <UserPlus size={13} />
-                            转为学员
-                          </Button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => handleConvertToStudent(lead)}
+                              className="inline-flex items-center gap-1 text-xs"
+                            >
+                              <UserPlus size={13} />
+                              转为学员
+                            </Button>
+                            <button
+                              onClick={() => handleDelete(lead)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="删除此线索"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
