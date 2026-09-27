@@ -36,6 +36,28 @@ export default function Leads() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // 格式化为马尼拉时间 (GMT+8)
+  const formatManilaTime = (dateStr) => {
+    if (!dateStr) return '—';
+    let isoStr = dateStr;
+    if (!isoStr.endsWith('Z') && !isoStr.includes('+')) {
+      isoStr = isoStr.replace(' ', 'T') + 'Z';
+    }
+    try {
+      const date = new Date(isoStr);
+      return date.toLocaleString('zh-CN', {
+        timeZone: 'Asia/Manila',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   const handleConvertToStudent = (lead) => {
     // 自动带入参数跳转到学生添加页面
     navigate(`/students?action=add&name=${encodeURIComponent(lead.name)}&phone=${encodeURIComponent(lead.phone)}&notes=${encodeURIComponent(`来源: ${lead.source || '留资'} | 意向: ${lead.course || ''} | 备注: ${lead.message || ''}`)}`);
@@ -167,7 +189,7 @@ export default function Leads() {
                     <th className="py-3.5 px-4">意向课程 / 交流</th>
                     <th className="py-3.5 px-4">渠道来源</th>
                     <th className="py-3.5 px-4">需求留言</th>
-                    <th className="py-3.5 px-4">提交时间</th>
+                    <th className="py-3.5 px-4" title="马尼拉时间 (GMT+8)">提交时间 (马尼拉)</th>
                     <th className="py-3.5 px-4 text-right">跟进操作</th>
                   </tr>
                 </thead>
@@ -228,13 +250,8 @@ export default function Leads() {
                             {lead.message || '—'}
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 text-xs text-gray-400 whitespace-nowrap">
-                          {lead.created_at ? new Date(lead.created_at).toLocaleString('zh-CN', {
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          }) : '—'}
+                        <td className="py-3.5 px-4 text-xs text-gray-500 font-medium whitespace-nowrap">
+                          {formatManilaTime(lead.created_at)}
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <Button
