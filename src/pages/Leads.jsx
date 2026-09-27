@@ -59,8 +59,18 @@ export default function Leads() {
   };
 
   const handleConvertToStudent = (lead) => {
-    // 自动带入参数跳转到学生添加页面
-    navigate(`/students?action=add&name=${encodeURIComponent(lead.name)}&phone=${encodeURIComponent(lead.phone)}&notes=${encodeURIComponent(`来源: ${lead.source || '留资'} | 意向: ${lead.course || ''} | 备注: ${lead.message || ''}`)}`);
+    // 自动带入参数跳转到学生添加页面（对齐姓名、英文名、性别、年龄、电话、邮箱等）
+    const params = new URLSearchParams({
+      action: 'add',
+      name: lead.name || '',
+      english_name: lead.english_name || '',
+      gender: lead.gender || '',
+      age: lead.age ? String(lead.age).replace(/[^0-9]/g, '') : '',
+      phone: lead.phone || '',
+      email: lead.email || '',
+      notes: `来源: ${lead.source || '留资'} | 意向: ${lead.course || ''} | 备注: ${lead.message || ''}`,
+    });
+    navigate(`/students?${params.toString()}`);
   };
 
   const handleDelete = async (lead) => {
@@ -234,10 +244,30 @@ export default function Leads() {
                     return (
                       <tr key={lead.id} className="hover:bg-gray-50/70 transition-colors">
                         <td className="py-3.5 px-4">
-                          <div className="font-semibold text-gray-900">{lead.name}</div>
-                          {lead.age && (
-                            <span className="text-xs text-gray-500">年龄: {lead.age}</span>
-                          )}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-gray-900">{lead.name}</span>
+                            {lead.english_name && (
+                              <span className="text-gray-500 font-normal text-xs">({lead.english_name})</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            {lead.gender && (
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[11px] font-medium leading-none ${
+                                  lead.gender === '男'
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                    : lead.gender === '女'
+                                    ? 'bg-pink-50 text-pink-700 border border-pink-200'
+                                    : 'bg-gray-50 text-gray-600 border border-gray-200'
+                                }`}
+                              >
+                                {lead.gender}
+                              </span>
+                            )}
+                            {lead.age && (
+                              <span className="text-xs text-gray-500">{lead.age}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2">

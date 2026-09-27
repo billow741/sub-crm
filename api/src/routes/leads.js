@@ -79,6 +79,8 @@ leads.post('/', async (c) => {
     const body = await c.req.json();
     const {
       name,
+      english_name = '',
+      gender = '',
       phone,
       email = '',
       age = '',
@@ -106,12 +108,12 @@ leads.post('/', async (c) => {
     if (message) details.push(`留言备注: ${message}`);
     const combinedMessage = details.join(' | ') || message;
 
-    // 1. 写入 D1 数据库
+    // 1. 写入 D1 数据库 (包含 english_name 与 gender)
     const DB = c.env.DB;
     const result = await DB.prepare(`
-      INSERT INTO leads (name, phone, email, age, course, source, message)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(name, phone, email, age, course, source, combinedMessage).run();
+      INSERT INTO leads (name, english_name, gender, phone, email, age, course, source, message)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(name, english_name, gender, phone, email, age, course, source, combinedMessage).run();
 
     console.log('[leads] DB insert result:', JSON.stringify(result));
 
@@ -120,17 +122,19 @@ leads.post('/', async (c) => {
     const submitTime = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
 
     if (resendKey) {
-      const emailTitle = `🔔 【新预约申请】${name} - ${phone} (来源: ${source})`;
+      const emailTitle = `🔔 【新预约申请】${name}${english_name ? ` (${english_name})` : ''} - ${phone} (来源: ${source})`;
 
       const emailText = `
 【SunnyBridge 客户预约/交流新申请】
 
 📍 渠道来源：${source}
-👤 客户姓名：${name}
+👤 学生中文名：${name}
+🔤 英文名字：${english_name || '未填写'}
+🚻 学生性别：${gender || '未填写'}
+🎂 年龄阶段：${age || '未填写'}
 📱 联系电话：${phone}
 💬 微信账号：${wechat || '未单独填写'}
 📧 电子邮箱：${email || '未填写'}
-🎂 年龄阶段：${age || '未填写'}
 📚 意向方案：${course || '未指定'}
 🎯 需求留言：${combinedMessage || '无'}
 ⏰ 提交时间：${submitTime}
@@ -169,14 +173,15 @@ leads.post('/', async (c) => {
     <div class="content">
       <div><span class="badge">渠道来源：${source}</span></div>
       <table class="info-table">
-        <tr><td class="info-label">👤 客户姓名</td><td class="info-val">${name}</td></tr>
+        <tr><td class="info-label">👤 中文姓名</td><td class="info-val">${name}</td></tr>
+        ${english_name ? `<tr><td class="info-label">🔤 英文名字</td><td class="info-val">${english_name}</td></tr>` : ''}
+        ${gender ? `<tr><td class="info-label">🚻 学生性别</td><td class="info-val">${gender}</td></tr>` : ''}
         <tr><td class="info-label">📱 联系电话</td><td class="info-val"><a href="tel:${phone}" style="color:#FF7A00;text-decoration:none;">${phone}</a></td></tr>
         ${wechat ? `<tr><td class="info-label">💬 微信账号</td><td class="info-val">${wechat}</td></tr>` : ''}
         ${email ? `<tr><td class="info-label">📧 电子邮箱</td><td class="info-val">${email}</td></tr>` : ''}
         ${age ? `<tr><td class="info-label">🎂 年龄阶段</td><td class="info-val">${age}</td></tr>` : ''}
         ${course ? `<tr><td class="info-label">📚 意向方案</td><td class="info-val">${course}</td></tr>` : ''}
         <tr><td class="info-label">📝 详细留言</td><td class="info-val">${combinedMessage || '无'}</td></tr>
-        <tr><td class="info-label">⏰ 提交时间</td><td class="info-val">${submitTime}</td></tr>
       </table>
       <div class="actions">
         <a class="btn" href="tel:${phone}">📞 立即拨打电话</a>

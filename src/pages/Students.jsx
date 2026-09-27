@@ -20,17 +20,35 @@ export default function Students() {
   const [submitting, setSubmitting] = useState(false);
   const [orgs, setOrgs] = useState([]);
   const [formData, setFormData] = useState({
-    name: '',
-    english_name: '',
-    gender: '',
-    phone: '',
-    email: '',
-    age: '',
+    name: searchParams.get('name') || '',
+    english_name: searchParams.get('english_name') || '',
+    gender: searchParams.get('gender') || '',
+    phone: searchParams.get('phone') || '',
+    email: searchParams.get('email') || '',
+    age: searchParams.get('age') || '',
     grade: '',
     parentName: '',
-    notes: '',
+    notes: searchParams.get('notes') || '',
     organization_id: '',
   });
+
+  // 当路由参数带有 action=add 时（例如从线索一键转为学员），自动填入并弹出新增窗口
+  useEffect(() => {
+    if (searchParams.get('action') === 'add') {
+      setFormData(prev => ({
+        ...prev,
+        name: searchParams.get('name') || prev.name,
+        english_name: searchParams.get('english_name') || prev.english_name,
+        gender: searchParams.get('gender') || prev.gender,
+        phone: searchParams.get('phone') || prev.phone,
+        email: searchParams.get('email') || prev.email,
+        age: searchParams.get('age') || prev.age,
+        notes: searchParams.get('notes') || prev.notes,
+      }));
+      setEditingStudent(null);
+      setShowModal(true);
+    }
+  }, [searchParams]);
 
   // 加载机构列表（用于新增/编辑弹窗中的机构选择）
   useEffect(() => {
