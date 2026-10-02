@@ -476,11 +476,15 @@ export default function Schedule() {
     });
   };
 
-  const getStudentName = (id) => {
-    if (!id) return '未知学生';
+  const getStudentName = (id, fallbackName, fallbackEnglishName) => {
     const student = students.find(s => s.id === parseInt(id) || s.id === id);
-    if (!student) return '未知学生';
-    return student.english_name ? `${student.name} (${student.english_name})` : student.name;
+    if (student) {
+      return student.english_name ? `${student.name} (${student.english_name})` : student.name;
+    }
+    if (fallbackName) {
+      return fallbackEnglishName ? `${fallbackName} (${fallbackEnglishName})` : fallbackName;
+    }
+    return '未知学生';
   };
 
   const getTeacherName = (id) => {
@@ -645,7 +649,7 @@ export default function Schedule() {
                               <div className="flex items-center gap-1 leading-tight">
                                 {statusStyle.icon}
                                 <div className={`font-semibold truncate text-[11px] ${statusStyle.text}`}>
-                                  {getStudentName(schedule.student_id)}
+                                  {getStudentName(schedule.student_id, schedule.student_name, schedule.student_english_name)}
                                 </div>
                               </div>
                               <div className={`truncate ml-4 text-[10px] font-medium leading-tight ${statusStyle.subtext}`}>

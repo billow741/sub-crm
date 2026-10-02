@@ -57,6 +57,7 @@ function Classes() {
         packageId: cls.package_id ?? cls.packageId,
         teacherId: cls.teacher_id ?? cls.teacherId,
         studentName: cls.student_name,
+        studentEnglishName: cls.student_english_name,
         teacherName: cls.teacher_name,
         packageName: cls.package_name,
         startTime: cls.start_time,
@@ -389,9 +390,10 @@ function Classes() {
                 <tbody className="divide-y divide-gray-100">
                   {paginatedClasses.map(cls => {
                     const student = students.find(s => s.id === cls.studentId);
+                    const englishName = student?.english_name || cls.studentEnglishName || cls.student_english_name;
                     let displayName = '未知';
-                    if (cls.studentName && student?.english_name) {
-                      displayName = `${cls.studentName} (${student.english_name})`;
+                    if (cls.studentName && englishName) {
+                      displayName = `${cls.studentName} (${englishName})`;
                     } else if (cls.studentName) {
                       displayName = cls.studentName;
                     } else if (student) {

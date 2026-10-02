@@ -88,8 +88,9 @@ export async function request(endpoint, options = {}) {
 // ============================================
 export const studentOps = {
   getAll: async (params = {}) => {
-    const query = new URLSearchParams(params).toString();
-    const endpoint = query ? `/students?${query}` : '/students';
+    const fullParams = { page_size: 1000, ...params };
+    const query = new URLSearchParams(fullParams).toString();
+    const endpoint = `/students?${query}`;
     const result = await request(endpoint);
     return result.data?.data || result.data || [];
   },

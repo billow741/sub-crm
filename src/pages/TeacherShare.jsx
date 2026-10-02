@@ -81,7 +81,7 @@ export default function TeacherShare() {
 
       const teacherClasses = allClasses.filter(c => c.teacher_id === teacherId);
 
-      const studentsRes = await fetch(`${API_BASE}/students`);
+      const studentsRes = await fetch(`${API_BASE}/students?page_size=1000`);
       const studentsData = await studentsRes.json();
       const students = studentsData.data?.data || [];
       const studentMap = {};
