@@ -33,7 +33,7 @@ jobs:
       - run: npm run build
 
       - name: Deploy CRM to Pages
-        run: npx wrangler pages deploy dist --project-name=sunnybridge-crm --branch=main
+        run: npx wrangler pages deploy dist --project-name=sub-crm --branch=main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -51,19 +51,19 @@ jobs:
           node-version: 22
 
       - name: Deploy Parent Portal to Pages
-        run: npx wrangler pages deploy parent-portal --project-name=parent-portal --branch=main
+        run: npx wrangler pages deploy parent-portal --project-name=sub-parent --branch=main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Teacher Portal to Pages
-        run: npx wrangler pages deploy teacher-portal --project-name=teacher-portal --branch=main
+        run: npx wrangler pages deploy teacher-portal --project-name=sub-teacher --branch=main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Org Portal to Pages
-        run: npx wrangler pages deploy org-portal --project-name=org-portal --branch=main
+        run: npx wrangler pages deploy org-portal --project-name=sub-org --branch=main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
