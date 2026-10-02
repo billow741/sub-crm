@@ -1883,7 +1883,7 @@ export default function StudentDetail() {
         body { background: #fff; padding: 0; }
         .report-page { box-shadow: none; border-radius: 0; max-width: 100%; }
         .print-btn-area { display: none; }
-        .report-rec-btn { display: none; }
+        .recording-section { display: none !important; }
         .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .dim-card { page-break-inside: avoid; }
         .overall-section { page-break-inside: avoid; }

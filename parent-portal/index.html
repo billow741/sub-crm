@@ -4972,7 +4972,6 @@ function getReportPrintCSS() {
   css += '.report-rec-cloud-btn{background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,0.25);}';
   css += '.report-rec-link-btn{background:#fff;border:1px solid #93C5FD;color:#1D4ED8;}';
   css += '.recording-text{font-size:12px;color:#475569;line-height:1.6;white-space:pre-wrap;background:#fff;padding:10px 14px;border-radius:8px;border:1px solid #E2E8F0;font-family:monospace;}';
-  css += '@media print { .report-rec-btn { display: none; } }';
   // Footer
   css += '.report-footer{text-align:center;padding:24px 48px;border-top:1px solid #E8EDF2;margin-top:8px;}';
   css += '.footer-brand{font-size:13px;font-weight:600;color:#1C244B;}';
@@ -4988,6 +4987,7 @@ function getReportPrintCSS() {
   css += 'body{background:#fff;padding:0;}';
   css += '.report-page{box-shadow:none;border-radius:0;max-width:100%;}';
   css += '.print-btn-area{display:none;}';
+  css += '.recording-section{display:none !important;}';
   css += '.report-header{-webkit-print-color-adjust:exact;print-color-adjust:exact;}';
   css += '.dim-card{page-break-inside:avoid;}';
   css += '.overall-section{page-break-inside:avoid;}';
