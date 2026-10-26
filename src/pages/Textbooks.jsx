@@ -2286,7 +2286,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
       if (pageCanvases.length > 0) {
         const cols = pageCanvases.length <= 2 ? pageCanvases.length : 2;
         const rows = Math.ceil(pageCanvases.length / cols);
-        const cellW = 800;
+        const cellW = 640;
         const cellH = Math.round((pageCanvases[0].height / pageCanvases[0].width) * cellW);
 
         const collageCanvas = document.createElement('canvas');
@@ -2302,7 +2302,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
           cCtx.drawImage(canv, c * cellW, r * cellH, cellW, cellH);
         });
 
-        const blob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.85));
+        const blob = await new Promise(res => collageCanvas.toBlob(res, 'image/jpeg', 0.72));
         singleCollageBase64 = await new Promise(res => {
           const reader = new FileReader();
           reader.onloadend = () => res(reader.result);

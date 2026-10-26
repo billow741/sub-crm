@@ -2747,43 +2747,38 @@ textbooks.post('/detect-toc/:code', async (c) => {
   }
 
   const prefix = structType === 'lesson' ? 'Lesson' : (structType === 'chapter' ? 'Chapter' : (structType === 'story' ? 'Story' : 'Unit'));
-  const example1 = structType === 'lesson' ? 'Lesson 1: Short a' : 'Unit 1: Aa · Bb · Cc';
-  const example2 = structType === 'lesson' ? 'Lesson 2: Short e' : 'Unit 2: Dd · Ee · Ff';
+  const example1 = structType === 'lesson' ? 'Lesson 1: Short a' : (structType === 'story' ? 'All by Myself' : 'Unit 1: Aa · Bb · Cc');
+  const example2 = structType === 'lesson' ? 'Lesson 2: Short e' : (structType === 'story' ? 'Look at That!' : 'Unit 2: Dd · Ee · Ff');
 
   const prompt = `You are an expert OCR and educational textbook Table of Contents (Contents / Syllabus) reader.
-Carefully read the provided Table of Contents image for "${book?.name || code}".
+Carefully read the provided Table of Contents for "${book?.name || code}".
 
-This textbook is organized by ${prefix} (e.g. ${prefix} 1, ${prefix} 2, etc.).
-
-CRITICAL OCR READING INSTRUCTIONS:
-1. READ ONLY WHAT IS ACTUALLY PRINTED IN THE IMAGE.
-   Do not guess, do not hallucinate, and do not copy content from other books.
-2. Read each row/entry from top to bottom (if multi-column or multi-page, read the left column/page first, then the right):
-   - On the left of the row: the badge or title (e.g. "${prefix} 1", "${prefix} 2", "Review 1", "Progress Test", etc.).
-   - In the middle: the exact letters or topic title text printed on that row.
-   - On the far right: the printed starting page number for that specific row (e.g. 4, 12, 20...).
-3. Fields to extract for each row:
-   - "unit_number": The integer number (1 for ${prefix} 1, 2 for ${prefix} 2, etc. Use 0 for an intro/starter song if present).
-   - "unit_title": The full title text (e.g. "${example1}", "${example2}", "Review 1"). Do NOT use "Lesson" unless the book explicitly says "Lesson"!
-   - "page_from": The starting page number on the right of this row.
-   - "page_to": The page number right before the next row starts. For the final row, page_from + 7.
-
-Extract ALL rows visible in the Table of Contents image (typically 8 to 20 items). Do NOT stop early.
-
-Return strict JSON only matching:
+Instructions:
+1. Extract EVERY unit, lesson, story, chapter, or reading entry listed in the Table of Contents in order.
+   - For standard textbooks: look for entries like "Unit 1: Title", "Lesson 1: Title", "Review 1", etc.
+   - For readers/storybooks (e.g. Spectrum Reading, Reading Wonders): each row is typically a story or article title followed by a starting page number (e.g. "All by Myself ... 2", "Look at That! ... 4"). Extract the story title even if it doesn't say "Story"!
+2. For each entry, extract:
+   - "unit_number": The integer number (1, 2, 3... in sequential order).
+   - "unit_title": The clean full title (e.g. "${prefix} 1: Title", or "${example1}").
+   - "page_from": The printed starting page number for this item.
+   - "page_to": The ending page number (the page right before the next item starts; for the last item, page_from + 7).
+3. Return strict JSON format only matching:
 {
   "units": [
     { "unit_number": 1, "unit_title": "${example1}", "page_from": 4, "page_to": 11 }
   ]
 }`;
 
+  const hasTextLayer = tocText && tocText.trim().length >= 40;
   const userContent = [{ type: 'text', text: prompt }];
-  if (tocText) {
+  if (hasTextLayer) {
     userContent.push({ type: 'text', text: `Extracted TOC Text from PDF:\n\n${tocText}` });
   }
-  // NVIDIA NIM strictly allows at most 1 image per request
-  for (const imgUrl of tocImages.slice(0, 1)) {
-    userContent.push({ type: 'image_url', image_url: { url: imgUrl } });
+  // 若未提取到文字层（扫描版 PDF），提供切片全景图给 AI 视觉模型；若已有文本层则不发大图以提升响应速度 (~1.5s)
+  if (!hasTextLayer) {
+    for (const imgUrl of tocImages.slice(0, 1)) {
+      userContent.push({ type: 'image_url', image_url: { url: imgUrl } });
+    }
   }
 
   function parseTocFromTextOrMarkdown(text) {
@@ -2811,7 +2806,7 @@ Return strict JSON only matching:
     if (units.length > 0) return units;
 
     // Pattern 2: - Prefix X: Title ... page Y / (Y - Z)
-    const regex2 = /(?:^|\n)[*\-•]\s*(?:(Unit|Lesson|Chapter)\s*(\d+)[:.\s]*)?([^\n\r]+?)(?:[：:\s\-]+(?:page|p\.?|第)?\s*(\d+))/gi;
+    const regex2 = /(?:^|\n)[*\-•]\s*(?:(Unit|Lesson|Chapter|Story)\s*(\d+)[:.\s]*)?([^\n\r]+?)(?:[：:\s\-]+(?:page|p\.?|第)?\s*(\d+))/gi;
     while ((match = regex2.exec(text)) !== null) {
       const num = match[2] ? parseInt(match[2], 10) : idx;
       const title = match[3].trim();
@@ -2835,7 +2830,7 @@ Return strict JSON only matching:
 
   for (const m of fallbackModels) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
 
     try {
       const resp = await fetch(`${baseUrl}/chat/completions`, {
@@ -2879,7 +2874,7 @@ Return strict JSON only matching:
       }
     } catch (err) {
       clearTimeout(timeoutId);
-      lastError = `[${m}] ${err.name === 'AbortError' ? '调用超时 (25s)' : err.message}`;
+      lastError = `[${m}] ${err.name === 'AbortError' ? '调用超时 (45s)' : err.message}`;
     }
   }
 
