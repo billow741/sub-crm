@@ -1227,13 +1227,14 @@ textbooks.post('/test-llm', async (c) => {
     const t0 = Date.now();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const messages = body.messages || [{ role: 'user', content: 'Say "Hello, vision model is ready!"' }];
     const resp = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: 'Say "Hello, vision model is ready!"' }],
-        max_tokens: 30
+        messages,
+        max_tokens: body.max_tokens || 100
       }),
       signal: controller.signal
     });
@@ -1284,14 +1285,13 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
   const baseUrl = opts.baseUrl || c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
   const apiKey = opts.apiKey || c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
   let model = opts.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'minimaxai/minimax-m3.1-flash';
-  if (model.includes('llama-3.2') || model.includes('llama-3.1')) {
+  if (model.includes('llama-3.2') || model.includes('llama-3.1') || model.includes('nemotron-3-nano-omni')) {
     model = 'minimaxai/minimax-m3.1-flash';
   }
   const fallbackModels = [
     model,
-    'minimaxai/minimax-m3.1-flash',
-    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'
-  ].filter((v, idx, arr) => v && arr.indexOf(v) === idx && !v.includes('llama-3.2') && !v.includes('llama-3.1'));
+    'minimaxai/minimax-m3.1-flash'
+  ].filter((v, idx, arr) => v && arr.indexOf(v) === idx && !v.includes('llama-3.2') && !v.includes('llama-3.1') && !v.includes('nemotron-3-nano-omni'));
 
   if (!apiKey) {
     throw new Error('LLM_API_KEY not configured. Please set API Key in Model Settings.');
@@ -1323,6 +1323,11 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     });
   }
 
+  const hasUnitText = opts.unitText && opts.unitText.trim().length >= 15;
+  if (!hasUnitText && model.includes('minimax') && imageContents.length > 0) {
+    throw new Error('当前切片未提取到文本层（可能是纯图片扫描版），MiniMax 为纯文本模型无法直接读图。请在【AI 模型设置】中选择支持视觉的模型（如免费的 Google Gemini 2.0 Flash 或 智谱 GLM-4V）。');
+  }
+
   // 单元模式 vs 整本书模式
   let promptText = opts.bookMode
     ? `You are given pages from a language textbook. Extract vocabulary, patterns, and grammar PER UNIT. Every item MUST have accurate Simplified Chinese translations and the exact textbook "page" number (integer). Return ONLY a JSON array of units.`
@@ -1336,21 +1341,23 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
     promptText += `\n\n=== 课本文本层内容 (包含该单元各课全部单词与对话) ===\n${opts.unitText}\n======================================================`;
   }
 
-  const userContent = [
-    { type: 'text', text: `${promptText}\n\n请立即输出纯 JSON 数据：` },
-    ...imageContents
-  ];
-
   async function tryCall(m) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const timeoutId = setTimeout(() => controller.abort(), 35000);
+    // 若当前尝试的模型是纯文本模型 (如 minimax)，则不附加 imageContents 避免报错
+    const isMultimodal = !m.includes('minimax') && imageContents.length > 0;
+    const contentForModel = [
+      { type: 'text', text: `${promptText}\n\n请立即输出纯 JSON 数据：` },
+      ...(isMultimodal ? imageContents : [])
+    ];
+
     try {
       const resp = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: m,
-          messages: [{ role: 'user', content: userContent }],
+          messages: [{ role: 'user', content: contentForModel }],
           temperature: 0.1,
           max_tokens: opts.bookMode ? 4096 : 2048
         }),
@@ -2718,14 +2725,13 @@ textbooks.post('/detect-toc/:code', async (c) => {
   const baseUrl = userBaseUrl || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
   const apiKey = userApiKey || c.env.LLM_API_KEY;
   let preferredModel = userModel || c.env.LLM_MODEL || 'minimaxai/minimax-m3.1-flash';
-  if (preferredModel.includes('llama-3.2') || preferredModel.includes('llama-3.1')) {
+  if (preferredModel.includes('llama-3.2') || preferredModel.includes('llama-3.1') || preferredModel.includes('nemotron-3-nano-omni')) {
     preferredModel = 'minimaxai/minimax-m3.1-flash';
   }
   const fallbackModels = [
     preferredModel,
-    'minimaxai/minimax-m3.1-flash',
-    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'
-  ].filter((v, idx, arr) => v && arr.indexOf(v) === idx && !v.includes('llama-3.2') && !v.includes('llama-3.1'));
+    'minimaxai/minimax-m3.1-flash'
+  ].filter((v, idx, arr) => v && arr.indexOf(v) === idx && !v.includes('llama-3.2') && !v.includes('llama-3.1') && !v.includes('nemotron-3-nano-omni'));
 
   if (!apiKey) {
     return c.json({ error: { code: 'CONFIG_ERROR', message: 'LLM API key is not configured' } }, 400);
@@ -2769,13 +2775,23 @@ Instructions:
   ]
 }`;
 
-  const hasTextLayer = tocText && tocText.trim().length >= 40;
+  const hasTextLayer = tocText && tocText.trim().length >= 10;
+  // 若未提取到文字层，且当前模型为纯文本模型 (如 minimax)，给出友好的明确提示
+  if (!hasTextLayer && preferredModel.includes('minimax') && tocImages.length > 0) {
+    return c.json({
+      error: {
+        code: 'NO_TEXT_IN_TOC',
+        message: '所选目录页码未提取到可读文本层（可能是纯图片扫描版），当前默认模型 MiniMax 为纯文本模型。\n\n建议操作：\n1. 请检查目录页码范围是否设置正确（如第 4-6 页），以获取文字层；\n2. 若左侧已自动生成好课时大纲，可直接关闭此窗口并执行切片，无需重复扫描目录；\n3. 若确需识别纯图片目录，请在【AI 模型设置】中配置支持视觉的模型（推荐免费获取的 Google Gemini 2.0 Flash 或 智谱 GLM-4V）。'
+      }
+    }, 400);
+  }
+
   const userContent = [{ type: 'text', text: prompt }];
   if (hasTextLayer) {
     userContent.push({ type: 'text', text: `Extracted TOC Text from PDF:\n\n${tocText}` });
   }
-  // 若未提取到文字层（扫描版 PDF），提供切片全景图给 AI 视觉模型；若已有文本层则不发大图以提升响应速度 (~1.5s)
-  if (!hasTextLayer) {
+  // 若未提取到文字层且当前是多模态模型，才提供切片图
+  if (!hasTextLayer && !preferredModel.includes('minimax')) {
     for (const imgUrl of tocImages.slice(0, 1)) {
       userContent.push({ type: 'image_url', image_url: { url: imgUrl } });
     }
@@ -2855,7 +2871,13 @@ Instructions:
 
       if (!resp.ok) {
         const errText = await resp.text();
-        lastError = `[${m}] 报错 (${resp.status}): ${errText.substring(0, 150)}`;
+        if (resp.status === 429) {
+          lastError = '大模型服务繁忙 (429 请求限流)，请稍候 5 秒后重试';
+        } else if (resp.status === 503) {
+          lastError = '模型并发达上限 (503 Resource Exhausted)，建议在【AI 模型设置】中配置个人 API Key';
+        } else {
+          lastError = `[${m}] 报错 (${resp.status}): ${errText.substring(0, 150)}`;
+        }
         continue;
       }
 
@@ -2879,7 +2901,7 @@ Instructions:
   }
 
   if (!parsed && !rawContent) {
-    return c.json({ error: { code: 'LLM_ERROR', message: `LLM error: ${lastError || '无法连接模型服务'}` } }, 500);
+    return c.json({ error: { code: 'LLM_ERROR', message: `AI 目录识别失败: ${lastError || '无法连接模型服务，请检查网络或在模型设置中切换模型'}` } }, 500);
   }
 
     let resultUnits = (parsed && Array.isArray(parsed.units)) ? parsed.units : (Array.isArray(parsed) ? parsed : []);

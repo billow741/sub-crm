@@ -93,8 +93,8 @@ export default function Textbooks() {
       const saved = localStorage.getItem('sb_llm_config');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // 若之前保存的是已超时/失效的 llama-3.2 模型，平滑迁移到稳定极速的 MiniMax M3.1 Flash
-        if (parsed.model?.includes('llama-3.2')) {
+        // 若之前保存的是已超时/失效的 llama-3.2 或 nemotron-omni 模型，平滑迁移到稳定极速的 MiniMax M3.1 Flash
+        if (parsed.model?.includes('llama-3.2') || parsed.model?.includes('llama-3.1') || parsed.model?.includes('nemotron-3-nano-omni')) {
           parsed.provider = 'minimax_m3';
           parsed.baseUrl = 'https://integrate.api.nvidia.com/v1';
           parsed.model = 'minimaxai/minimax-m3.1-flash';
@@ -2335,10 +2335,10 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
       try {
         json = await resp.json();
       } catch (pe) {
-        throw new Error('服务器响应异常 (500)');
+        throw new Error('服务器响应异常');
       }
 
-      if (json.data?.units && json.data.units.length > 0) {
+      if (resp.ok && json.data?.units && json.data.units.length > 0) {
         const structType = isOxfordPhonics ? 'unit' : (bookSchema?.structure_type || (json.data.units.some(x => (x.unit_title || '').toLowerCase().includes('lesson')) ? 'lesson' : 'unit'));
         const defaultPrefix = structType === 'lesson' ? 'Lesson ' : (structType === 'chapter' ? 'Chapter ' : (structType === 'story' ? 'Story ' : 'Unit '));
         const detected = json.data.units.map((u, i) => {
@@ -2391,7 +2391,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
         setStatusMsg(`🎉 AI 视觉目录解析成功！已提取 ${detected.length} 个课时/单元，并已自动对齐页码偏移量`);
       } else {
         const msg = json.error?.message || '未在指定目录页中识别到明确课时列表';
-        alert(`AI 目录解析提示: ${msg}\n\n请确认目录页码范围是否准确（当前扫描第 ${fromP}-${toP} 页），或使用【📐 规律排课生成】！`);
+        alert(`AI 目录解析提示:\n\n${msg}\n\n💡 提示：若上方已自动识别出课时大纲，可直接点击【执行切片与 AI 提取】，无需重复扫描目录！`);
       }
     } catch (err) {
       alert('AI 目录扫描失败: ' + err.message);
@@ -3885,31 +3885,31 @@ function BooksManageModal({ books, onClose }) {
 const LLM_PRESETS = [
   {
     id: 'minimax_m3',
-    name: 'MiniMax M3.1 Flash (首选极速推荐 · ~3s 稳定高精度)',
+    name: 'MiniMax M3.1 Flash (系统内置 · ~1.5s 极速免配 Key)',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
     model: 'minimaxai/minimax-m3.1-flash',
-    desc: 'NVIDIA 平台高吞吐视觉大模型，约 3 秒极速响应，英文课本目录识别极准，支持服务端内置 Key'
+    desc: '极速解析课本文本层与目录结构，系统服务端内置免费额度，无需配置 Key 即可直接使用'
   },
   {
-    id: 'nvidia_omni',
-    name: 'NVIDIA Nemotron Omni (备选全模态 · ~10s)',
-    baseUrl: 'https://integrate.api.nvidia.com/v1',
-    model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
-    desc: '30B 全模态模型，支持图片直接识别与结构化大纲提取'
+    id: 'gemini',
+    name: 'Google Gemini 2.0 Flash (推荐视觉OCR · 免费极速)',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    model: 'gemini-2.0-flash',
+    desc: '谷歌最新多模态视觉模型，支持扫描版高分辨率图片直接识别，速度极快，在 Google AI Studio 免费获取 Key'
   },
   {
     id: 'zhipu',
-    name: '智谱 GLM-4V',
+    name: '智谱 GLM-4V-Flash (国产视觉 · 免费额度)',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     model: 'glm-4v-flash',
-    desc: 'glm-4v-flash 免费提供无需充值，中文释义地道'
+    desc: 'glm-4v-flash 提供免费调用额度，中英文教材识别与释义准确'
   },
   {
     id: 'openai',
     name: 'OpenAI (GPT-4o)',
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o-mini',
-    desc: '业界顶级视觉多模态 (支持 gpt-4o / gpt-4o-mini)'
+    desc: '业界顶级多模态视觉大模型 (支持 gpt-4o / gpt-4o-mini)，需自备 OpenAI Key'
   },
   {
     id: 'qwen',
