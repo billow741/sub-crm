@@ -2058,7 +2058,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
   const [detectingToc, setDetectingToc] = useState(false);
   const [currentProcessingUnit, setCurrentProcessingUnit] = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
-  const [showTocPicker, setShowTocPicker] = useState(false);
+  const [outlineMethodTab, setOutlineMethodTab] = useState('paste'); // 'paste' | 'ai' | 'rule' | 'scan'
   // 目录页码：Oxford Phonics 在第 2-4 页，鲸鱼英语在第 6-8 页
   const [tocStartPage, setTocStartPage] = useState(bookCode?.startsWith('WE') ? 6 : 2);
   const [tocEndPage, setTocEndPage] = useState(bookCode?.startsWith('WE') ? 8 : 4);
@@ -2083,7 +2083,6 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
     }
   };
 
-  const [showRuleGenerator, setShowRuleGenerator] = useState(false);
   const [ruleConfig, setRuleConfig] = useState({
     prefix: isLessonStructure ? 'Lesson' : 'Unit',
     totalCount: isLessonStructure ? 16 : 8,
@@ -2092,13 +2091,28 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
     includeWelcome: false
   });
 
-  const [showBatchPasteDrawer, setShowBatchPasteDrawer] = useState(false);
   const [batchPasteText, setBatchPasteText] = useState('');
   const [batchPasteConfig, setBatchPasteConfig] = useState({
     startPage: 2,
     pagesPerLesson: 2,
     prefix: 'Story'
   });
+
+  const handleFillPasteExample = () => {
+    setBatchPasteText(
+`All by Myself ... 2
+Look at That! ... 4
+Big and Small ... 6
+The Surprise Party ... 8
+A Day at the Beach ... 10`
+    );
+    setBatchPasteConfig(prev => ({
+      ...prev,
+      prefix: 'Story',
+      startPage: 2,
+      pagesPerLesson: 2
+    }));
+  };
 
   // 批量粘贴标题与目录快速解析大纲
   const handleApplyBatchPaste = () => {
@@ -2170,8 +2184,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
     }
 
     setOutline(list);
-    setShowBatchPasteDrawer(false);
-    setStatusMsg(`🎉 成功导入并解析了 ${list.length} 个课时大纲与页码！已更新列表`);
+    setStatusMsg(`🎉 成功导入并解析了 ${list.length} 个课时大纲与页码！已更新列表，请在下方步骤三中核对或微调`);
   };
 
   // 按规则一键排课生成大纲
@@ -2215,7 +2228,6 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
     }
 
     setOutline(list);
-    setShowRuleGenerator(false);
     setStatusMsg(`✅ 已按规律生成 ${list.length} 个 ${ruleConfig.prefix} 大纲，每课 ${pCount} 页，可核对或微调`);
   };
 
@@ -2470,7 +2482,6 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
         }
 
         setOutline(detected);
-        setShowTocPicker(false);
         setStatusMsg(`🎉 AI 视觉目录解析成功！已提取 ${detected.length} 个课时/单元，并已自动对齐页码偏移量`);
       } else {
         const msg = json.error?.message || '未在指定目录页中识别到明确课时列表';
@@ -3008,143 +3019,272 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
             </div>
           ) : (
             <div className="space-y-6">
-              {/* 2. 核心：页码偏移量校准器 (Offset) */}
-              <div className="p-5 bg-white border border-gray-200 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-6 shadow-sm">
-                <div className="space-y-2 flex-1">
-                  <div className="text-sm font-bold text-gray-900 flex items-center gap-3">
-                    <span className="flex items-center gap-2"><Layers className="w-5 h-5 text-primary-500" /> 页码偏移量校准</span>
-                    <Badge variant="primary" className="text-xs">当前偏移: +{pageOffset}</Badge>
+              {/* 步骤 1：页码偏移量校准器 (Offset) */}
+              <div className="p-5 bg-white border border-gray-200 rounded-2xl shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-primary-100 text-primary-700 font-bold flex items-center justify-center text-sm shrink-0">
+                      1
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        步骤一：页码偏移量校准 (Offset)
+                        <Badge variant="primary" className="text-xs">当前偏移: +{pageOffset}</Badge>
+                      </h4>
+                      <p className="text-xs text-gray-500">原版教材前面通常有封面/目录，导致课本印刷页码与 PDF 实际页码存在差额</p>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 leading-relaxed bg-gray-50 p-3 rounded-xl border border-gray-100">
-                    计算公式：<b>PDF 真实页码 = 课本印刷页码 + {pageOffset}</b><br/>
-                    示例：课本印刷第 2 页，在 PDF 中位于第 {2 + pageOffset} 页
-                  </p>
+                  <div className="text-xs bg-primary-50 text-primary-800 px-3 py-1.5 rounded-lg border border-primary-200 font-medium">
+                    计算公式：<b>PDF 真实页码 = 课本印刷页码 + {pageOffset}</b>
+                  </div>
                 </div>
 
-                {/* 调节按钮与微调器 */}
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center border border-gray-200 rounded-xl bg-gray-50 overflow-hidden shadow-inner">
-                    <button
-                      type="button"
-                      onClick={() => handleOffsetChange(pageOffset - 1)}
-                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 font-bold border-r border-gray-200 transition-colors"
-                    >
-                      -1
-                    </button>
-                    <span className="px-5 py-2 text-sm font-bold text-primary-700 bg-white min-w-[3rem] text-center">+{pageOffset}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleOffsetChange(pageOffset + 1)}
-                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 font-bold border-l border-gray-200 transition-colors"
-                    >
-                      +1
-                    </button>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gray-50/80 p-4 rounded-xl border border-gray-200">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="text-xs font-bold text-gray-700">调节偏移数值：</div>
+                    <div className="flex items-center border border-gray-300 rounded-xl bg-white overflow-hidden shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => handleOffsetChange(pageOffset - 1)}
+                        className="px-3.5 py-1.5 text-sm text-gray-700 hover:bg-gray-100 font-bold border-r border-gray-200 transition-colors"
+                        title="偏移量 -1"
+                      >
+                        -1
+                      </button>
+                      <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={pageOffset}
+                        onChange={e => handleOffsetChange(parseInt(e.target.value) || 0)}
+                        className="w-16 px-2 py-1 text-sm font-bold text-primary-700 text-center border-none focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleOffsetChange(pageOffset + 1)}
+                        className="px-3.5 py-1.5 text-sm text-gray-700 hover:bg-gray-100 font-bold border-l border-gray-200 transition-colors"
+                        title="偏移量 +1"
+                      >
+                        +1
+                      </button>
+                    </div>
+
+                    {/* 快捷推荐预设 */}
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <span>常见预设：</span>
+                      {[0, 2, 4, 6].map(val => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => handleOffsetChange(val)}
+                          className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
+                            pageOffset === val
+                              ? 'bg-primary-600 text-white border-primary-600 font-bold shadow-xs'
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          +{val}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* 缩略图肉眼核对 */}
                   {previewThumbnail && (
-                    <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-xl border border-gray-200 shrink-0">
-                      <img src={previewThumbnail} alt="Preview" className="h-16 w-auto object-contain rounded border border-gray-200 shadow-sm bg-white" />
+                    <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm shrink-0">
+                      <img src={previewThumbnail} alt="Preview" className="h-14 w-auto object-contain rounded border border-gray-200 shadow-sm bg-white" />
                       <div className="text-xs text-gray-600 text-left">
-                        <div className="font-medium mb-1">PDF 第 <b>{previewingPdfPage}</b> 页</div>
-                        <div className="text-success-600 font-bold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> 采样核对</div>
+                        <div className="font-bold text-gray-800">PDF 第 <span className="text-primary-700 font-mono text-sm">{previewingPdfPage}</span> 页采样</div>
+                        <div className="text-[11px] text-gray-500">（对应课本印刷第 2 页，核验是否对齐）</div>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* 3. 单元目录大纲表格与智能探测工具栏 */}
+              {/* 步骤 2：生成课时大纲与标题 (Tab 标签页切换，单选互斥，绝不折叠隐藏) */}
               <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 space-y-4">
-                {/* 智能扫描与识别栏 */}
-                <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-gradient-to-r from-primary-50/60 to-blue-50/40 border border-primary-100 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-primary-600" />
-                      智能目录探测与分页
-                    </span>
-                    <Badge variant="outline" className="text-[10px] bg-white text-primary-700 border-primary-200">
-                      已划分 {outline.length} 单元/课时
-                    </Badge>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-sm shrink-0">
+                      2
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        步骤二：录入课时大纲与标题（请选择生成方式）
+                      </h4>
+                      <p className="text-xs text-gray-500">推荐直接批量粘贴目录文本，1 秒搞定全部课时真实标题与起止页码</p>
+                    </div>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => scanKeywordsAndPaginate(pdfDoc)}
-                      disabled={detectingToc || processing || loadingPdf}
-                      className="h-8 text-xs bg-white border-primary-200 text-primary-700 hover:bg-primary-50"
-                      title="扫描 PDF 文本层中的 Unit/Lesson/Story/Review 关键词并智能划分起止页"
-                    >
-                      {detectingToc ? <Loader className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
-                      ⚡ 重新扫描关键词分页
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowTocPicker(!showTocPicker)}
-                      disabled={detectingToc || processing || loadingPdf}
-                      className={`h-8 text-xs font-bold transition-colors ${
-                        showTocPicker ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50'
-                      }`}
-                      title="自定义指定课本目录所在页码并让 AI 视觉识别"
-                    >
-                      {detectingToc ? <Loader className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5 text-blue-500" />}
-                      🤖 AI 视觉扫描目录 {showTocPicker ? '▲' : '▼'}
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      type="button"
-                      onClick={() => setShowRuleGenerator(!showRuleGenerator)}
-                      disabled={processing || loadingPdf}
-                      className={`h-8 text-xs font-bold transition-colors ${
-                        showRuleGenerator ? 'bg-amber-100 border-amber-400 text-amber-900' : 'bg-white border-amber-300 text-amber-800 hover:bg-amber-50'
-                      }`}
-                      title="适用于无目录或固定课时的教材，一键生成 Lesson 1 ~ N 的标准起止页大纲"
-                    >
-                      <Layers className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
-                      📐 规律排课生成 {showRuleGenerator ? '▲' : '▼'}
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      type="button"
-                      onClick={() => setShowBatchPasteDrawer(!showBatchPasteDrawer)}
-                      disabled={processing || loadingPdf}
-                      className={`h-8 text-xs font-bold transition-colors ${
-                        showBatchPasteDrawer ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-50'
-                      }`}
-                      title="直接粘贴目录文字或标题清单，一键批量填充课时真实标题与起止页码"
-                    >
-                      <FileText className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-                      📝 批量粘贴标题与页码 {showBatchPasteDrawer ? '▲' : '▼'}
-                    </Button>
-                  </div>
+                  <Badge variant="outline" className="text-xs font-semibold text-gray-700 bg-gray-50">
+                    当前已载入 <span className="text-primary-700 font-bold mx-1">{outline.length}</span> 个课时
+                  </Badge>
                 </div>
 
-                {/* AI 目录视觉扫描设置抽屉 */}
-                {showTocPicker && (
-                  <div className="p-4 bg-gradient-to-r from-blue-50/90 to-indigo-50/70 border border-blue-200 rounded-xl space-y-3">
+                {/* Tab 切换栏 */}
+                <div className="flex flex-wrap items-center gap-2 p-1.5 bg-gray-100/80 rounded-xl border border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setOutlineMethodTab('paste')}
+                    className={`flex-1 min-w-[160px] py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                      outlineMethodTab === 'paste'
+                        ? 'bg-white text-emerald-800 shadow-sm border border-emerald-300 ring-2 ring-emerald-500/20'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <FileText className="w-4 h-4 text-emerald-600" />
+                    <span>📝 批量粘贴目录（强烈推荐）</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOutlineMethodTab('ai')}
+                    className={`flex-1 min-w-[160px] py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                      outlineMethodTab === 'ai'
+                        ? 'bg-white text-blue-800 shadow-sm border border-blue-300 ring-2 ring-blue-500/20'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4 text-blue-600" />
+                    <span>🤖 AI 视觉扫描目录页</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOutlineMethodTab('rule')}
+                    className={`flex-1 min-w-[140px] py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                      outlineMethodTab === 'rule'
+                        ? 'bg-white text-amber-800 shadow-sm border border-amber-300 ring-2 ring-amber-500/20'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <Layers className="w-4 h-4 text-amber-600" />
+                    <span>📐 快速规律排课生成</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOutlineMethodTab('scan')}
+                    className={`flex-1 min-w-[140px] py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                      outlineMethodTab === 'scan'
+                        ? 'bg-white text-purple-800 shadow-sm border border-purple-300 ring-2 ring-purple-500/20'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <RefreshCw className="w-4 h-4 text-purple-600" />
+                    <span>⚡ 文本层关键词扫描</span>
+                  </button>
+                </div>
+
+                {/* Tab 内容区 - 1: 批量粘贴 */}
+                {outlineMethodTab === 'paste' && (
+                  <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-blue-600" />
-                        AI 视觉扫描目录配置（请指定课本目录页在 PDF 中的真实页码）
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowTocPicker(false)}
-                        className="text-blue-700 hover:text-blue-950 font-bold text-xs"
-                      >
-                        ✕ 关闭
-                      </button>
+                      <div className="text-xs font-bold text-emerald-950 flex items-center gap-2">
+                        <span>📋 在下方文本框中粘贴目录或标题清单：</span>
+                        <span className="text-[11px] font-normal text-emerald-800">（支持带页码的目录行，也支持纯课文标题）</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleFillPasteExample}
+                          className="px-2.5 py-1 text-xs font-semibold bg-white text-emerald-700 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors shadow-xs"
+                        >
+                          📋 填入示例格式
+                        </button>
+                        {batchPasteText && (
+                          <button
+                            type="button"
+                            onClick={() => setBatchPasteText('')}
+                            className="px-2.5 py-1 text-xs font-semibold bg-white text-gray-600 hover:bg-gray-100 border border-gray-300 rounded-lg transition-colors"
+                          >
+                            🗑️ 清空
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-4 bg-white p-3 rounded-xl border border-blue-100 shadow-sm">
+                    <textarea
+                      rows={6}
+                      value={batchPasteText}
+                      onChange={e => setBatchPasteText(e.target.value)}
+                      placeholder={`可以直接在 PDF 目录页框选复制文字粘贴到此处！两种格式都支持：
+
+格式 A（带页码，系统自动读取真实起止页）：
+All by Myself ... 2
+Look at That! ... 4
+Big and Small ... 6
+
+格式 B（纯课文标题，系统按每课页数自动推算起止页）：
+All by Myself
+Look at That!
+Big and Small`}
+                      className="w-full px-3.5 py-2.5 text-xs font-mono bg-white border-2 border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none leading-relaxed text-gray-800 placeholder-gray-400 shadow-inner"
+                    />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end bg-white p-3.5 rounded-xl border border-emerald-200 shadow-sm">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">课时前缀设置</label>
+                        <select
+                          value={batchPasteConfig.prefix}
+                          onChange={e => setBatchPasteConfig({ ...batchPasteConfig, prefix: e.target.value })}
+                          className="w-full px-3 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-medium"
+                        >
+                          <option value="Story">Story (故事)</option>
+                          <option value="Lesson">Lesson (课时)</option>
+                          <option value="Unit">Unit (单元)</option>
+                          <option value="Chapter">Chapter (章节)</option>
+                          <option value="None">无前缀（仅保留纯标题）</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">首课起始印刷页</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={batchPasteConfig.startPage}
+                          onChange={e => setBatchPasteConfig({ ...batchPasteConfig, startPage: parseInt(e.target.value) || 1 })}
+                          className="w-full px-3 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">每课页数 <span className="text-[11px] font-normal text-gray-500">(纯标题时生效)</span></label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={batchPasteConfig.pagesPerLesson}
+                          onChange={e => setBatchPasteConfig({ ...batchPasteConfig, pagesPerLesson: parseInt(e.target.value) || 1 })}
+                          className="w-full px-3 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          type="button"
+                          onClick={handleApplyBatchPaste}
+                          className="w-full h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md hover:shadow-lg transition-all"
+                        >
+                          🚀 一键解析并生成大纲
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 内容区 - 2: AI 视觉扫描 */}
+                {outlineMethodTab === 'ai' && (
+                  <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-3">
+                    <div className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-blue-600" />
+                      AI 视觉扫描目录配置（请指定课本目录页在 PDF 中的真实页码）
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 bg-white p-3.5 rounded-xl border border-blue-100 shadow-sm">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-gray-700">PDF 目录所在页：第</span>
                         <input
@@ -3186,7 +3326,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                           type="button"
                           onClick={() => handleAiTocDetection(tocStartPage, tocEndPage)}
                           disabled={detectingToc || processing}
-                          className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
+                          className="h-9 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md"
                         >
                           {detectingToc ? <Loader className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
                           {detectingToc ? '正在调用 AI 解析中...' : `🚀 确认扫描第 ${tocStartPage} - ${tocEndPage} 页并生成大纲`}
@@ -3195,35 +3335,26 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                     </div>
 
                     <p className="text-[11px] text-blue-800 leading-relaxed">
-                      💡 <b>使用说明</b>：大部分教材前几页为封面、说明或版权页，目录通常在 <b>第 5~8 页</b>。调整页码时，中间的小缩略图会实时更新，当核对确认是目录页后，点击右侧蓝色按钮，AI 就会自动提取所有 Lesson/课时并切分好起止页码！
+                      💡 <b>提示</b>：大部分教材前几页为封面、说明或版权页，目录通常在 <b>第 4~8 页</b>。调整页码时缩略图会实时更新，确认是目录页后点击右侧按钮，AI 将提取课时标题与起止页。
                     </p>
                   </div>
                 )}
 
-                {/* 快速规则生成大纲抽屉 */}
-                {showRuleGenerator && (
-                  <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                        <Layers className="w-4 h-4 text-amber-600" />
-                        快速规律排课生成器 (按固定页数与课时批量生成大纲)
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowRuleGenerator(false)}
-                        className="text-amber-700 hover:text-amber-950 font-bold text-xs"
-                      >
-                        ✕ 关闭
-                      </button>
+                {/* Tab 内容区 - 3: 规律排课 */}
+                {outlineMethodTab === 'rule' && (
+                  <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-3">
+                    <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-amber-600" />
+                      快速规律排课生成器 (按固定页数与课时数批量生成大纲)
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end bg-white p-3.5 rounded-xl border border-amber-100 shadow-sm">
                       <div>
-                        <label className="block text-[11px] font-medium text-gray-700 mb-1">课时前缀</label>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-1">课时前缀</label>
                         <select
                           value={ruleConfig.prefix}
                           onChange={e => setRuleConfig({ ...ruleConfig, prefix: e.target.value })}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                          className="w-full px-2.5 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 font-medium"
                         >
                           <option value="Lesson">Lesson (课时)</option>
                           <option value="Unit">Unit (单元)</option>
@@ -3233,37 +3364,37 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-medium text-gray-700 mb-1">课时总数</label>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-1">课时总数</label>
                         <input
                           type="number"
                           min="1"
                           max="60"
                           value={ruleConfig.totalCount}
                           onChange={e => setRuleConfig({ ...ruleConfig, totalCount: parseInt(e.target.value) || 1 })}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                          className="w-full px-2.5 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 font-medium"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-medium text-gray-700 mb-1">首课印刷起始页</label>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-1">首课印刷起始页</label>
                         <input
                           type="number"
                           min="1"
                           value={ruleConfig.startPage}
                           onChange={e => setRuleConfig({ ...ruleConfig, startPage: parseInt(e.target.value) || 1 })}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                          className="w-full px-2.5 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 font-medium"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-medium text-gray-700 mb-1">每课包含页数</label>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-1">每课包含页数</label>
                         <input
                           type="number"
                           min="1"
                           max="20"
                           value={ruleConfig.pagesPerLesson}
                           onChange={e => setRuleConfig({ ...ruleConfig, pagesPerLesson: parseInt(e.target.value) || 1 })}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                          className="w-full px-2.5 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 font-medium"
                         />
                       </div>
 
@@ -3273,7 +3404,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                           size="sm"
                           type="button"
                           onClick={handleGenerateOutlineByRule}
-                          className="w-full h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                          className="w-full h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm"
                         >
                           ⚡ 立即生成大纲
                         </Button>
@@ -3290,114 +3421,65 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                         />
                         包含 Starter / Welcome 预备课
                       </label>
-                      <span className="text-[11px] text-gray-400">（生成后可在下方列表中自由增删、修改标题或页码）</span>
+                      <span className="text-[11px] text-gray-400">（生成后可在下方步骤三列表中自由增删或修改）</span>
                     </div>
                   </div>
                 )}
 
-                {/* 批量粘贴目录与标题抽屉 */}
-                {showBatchPasteDrawer && (
-                  <div className="p-4 bg-emerald-50/90 border border-emerald-200 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                        <FileText className="w-4 h-4 text-emerald-600" />
-                        批量粘贴目录文本 / 标题与页码快速导入
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowBatchPasteDrawer(false)}
-                        className="text-emerald-700 hover:text-emerald-950 font-bold text-xs"
-                      >
-                        ✕ 关闭
-                      </button>
+                {/* Tab 内容区 - 4: 关键词扫描 */}
+                {outlineMethodTab === 'scan' && (
+                  <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-xl space-y-3">
+                    <div className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                      <RefreshCw className="w-4 h-4 text-purple-600" />
+                      通过 PDF 文本层关键词自动初筛划分
                     </div>
-
-                    <p className="text-xs text-emerald-800 leading-relaxed">
-                      💡 <b>使用提示</b>：您可以直接打开 PDF 目录页，全选复制目录文字粘贴到下方；或者每行输入一个故事/课文标题。系统将智能提取真实标题并自动计算每个课时的起止页码。
+                    <p className="text-xs text-purple-800 leading-relaxed">
+                      系统会扫描整本 PDF 的文本图层，寻找“Unit / Lesson / Story / Review”等标识词，自动按标题出现位置推导每个课时的起止页码。
                     </p>
-
                     <div>
-                      <textarea
-                        rows={6}
-                        value={batchPasteText}
-                        onChange={e => setBatchPasteText(e.target.value)}
-                        placeholder="示例 1（直接粘贴 PDF 目录带页码）：&#10;All by Myself ... 2&#10;Look at That! ... 4&#10;Big and Small ... 6&#10;&#10;示例 2（纯标题列表，每行一课）：&#10;All by Myself&#10;Look at That!&#10;Big and Small"
-                        className="w-full px-3 py-2 text-xs font-mono bg-white border border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end bg-white p-3 rounded-xl border border-emerald-200 shadow-sm">
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-700 mb-1">课时前缀</label>
-                        <select
-                          value={batchPasteConfig.prefix}
-                          onChange={e => setBatchPasteConfig({ ...batchPasteConfig, prefix: e.target.value })}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                        >
-                          <option value="Story">Story (故事)</option>
-                          <option value="Lesson">Lesson (课时)</option>
-                          <option value="Unit">Unit (单元)</option>
-                          <option value="Chapter">Chapter (章节)</option>
-                          <option value="None">无前缀（仅保留纯标题）</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-700 mb-1">首课起始印刷页</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={batchPasteConfig.startPage}
-                          onChange={e => setBatchPasteConfig({ ...batchPasteConfig, startPage: parseInt(e.target.value) || 1 })}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-700 mb-1">每课包含页数 (纯标题时生效)</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="20"
-                          value={batchPasteConfig.pagesPerLesson}
-                          onChange={e => setBatchPasteConfig({ ...batchPasteConfig, pagesPerLesson: parseInt(e.target.value) || 1 })}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                        />
-                      </div>
-
-                      <div>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          type="button"
-                          onClick={handleApplyBatchPaste}
-                          className="w-full h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
-                        >
-                          🚀 一键解析并生成大纲
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => scanKeywordsAndPaginate(pdfDoc)}
+                        disabled={detectingToc || processing || loadingPdf}
+                        className="h-9 text-xs bg-purple-600 hover:bg-purple-700 text-white font-bold border-purple-600 shadow-sm"
+                      >
+                        {detectingToc ? <Loader className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                        ⚡ 立即重新扫描 PDF 关键词并划分大纲
+                      </Button>
                     </div>
                   </div>
                 )}
+              </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-gray-900">📖 单元精准切片大纲</span>
-                    <Button
-                      variant="ghost" size="sm"
-                      onClick={() => {
-                        const allSelected = outline.every(u => u.selected);
-                        setOutline(prev => prev.map(u => ({ ...u, selected: !allSelected })));
-                      }}
-                      className="h-6 text-xs text-primary-600 hover:bg-primary-50"
-                    >
-                      {outline.every(u => u.selected) ? '取消全选' : '全选'}
-                    </Button>
+              {/* 步骤 3：课时大纲核对与批量切片 */}
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-sm shrink-0">
+                      3
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        步骤三：核对课时大纲与批量切片
+                        <Button
+                          variant="ghost" size="sm"
+                          onClick={() => {
+                            const allSelected = outline.every(u => u.selected);
+                            setOutline(prev => prev.map(u => ({ ...u, selected: !allSelected })));
+                          }}
+                          className="h-6 text-xs text-primary-600 hover:bg-primary-50 px-2 py-0"
+                        >
+                          {outline.every(u => u.selected) ? '取消全选' : '全选'}
+                        </Button>
+                      </h4>
+                      <p className="text-xs text-gray-500">点击下方表格中的标题或页码可直接微调；核对无误后点击右侧按钮进行批量切片与入库</p>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" onClick={addOutlineUnit} disabled={processing || slicingUnits || extractingAi || loadingPdf}>
-                      <Plus className="w-4 h-4 mr-1" /> 添加单元
+                      <Plus className="w-4 h-4 mr-1" /> 添加课时
                     </Button>
 
                     <Button
@@ -3405,10 +3487,10 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                       size="sm"
                       onClick={() => handleSliceOutlineUnits(null)}
                       disabled={processing || slicingUnits || extractingAi || loadingPdf}
-                      className="bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 font-bold shadow-sm"
+                      className="bg-amber-500 hover:bg-amber-600 text-white font-bold shadow-sm border-amber-500"
                       title="仅从 PDF 极速切出页面并生成原图预览，不调用大模型，几秒钟即可完成并核对切图！"
                     >
-                      {slicingUnits ? <Loader className="w-4 h-4 mr-1.5 animate-spin" /> : <Camera className="w-4 h-4 mr-1.5 text-amber-600" />}
+                      {slicingUnits ? <Loader className="w-4 h-4 mr-1.5 animate-spin" /> : <Camera className="w-4 h-4 mr-1.5" />}
                       {slicingUnits ? '切片处理中...' : '📸 步骤一：极速批量切片'}
                     </Button>
 
@@ -3419,10 +3501,10 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                         size="sm"
                         onClick={() => handleCommitAll(false)}
                         disabled={savingAll || slicingUnits || extractingAi || loadingPdf}
-                        className="bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 font-bold shadow-sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm border-emerald-600"
                         title="切片完成后直接将课时大纲与切片原图存入系统，保留当前窗口以便继续进行 AI 知识点提取"
                       >
-                        {savingAll ? <Loader className="w-4 h-4 mr-1.5 animate-spin" /> : <Save className="w-4 h-4 mr-1.5 text-emerald-600" />}
+                        {savingAll ? <Loader className="w-4 h-4 mr-1.5 animate-spin" /> : <Save className="w-4 h-4 mr-1.5" />}
                         {savingAll ? '正在保存...' : '💾 保存切片大纲 (保留窗口)'}
                       </Button>
                     )}
