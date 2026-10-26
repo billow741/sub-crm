@@ -2092,6 +2092,88 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
     includeWelcome: false
   });
 
+  const [showBatchPasteDrawer, setShowBatchPasteDrawer] = useState(false);
+  const [batchPasteText, setBatchPasteText] = useState('');
+  const [batchPasteConfig, setBatchPasteConfig] = useState({
+    startPage: 2,
+    pagesPerLesson: 2,
+    prefix: 'Story'
+  });
+
+  // 批量粘贴标题与目录快速解析大纲
+  const handleApplyBatchPaste = () => {
+    if (!batchPasteText || !batchPasteText.trim()) {
+      alert('请先在输入框中粘贴目录文本或标题清单！');
+      return;
+    }
+
+    const lines = batchPasteText.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+    const list = [];
+    let curPage = parseInt(batchPasteConfig.startPage) || 2;
+    const pCount = parseInt(batchPasteConfig.pagesPerLesson) || 2;
+    const prefix = batchPasteConfig.prefix === 'None' ? '' : (batchPasteConfig.prefix || '');
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^(?:table\s*of\s*contents|contents|scope|sequence|syllabus|reading)/i.test(line) && line.length < 35) continue;
+
+      const rangeMatch = line.match(/^(.+?)[\s\.\-_~至到]+(\d+)\s*[-~至到]\s*(\d+)$/);
+      const singlePageMatch = !rangeMatch && line.match(/^(.+?)(?:[\s\.\-_…·]{2,}|\s+)(\d+)$/);
+
+      let title = line;
+      let pFrom = curPage;
+      let pTo = curPage + pCount - 1;
+
+      if (rangeMatch) {
+        title = rangeMatch[1].trim();
+        pFrom = parseInt(rangeMatch[2], 10);
+        pTo = parseInt(rangeMatch[3], 10);
+        curPage = pTo + 1;
+      } else if (singlePageMatch) {
+        title = singlePageMatch[1].trim();
+        pFrom = parseInt(singlePageMatch[2], 10);
+        pTo = pFrom + pCount - 1;
+        curPage = pTo + 1;
+      } else {
+        curPage += pCount;
+      }
+
+      title = title.replace(/^(?:Unit|Lesson|Story|Chapter|Part)?\s*\d+[\.\s:：\-]+/, '').replace(/[\.\-_…·]+$/, '').trim();
+
+      if (title) {
+        const uNum = list.length + 1;
+        const fullTitle = prefix ? `${prefix} ${uNum}: ${title}` : title;
+        list.push({
+          unit_number: uNum,
+          unit_title: fullTitle,
+          page_from: pFrom,
+          page_to: pTo,
+          selected: true,
+          status: 'idle',
+          vocabCount: 0,
+          patternCount: 0,
+          extraCount: 0,
+          extractedData: null
+        });
+      }
+    }
+
+    for (let i = 0; i < list.length - 1; i++) {
+      if (list[i + 1].page_from > list[i].page_from) {
+        list[i].page_to = list[i + 1].page_from - 1;
+      }
+    }
+
+    if (list.length === 0) {
+      alert('未能在粘贴的文本中解析出有效课时，请检查格式');
+      return;
+    }
+
+    setOutline(list);
+    setShowBatchPasteDrawer(false);
+    setStatusMsg(`🎉 成功导入并解析了 ${list.length} 个课时大纲与页码！已更新列表`);
+  };
+
   // 按规则一键排课生成大纲
   const handleGenerateOutlineByRule = () => {
     const list = [];
@@ -2152,8 +2234,9 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
         eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20
       };
 
-      const unitRegex = /\b(?:Lesson|Unit|Chapter|Story|Part)\s*[:\-]?\s*([0-9A-Za-z]+)\b/i;
-      const specialRegex = /\b(Welcome|Starter|Review|Phonics|Phonics\s*Time)\s*([0-9A-Za-z]*)\b/i;
+      const validNumPattern = '\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|[ivxlcdm]+';
+      const unitRegex = new RegExp(`\\b(?:Lesson|Unit|Chapter|Story|Part)\\s*[:\\-#]?\\s*(${validNumPattern})\\b`, 'i');
+      const specialRegex = new RegExp(`\\b(Welcome|Starter|Review|Phonics|Phonics\\s*Time)(?:\\s*(${validNumPattern}))?\\b`, 'i');
 
       for (let p = 1; p <= numPages; p++) {
         const page = await doc.getPage(p);
@@ -2171,7 +2254,7 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
           if (unitMatch) {
             const raw = (unitMatch[1] || '').toLowerCase();
             unitNumber = WORD_NUMS[raw] !== undefined ? WORD_NUMS[raw] : parseInt(raw, 10);
-            if (isNaN(unitNumber)) unitNumber = candidates.length + 1;
+            if (isNaN(unitNumber)) continue;
             identifier = unitMatch[0];
           } else if (specialMatch) {
             const tag = specialMatch[1];
@@ -3026,6 +3109,21 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                       <Layers className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
                       📐 规律排课生成 {showRuleGenerator ? '▲' : '▼'}
                     </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      onClick={() => setShowBatchPasteDrawer(!showBatchPasteDrawer)}
+                      disabled={processing || loadingPdf}
+                      className={`h-8 text-xs font-bold transition-colors ${
+                        showBatchPasteDrawer ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-50'
+                      }`}
+                      title="直接粘贴目录文字或标题清单，一键批量填充课时真实标题与起止页码"
+                    >
+                      <FileText className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+                      📝 批量粘贴标题与页码 {showBatchPasteDrawer ? '▲' : '▼'}
+                    </Button>
                   </div>
                 </div>
 
@@ -3193,6 +3291,91 @@ function BatchBookImportModal({ bookCode, bookName, bookSchema, llmConfig, onSyn
                         包含 Starter / Welcome 预备课
                       </label>
                       <span className="text-[11px] text-gray-400">（生成后可在下方列表中自由增删、修改标题或页码）</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 批量粘贴目录与标题抽屉 */}
+                {showBatchPasteDrawer && (
+                  <div className="p-4 bg-emerald-50/90 border border-emerald-200 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-emerald-600" />
+                        批量粘贴目录文本 / 标题与页码快速导入
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowBatchPasteDrawer(false)}
+                        className="text-emerald-700 hover:text-emerald-950 font-bold text-xs"
+                      >
+                        ✕ 关闭
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-emerald-800 leading-relaxed">
+                      💡 <b>使用提示</b>：您可以直接打开 PDF 目录页，全选复制目录文字粘贴到下方；或者每行输入一个故事/课文标题。系统将智能提取真实标题并自动计算每个课时的起止页码。
+                    </p>
+
+                    <div>
+                      <textarea
+                        rows={6}
+                        value={batchPasteText}
+                        onChange={e => setBatchPasteText(e.target.value)}
+                        placeholder="示例 1（直接粘贴 PDF 目录带页码）：&#10;All by Myself ... 2&#10;Look at That! ... 4&#10;Big and Small ... 6&#10;&#10;示例 2（纯标题列表，每行一课）：&#10;All by Myself&#10;Look at That!&#10;Big and Small"
+                        className="w-full px-3 py-2 text-xs font-mono bg-white border border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end bg-white p-3 rounded-xl border border-emerald-200 shadow-sm">
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-1">课时前缀</label>
+                        <select
+                          value={batchPasteConfig.prefix}
+                          onChange={e => setBatchPasteConfig({ ...batchPasteConfig, prefix: e.target.value })}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <option value="Story">Story (故事)</option>
+                          <option value="Lesson">Lesson (课时)</option>
+                          <option value="Unit">Unit (单元)</option>
+                          <option value="Chapter">Chapter (章节)</option>
+                          <option value="None">无前缀（仅保留纯标题）</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-1">首课起始印刷页</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={batchPasteConfig.startPage}
+                          onChange={e => setBatchPasteConfig({ ...batchPasteConfig, startPage: parseInt(e.target.value) || 1 })}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-1">每课包含页数 (纯标题时生效)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={batchPasteConfig.pagesPerLesson}
+                          onChange={e => setBatchPasteConfig({ ...batchPasteConfig, pagesPerLesson: parseInt(e.target.value) || 1 })}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          type="button"
+                          onClick={handleApplyBatchPaste}
+                          className="w-full h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
+                        >
+                          🚀 一键解析并生成大纲
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}
