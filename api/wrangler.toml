@@ -13,10 +13,9 @@ DEBUG = "true"
 FEATURE_AUTO_DEDUCT = "true"
 RESEND_API_KEY = "re_7ZfLM9p9_27LogrTCeuFi37jHdPDKhNEV"
 # LLM 配置 (OpenAI 兼容)
-# 当前用 NVIDIA NIM 上的 google/gemma-3n-e4b-it (视觉多模态,免费额度,质量高不限流)
-# 注意: 用户的 LLM_API_KEY 已改为 NVIDIA NIM 的 key (不是 z.ai)
+# 使用 NVIDIA NIM 平台的视觉多模态大模型 (支持单图 OCR/目录结构解析/知识点提取，响应极速 ~3s)
 LLM_BASE_URL = "https://integrate.api.nvidia.com/v1"
-LLM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+LLM_MODEL = "minimaxai/minimax-m3.1-flash"
 # LLM_API_KEY 用 wrangler secret 配置 NVIDIA NIM API key
 
 # D1 数据库配置

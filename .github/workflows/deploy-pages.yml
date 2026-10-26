@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'api/**'
       - 'public/**'
       - 'index.html'
       - 'parent-portal/**'

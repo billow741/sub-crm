@@ -91,13 +91,23 @@ export default function Textbooks() {
   const [llmConfig, setLlmConfig] = useState(() => {
     try {
       const saved = localStorage.getItem('sb_llm_config');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // 若之前保存的是已超时/失效的 llama-3.2 模型，平滑迁移到稳定极速的 MiniMax M3.1 Flash
+        if (parsed.model?.includes('llama-3.2')) {
+          parsed.provider = 'minimax_m3';
+          parsed.baseUrl = 'https://integrate.api.nvidia.com/v1';
+          parsed.model = 'minimaxai/minimax-m3.1-flash';
+          localStorage.setItem('sb_llm_config', JSON.stringify(parsed));
+        }
+        return parsed;
+      }
     } catch {}
     return {
-      provider: 'nvidia_11b',
+      provider: 'minimax_m3',
       baseUrl: 'https://integrate.api.nvidia.com/v1',
       apiKey: '',
-      model: 'meta/llama-3.2-11b-vision-instruct'
+      model: 'minimaxai/minimax-m3.1-flash'
     };
   });
 
@@ -3874,18 +3884,18 @@ function BooksManageModal({ books, onClose }) {
 // ============================================================
 const LLM_PRESETS = [
   {
-    id: 'nvidia_11b',
-    name: 'NVIDIA Llama-3.2-11B Vision (首选极速推荐 · ~500ms)',
+    id: 'minimax_m3',
+    name: 'MiniMax M3.1 Flash (首选极速推荐 · ~3s 稳定高精度)',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
-    model: 'meta/llama-3.2-11b-vision-instruct',
-    desc: 'NVIDIA NIM 官方高吞吐模型，约 0.5 秒极速响应，英文课本 OCR 与版式识别极准'
+    model: 'minimaxai/minimax-m3.1-flash',
+    desc: 'NVIDIA 平台高吞吐视觉大模型，约 3 秒极速响应，英文课本目录识别极准，支持服务端内置 Key'
   },
   {
-    id: 'nvidia_90b',
-    name: 'NVIDIA Llama-3.2-90B Vision (900亿旗舰版)',
+    id: 'nvidia_omni',
+    name: 'NVIDIA Nemotron Omni (备选全模态 · ~10s)',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
-    model: 'meta/llama-3.2-90b-vision-instruct',
-    desc: '900亿参数超大视觉模型（若遇官方队列高峰，系统会自动切换到 11B 备选）'
+    model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+    desc: '30B 全模态模型，支持图片直接识别与结构化大纲提取'
   },
   {
     id: 'zhipu',

@@ -1214,7 +1214,10 @@ textbooks.post('/test-llm', async (c) => {
   
   const baseUrl = body.base_url || c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
   const apiKey = body.api_key || c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
-  const model = body.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'meta/llama-3.2-11b-vision-instruct';
+  let model = body.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'minimaxai/minimax-m3.1-flash';
+  if (model.includes('llama-3.2') || model.includes('llama-3.1')) {
+    model = 'minimaxai/minimax-m3.1-flash';
+  }
 
   if (!apiKey) {
     return c.json({ error: { code: 'NO_API_KEY', message: '未提供 API Key' } }, 400);
@@ -1222,6 +1225,8 @@ textbooks.post('/test-llm', async (c) => {
 
   try {
     const t0 = Date.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     const resp = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
@@ -1229,8 +1234,10 @@ textbooks.post('/test-llm', async (c) => {
         model,
         messages: [{ role: 'user', content: 'Say "Hello, vision model is ready!"' }],
         max_tokens: 30
-      })
+      }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     const elapsed = Date.now() - t0;
     if (!resp.ok) {
@@ -1242,7 +1249,8 @@ textbooks.post('/test-llm', async (c) => {
     const reply = data.choices?.[0]?.message?.content || '';
     return c.json({ data: { success: true, elapsed_ms: elapsed, model, reply } });
   } catch (err) {
-    return c.json({ error: { code: 'NETWORK_ERROR', message: `连接异常: ${err.message}` } }, 500);
+    const isTimeout = err.name === 'AbortError';
+    return c.json({ error: { code: isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR', message: isTimeout ? '连接超时 (20s)' : `连接异常: ${err.message}` } }, 500);
   }
 });
 
@@ -1275,8 +1283,15 @@ textbooks.get('/llm-models', async (c) => {
 async function callLLMWithImages(c, imageFiles, opts = {}) {
   const baseUrl = opts.baseUrl || c.req.header('x-llm-base-url') || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
   const apiKey = opts.apiKey || c.req.header('x-llm-api-key') || c.env.LLM_API_KEY;
-  const model = opts.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'meta/llama-3.2-11b-vision-instruct';
-  const fallbackModels = [model, 'meta/llama-3.2-11b-vision-instruct', 'meta/llama-3.2-90b-vision-instruct'];
+  let model = opts.model || c.req.header('x-llm-model') || c.env.LLM_MODEL || 'minimaxai/minimax-m3.1-flash';
+  if (model.includes('llama-3.2') || model.includes('llama-3.1')) {
+    model = 'minimaxai/minimax-m3.1-flash';
+  }
+  const fallbackModels = [
+    model,
+    'minimaxai/minimax-m3.1-flash',
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'
+  ].filter((v, idx, arr) => v && arr.indexOf(v) === idx && !v.includes('llama-3.2') && !v.includes('llama-3.1'));
 
   if (!apiKey) {
     throw new Error('LLM_API_KEY not configured. Please set API Key in Model Settings.');
@@ -1327,17 +1342,26 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
   ];
 
   async function tryCall(m) {
-    const resp = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: m,
-        messages: [{ role: 'user', content: userContent }],
-        temperature: 0.1,
-        max_tokens: opts.bookMode ? 4096 : 2048
-      })
-    });
-    return resp;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    try {
+      const resp = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: m,
+          messages: [{ role: 'user', content: userContent }],
+          temperature: 0.1,
+          max_tokens: opts.bookMode ? 4096 : 2048
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      return resp;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
   }
 
   // 自动二级提纯函数：将自然语言描述提纯为带中文翻译的标准 JSON
@@ -1349,6 +1373,8 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
         ? '提取为包含 "unit_title", "key_words", "key_phrases", "comprehension_questions", "story_summary", "vocab", "patterns" 的严格 JSON。所有条目必须保留 "page" (数字页码)。'
         : '提取为严格的 JSON 对象，必须包含 "unit_title", "vocab" (包含 "word", "translation", is_core: true, difficulty: 1, "page": 整数页码), "patterns" (包含 "pattern", "translation", is_core: true, "page": 整数页码), "grammar" (包含 "point", "example", is_core: true, "page": 整数页码)。所有 item 必须包含准确地道的简体中文 "translation"。');
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     try {
       const resp = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
@@ -1363,14 +1389,17 @@ async function callLLMWithImages(c, imageFiles, opts = {}) {
           ],
           temperature: 0.1,
           max_tokens: 2048
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       if (resp.ok) {
         const data = await resp.json();
         const text = data.choices?.[0]?.message?.content || '';
         return cleanAndParseJson(text);
       }
     } catch (e) {
+      clearTimeout(timeoutId);
       console.warn('refineToJSON error:', e);
     }
     return null;
@@ -2688,13 +2717,22 @@ textbooks.post('/detect-toc/:code', async (c) => {
 
   const baseUrl = userBaseUrl || c.env.LLM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
   const apiKey = userApiKey || c.env.LLM_API_KEY;
-  const model = userModel || c.env.LLM_MODEL || 'meta/llama-3.2-11b-vision-instruct';
+  let preferredModel = userModel || c.env.LLM_MODEL || 'minimaxai/minimax-m3.1-flash';
+  if (preferredModel.includes('llama-3.2') || preferredModel.includes('llama-3.1')) {
+    preferredModel = 'minimaxai/minimax-m3.1-flash';
+  }
+  const fallbackModels = [
+    preferredModel,
+    'minimaxai/minimax-m3.1-flash',
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'
+  ].filter((v, idx, arr) => v && arr.indexOf(v) === idx && !v.includes('llama-3.2') && !v.includes('llama-3.1'));
 
   if (!apiKey) {
     return c.json({ error: { code: 'CONFIG_ERROR', message: 'LLM API key is not configured' } }, 400);
   }
 
-  const DB = c.env.DB;
+  try {
+    const DB = c.env.DB;
   const book = await DB.prepare('SELECT name, series, content_schema FROM textbooks WHERE code = ?').bind(code).first();
   let structType = 'unit';
   if (body?.structure_type) {
@@ -2748,76 +2786,106 @@ Return strict JSON only matching:
     userContent.push({ type: 'image_url', image_url: { url: imgUrl } });
   }
 
-  try {
-    const resp = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: 'You are a precise educational textbook TOC parser. You must return valid JSON strictly conforming to the requested schema.' },
-          { role: 'user', content: userContent }
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.1,
-        max_tokens: 3000
-      })
-    });
+  function parseTocFromTextOrMarkdown(text) {
+    if (!text || typeof text !== 'string') return [];
+    const units = [];
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      return c.json({ error: { code: 'LLM_ERROR', message: `LLM error: ${errText.substring(0, 200)}` } }, 500);
-    }
-
-    const data = await resp.json();
-    const rawContent = data.choices?.[0]?.message?.content || '';
-    const parsed = cleanAndParseJson(rawContent);
-
-function parseTocFromTextOrMarkdown(text) {
-  if (!text || typeof text !== 'string') return [];
-  const units = [];
-
-  // Pattern 1: **Title** \n * Page From: X \n * Page To: Y
-  const regex1 = /\*\*\s*(.+?)\s*\*\*\s*[\r\n]+\s*\*+\s*Page From:\s*(\d+)(?:\s*[\r\n]+\s*\*+\s*Page To:\s*(\d+))?/gi;
-  let match;
-  let idx = 1;
-  while ((match = regex1.exec(text)) !== null) {
-    const rawTitle = match[1].trim();
-    const pFrom = parseInt(match[2], 10);
-    const pTo = match[3] ? parseInt(match[3], 10) : pFrom + 5;
-    const numMatch = rawTitle.match(/(?:Lesson|Unit)\s*(\d+)/i);
-    const unitNum = numMatch ? parseInt(numMatch[1], 10) : idx;
-    units.push({
-      unit_number: unitNum,
-      unit_title: rawTitle,
-      page_from: pFrom,
-      page_to: pTo
-    });
-    idx++;
-  }
-  if (units.length > 0) return units;
-
-  // Pattern 2: - Prefix X: Title ... page Y / (Y - Z)
-  const regex2 = /(?:^|\n)[*\-•]\s*(?:(Unit|Lesson|Chapter)\s*(\d+)[:.\s]*)?([^\n\r]+?)(?:[：:\s\-]+(?:page|p\.?|第)?\s*(\d+))/gi;
-  while ((match = regex2.exec(text)) !== null) {
-    const num = match[2] ? parseInt(match[2], 10) : idx;
-    const title = match[3].trim();
-    const pFrom = parseInt(match[4], 10);
-    if (pFrom && title) {
+    // Pattern 1: **Title** \n * Page From: X \n * Page To: Y
+    const regex1 = /\*\*\s*(.+?)\s*\*\*\s*[\r\n]+\s*\*+\s*Page From:\s*(\d+)(?:\s*[\r\n]+\s*\*+\s*Page To:\s*(\d+))?/gi;
+    let match;
+    let idx = 1;
+    while ((match = regex1.exec(text)) !== null) {
+      const rawTitle = match[1].trim();
+      const pFrom = parseInt(match[2], 10);
+      const pTo = match[3] ? parseInt(match[3], 10) : pFrom + 5;
+      const numMatch = rawTitle.match(/(?:Lesson|Unit)\s*(\d+)/i);
+      const unitNum = numMatch ? parseInt(numMatch[1], 10) : idx;
       units.push({
-        unit_number: num,
-        unit_title: title.startsWith(prefix) ? title : `${prefix} ${num}: ${title}`,
+        unit_number: unitNum,
+        unit_title: rawTitle,
         page_from: pFrom,
-        page_to: pFrom + 5
+        page_to: pTo
       });
       idx++;
     }
+    if (units.length > 0) return units;
+
+    // Pattern 2: - Prefix X: Title ... page Y / (Y - Z)
+    const regex2 = /(?:^|\n)[*\-•]\s*(?:(Unit|Lesson|Chapter)\s*(\d+)[:.\s]*)?([^\n\r]+?)(?:[：:\s\-]+(?:page|p\.?|第)?\s*(\d+))/gi;
+    while ((match = regex2.exec(text)) !== null) {
+      const num = match[2] ? parseInt(match[2], 10) : idx;
+      const title = match[3].trim();
+      const pFrom = parseInt(match[4], 10);
+      if (pFrom && title) {
+        units.push({
+          unit_number: num,
+          unit_title: title.startsWith(prefix) ? title : `${prefix} ${num}: ${title}`,
+          page_from: pFrom,
+          page_to: pFrom + 5
+        });
+        idx++;
+      }
+    }
+    return units;
   }
-  return units;
-}
+
+  let lastError = '';
+  let rawContent = '';
+  let parsed = null;
+
+  for (const m of fallbackModels) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+    try {
+      const resp = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: m,
+          messages: [
+            { role: 'system', content: 'You are a precise educational textbook TOC parser. You must return valid JSON strictly conforming to the requested schema.' },
+            { role: 'user', content: userContent }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.1,
+          max_tokens: 3000
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        lastError = `[${m}] 报错 (${resp.status}): ${errText.substring(0, 150)}`;
+        continue;
+      }
+
+      const data = await resp.json();
+      rawContent = data.choices?.[0]?.message?.content || '';
+      parsed = cleanAndParseJson(rawContent);
+      if ((parsed && Array.isArray(parsed.units) && parsed.units.length > 0) || (Array.isArray(parsed) && parsed.length > 0)) {
+        break;
+      }
+      if (rawContent && rawContent.trim().length > 0) {
+        const fallbackUnits = parseTocFromTextOrMarkdown(rawContent);
+        if (fallbackUnits.length > 0) {
+          parsed = { units: fallbackUnits };
+          break;
+        }
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastError = `[${m}] ${err.name === 'AbortError' ? '调用超时 (25s)' : err.message}`;
+    }
+  }
+
+  if (!parsed && !rawContent) {
+    return c.json({ error: { code: 'LLM_ERROR', message: `LLM error: ${lastError || '无法连接模型服务'}` } }, 500);
+  }
 
     let resultUnits = (parsed && Array.isArray(parsed.units)) ? parsed.units : (Array.isArray(parsed) ? parsed : []);
     if (resultUnits.length === 0) {
