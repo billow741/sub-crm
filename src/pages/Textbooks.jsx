@@ -2121,7 +2121,18 @@ A Day at the Beach ... 10`
       return;
     }
 
-    const lines = batchPasteText.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+    const rawLines = batchPasteText.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+    const lines = [];
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i].trim();
+      // 如果下一行是单独的页码或页码范围（如 126 或 126-128），与上一行标题自动智能合并
+      if (i < rawLines.length - 1 && /^\d+(?:\s*[-~至到]\s*\d+)?$/.test(rawLines[i + 1].trim())) {
+        lines.push(line.replace(/[\s\.\-_…·]+$/, '') + ' ... ' + rawLines[i + 1].trim());
+        i++;
+      } else {
+        lines.push(line);
+      }
+    }
     const list = [];
     let curPage = parseInt(batchPasteConfig.startPage) || 2;
     const pCount = parseInt(batchPasteConfig.pagesPerLesson) || 2;
