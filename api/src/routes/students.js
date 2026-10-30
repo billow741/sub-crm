@@ -426,11 +426,22 @@ students.patch('/:id/adjust-hours', validateParams(idParamSchema), async (c) => 
     .bind(newTotal, new Date().toISOString(), id)
     .run();
 
-  // 记录课时变动
-  await DB.prepare(`
-    INSERT INTO hour_changes (student_id, type, amount, balance_after, description)
-    VALUES (?, 'adjust', ?, ?, ?)
-  `).bind(id, adjNum, newRemaining, reason || '手动调整').run();
+  // 记录课时变动（带兼容降级保护，确保流水写入稳健）
+  try {
+    await DB.prepare(`
+      INSERT INTO hour_changes (student_id, type, amount, balance_after, description)
+      VALUES (?, 'adjust', ?, ?, ?)
+    `).bind(id, adjNum, newRemaining, reason || '手动调整').run();
+  } catch (hcErr) {
+    try {
+      await DB.prepare(`
+        INSERT INTO hour_changes (student_id, type, amount, description)
+        VALUES (?, 'adjust', ?, ?)
+      `).bind(id, adjNum, reason || '手动调整').run();
+    } catch (fallbackErr) {
+      console.warn('记录课时流水警告:', fallbackErr.message);
+    }
+  }
   return c.json(success({
     id: student.id,
     name: student.name,
