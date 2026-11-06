@@ -1516,4 +1516,466 @@ reports.get('/financial/trend', async (c) => {
   }
 });
 
+
+/**
+ * 阶段 C：教学交付 - 综合大盘概况
+ * GET /api/v1/reports/teaching/summary
+ * 参数：from_date, to_date, org_id
+ */
+reports.get('/teaching/summary', async (c) => {
+  const perm = checkPermission(c);
+  if (perm.forbidden) {
+    return c.json(perm.error, 403);
+  }
+
+  const DB = c.env.DB;
+  const { effectiveOrgId, userRole } = perm;
+  const { fromDate, toDate } = resolveDateRange(c);
+
+  try {
+    const orgFilter = effectiveOrgId ? 'AND organization_id = ?' : '';
+    const orgParams = effectiveOrgId ? [effectiveOrgId] : [];
+
+    // 1. 出勤结构 (正课 is_trial = 0)
+    const attendanceParams = [fromDate, toDate, ...orgParams];
+    const attendanceQuery = `
+      SELECT 
+        COUNT(*) as total_classes,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_count,
+        SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent_count,
+        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count,
+        SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) as scheduled_count
+      FROM classes
+      WHERE date >= ? AND date <= ? AND is_trial = 0
+        ${orgFilter}
+    `;
+    const attRes = await DB.prepare(attendanceQuery).bind(...attendanceParams).first();
+    const totalClasses = Number(attRes?.total_classes || 0);
+    const completedCount = Number(attRes?.completed_count || 0);
+    const absentCount = Number(attRes?.absent_count || 0);
+    const cancelledCount = Number(attRes?.cancelled_count || 0);
+    const scheduledCount = Number(attRes?.scheduled_count || 0);
+
+    const completionRate = totalClasses > 0 ? Math.round((completedCount / totalClasses) * 10000) / 10000 : 0;
+    const absenceRate = totalClasses > 0 ? Math.round((absentCount / totalClasses) * 10000) / 10000 : 0;
+    const cancellationRate = totalClasses > 0 ? Math.round((cancelledCount / totalClasses) * 10000) / 10000 : 0;
+    const scheduledRate = totalClasses > 0 ? Math.round((scheduledCount / totalClasses) * 10000) / 10000 : 0;
+
+    // 试听课单独计数 (is_trial = 1)
+    const trialQuery = `
+      SELECT 
+        COUNT(*) as total_classes,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_count,
+        SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent_count,
+        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count,
+        SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) as scheduled_count
+      FROM classes
+      WHERE date >= ? AND date <= ? AND is_trial = 1
+        ${orgFilter}
+    `;
+    const trialRes = await DB.prepare(trialQuery).bind(...attendanceParams).first();
+    const trialTotalClasses = Number(trialRes?.total_classes || 0);
+    const trialCompletedCount = Number(trialRes?.completed_count || 0);
+    const trialAbsentCount = Number(trialRes?.absent_count || 0);
+    const trialCancelledCount = Number(trialRes?.cancelled_count || 0);
+    const trialScheduledCount = Number(trialRes?.scheduled_count || 0);
+
+    // 2. 反馈填报率 (期间内 completed 课程)
+    const feedbackQuery = `
+      SELECT 
+        COUNT(*) as total_completed,
+        SUM(CASE WHEN (fb_teacher_message IS NOT NULL AND TRIM(fb_teacher_message) != '') 
+                   OR (fb_vocab IS NOT NULL AND TRIM(fb_vocab) != '') 
+                 THEN 1 ELSE 0 END) as submitted_count
+      FROM classes
+      WHERE date >= ? AND date <= ? AND status = 'completed'
+        ${orgFilter}
+    `;
+    const fbRes = await DB.prepare(feedbackQuery).bind(...attendanceParams).first();
+    const feedbackTotal = Number(fbRes?.total_completed || 0);
+    const feedbackSubmitted = Number(fbRes?.submitted_count || 0);
+    const feedbackRate = feedbackTotal > 0 ? Math.round((feedbackSubmitted / feedbackTotal) * 10000) / 10000 : 0;
+
+    // 3. 录像覆盖率 (期间内 completed 课程，fb_recording_status 非 'none')
+    const recordingQuery = `
+      SELECT 
+        COUNT(*) as total_completed,
+        SUM(CASE WHEN fb_recording_status IS NOT NULL AND fb_recording_status != 'none' THEN 1 ELSE 0 END) as covered_count,
+        SUM(CASE WHEN fb_recording_status = 'ready' THEN 1 ELSE 0 END) as ready_count,
+        SUM(CASE WHEN fb_recording_status = 'pending' THEN 1 ELSE 0 END) as pending_count,
+        SUM(CASE WHEN fb_recording_status = 'none' OR fb_recording_status IS NULL THEN 1 ELSE 0 END) as none_count
+      FROM classes
+      WHERE date >= ? AND date <= ? AND status = 'completed'
+        ${orgFilter}
+    `;
+    const recRes = await DB.prepare(recordingQuery).bind(...attendanceParams).first();
+    const recordingTotal = Number(recRes?.total_completed || 0);
+    const recordingCovered = Number(recRes?.covered_count || 0);
+    const recordingRate = recordingTotal > 0 ? Math.round((recordingCovered / recordingTotal) * 10000) / 10000 : 0;
+
+    // 4. 固定教师率 (期间内每名学员以其当期完成课时最多的教师为主教师；按课时加权)
+    const fixedTeacherQuery = `
+      SELECT 
+        student_id,
+        COALESCE(teacher_id, 0) as teacher_id,
+        SUM(hours) as teacher_hours
+      FROM classes
+      WHERE date >= ? AND date <= ? AND status = 'completed'
+        ${orgFilter}
+      GROUP BY student_id, COALESCE(teacher_id, 0)
+    `;
+    const ftRows = (await DB.prepare(fixedTeacherQuery).bind(...attendanceParams).all()).results || [];
+    
+    const studentTeacherMap = new Map();
+    for (const row of ftRows) {
+      const sid = row.student_id;
+      const thours = Number(row.teacher_hours || 0);
+      if (!studentTeacherMap.has(sid)) {
+        studentTeacherMap.set(sid, []);
+      }
+      studentTeacherMap.get(sid).push(thours);
+    }
+
+    let primaryTeacherTotalHours = 0;
+    let periodCompletedTotalHours = 0;
+    const studentCount = studentTeacherMap.size;
+
+    for (const hoursList of studentTeacherMap.values()) {
+      const studentTotal = hoursList.reduce((a, b) => a + b, 0);
+      const studentMax = Math.max(...hoursList);
+      periodCompletedTotalHours += studentTotal;
+      primaryTeacherTotalHours += studentMax;
+    }
+
+    periodCompletedTotalHours = Math.round(periodCompletedTotalHours * 100) / 100;
+    primaryTeacherTotalHours = Math.round(primaryTeacherTotalHours * 100) / 100;
+    const fixedTeacherRate = periodCompletedTotalHours > 0 
+      ? Math.round((primaryTeacherTotalHours / periodCompletedTotalHours) * 10000) / 10000 
+      : 0;
+
+    // 5. 试听转化 cohort 表 (D6)
+    const startMonth = fromDate.substring(0, 7);
+    const endMonth = toDate.substring(0, 7);
+
+    const cohortQuery = `
+      WITH first_trials AS (
+        SELECT 
+          c.student_id,
+          MIN(c.date) as first_trial_date
+        FROM classes c
+        WHERE c.is_trial = 1
+          ${orgFilter}
+        GROUP BY c.student_id
+      ),
+      cohort_students AS (
+        SELECT 
+          ft.student_id,
+          ft.first_trial_date,
+          strftime('%Y-%m', ft.first_trial_date) as cohort_month
+        FROM first_trials ft
+        WHERE strftime('%Y-%m', ft.first_trial_date) >= ? 
+          AND strftime('%Y-%m', ft.first_trial_date) <= ?
+      ),
+      first_converted_payments AS (
+        SELECT 
+          cs.student_id,
+          MIN(p.date) as first_payment_date
+        FROM cohort_students cs
+        JOIN payments p ON p.student_id = cs.student_id 
+                       AND p.payment_method != 'gift' 
+                       AND p.hours > 0
+                       AND p.date >= cs.first_trial_date
+                       AND p.date <= date(cs.first_trial_date, '+30 days')
+                       ${effectiveOrgId ? 'AND p.organization_id = ?' : ''}
+        GROUP BY cs.student_id
+      )
+      SELECT 
+        cs.cohort_month,
+        COUNT(cs.student_id) as trial_count,
+        COUNT(fcp.student_id) as converted_count,
+        ROUND(CAST(COUNT(fcp.student_id) AS REAL) / COUNT(cs.student_id), 4) as conversion_rate,
+        AVG(CASE WHEN fcp.first_payment_date IS NOT NULL 
+                 THEN CAST(julianday(fcp.first_payment_date) - julianday(cs.first_trial_date) AS INTEGER) 
+                 ELSE NULL END) as avg_conversion_days
+      FROM cohort_students cs
+      LEFT JOIN first_converted_payments fcp ON fcp.student_id = cs.student_id
+      GROUP BY cs.cohort_month
+      ORDER BY cs.cohort_month ASC
+    `;
+
+    const cohortParams = effectiveOrgId 
+      ? [effectiveOrgId, startMonth, endMonth, effectiveOrgId]
+      : [startMonth, endMonth];
+    const cohortRows = (await DB.prepare(cohortQuery).bind(...cohortParams).all()).results || [];
+    
+    const cohortMap = new Map();
+    for (const r of cohortRows) {
+      cohortMap.set(r.cohort_month, r);
+    }
+
+    const cohortList = [];
+    const [startYear, startM] = startMonth.split('-').map(Number);
+    const [endYear, endM] = endMonth.split('-').map(Number);
+    let y = startYear;
+    let m = startM;
+    while (y < endYear || (y === endYear && m <= endM)) {
+      const mStr = `${y}-${String(m).padStart(2, '0')}`;
+      if (cohortMap.has(mStr)) {
+        const item = cohortMap.get(mStr);
+        cohortList.push({
+          month: mStr,
+          trial_count: Number(item.trial_count || 0),
+          converted_count: Number(item.converted_count || 0),
+          conversion_rate: Number(item.conversion_rate || 0),
+          avg_conversion_days: item.avg_conversion_days !== null ? Math.round(Number(item.avg_conversion_days) * 10) / 10 : null
+        });
+      } else {
+        cohortList.push({
+          month: mStr,
+          trial_count: 0,
+          converted_count: 0,
+          conversion_rate: 0,
+          avg_conversion_days: null
+        });
+      }
+      m++;
+      if (m > 12) {
+        m = 1;
+        y++;
+      }
+    }
+
+    return c.json(success({
+      attendance: {
+        total_classes: totalClasses,
+        completed_count: completedCount,
+        absent_count: absentCount,
+        cancelled_count: cancelledCount,
+        scheduled_count: scheduledCount,
+        completion_rate: completionRate,
+        absence_rate: absenceRate,
+        cancellation_rate: cancellationRate,
+        scheduled_rate: scheduledRate,
+        trial_summary: {
+          total_classes: trialTotalClasses,
+          completed_count: trialCompletedCount,
+          absent_count: trialAbsentCount,
+          cancelled_count: trialCancelledCount,
+          scheduled_count: trialScheduledCount
+        }
+      },
+      feedback: {
+        total_completed: feedbackTotal,
+        submitted_count: feedbackSubmitted,
+        feedback_rate: feedbackRate
+      },
+      recording: {
+        total_completed: recordingTotal,
+        covered_count: recordingCovered,
+        recording_rate: recordingRate,
+        ready_count: Number(recRes?.ready_count || 0),
+        pending_count: Number(recRes?.pending_count || 0),
+        none_count: Number(recRes?.none_count || 0)
+      },
+      fixed_teacher: {
+        fixed_teacher_rate: fixedTeacherRate,
+        student_count: studentCount,
+        primary_teacher_hours: primaryTeacherTotalHours,
+        total_completed_hours: periodCompletedTotalHours
+      },
+      trial_cohort: cohortList
+    }, {
+      from_date: fromDate,
+      to_date: toDate,
+      organization_id: effectiveOrgId,
+      attendance_denominator_desc: "出勤结构分母为期间内排课日期落入区间的全部正课节数(COUNT(*))，包含 completed、absent、cancelled、scheduled；试听课(is_trial=1)单独统计，不计入正课分母。",
+      feedback_definition_desc: "反馈已填判定口径为 fb_teacher_message 或 fb_vocab 非空且去除空白后有效。",
+      fixed_teacher_desc: "固定教师率以学员当期完成课时最多的教师为主教师，按当期总完成课时加权计算。"
+    }));
+
+  } catch (err) {
+    console.error('reports/teaching/summary 错误:', err);
+    return c.json(error('INTERNAL_ERROR', '获取教学交付汇总失败: ' + err.message), 500);
+  }
+});
+
+/**
+ * 阶段 C：教学交付 - 教师负荷与教学质量
+ * GET /api/v1/reports/teaching/workload
+ * 参数：from_date, to_date, org_id, sort_by (hours/classes_count/score), order (asc/desc), page, page_size
+ */
+reports.get('/teaching/workload', async (c) => {
+  const perm = checkPermission(c);
+  if (perm.forbidden) {
+    return c.json(perm.error, 403);
+  }
+
+  const DB = c.env.DB;
+  const { effectiveOrgId, userRole } = perm;
+  const { fromDate, toDate } = resolveDateRange(c);
+
+  const sortBy = c.req.query('sort_by') || 'hours'; // hours | classes_count | score
+  const sortOrder = (c.req.query('order') || 'desc').toLowerCase(); // desc | asc
+  const page = Math.max(1, parseInt(c.req.query('page') || '1'));
+  const pageSize = Math.min(50, Math.max(1, parseInt(c.req.query('page_size') || '20')));
+
+  try {
+    const orgFilter = effectiveOrgId ? 'AND c.organization_id = ?' : '';
+    const orgParams = effectiveOrgId ? [effectiveOrgId] : [];
+
+    const workloadParams = [fromDate, toDate, ...orgParams];
+    const workloadQuery = `
+      SELECT 
+        c.teacher_id,
+        t.name as registered_teacher_name,
+        c.teacher as class_teacher_name,
+        COUNT(CASE WHEN c.status = 'completed' THEN 1 END) as completed_classes,
+        ROUND(SUM(CASE WHEN c.status = 'completed' THEN c.hours ELSE 0 END), 2) as completed_hours,
+        COUNT(CASE WHEN c.status = 'completed' AND c.duration = 25 THEN 1 END) as duration_25_count,
+        COUNT(CASE WHEN c.status = 'completed' AND c.duration = 50 THEN 1 END) as duration_50_count,
+        COUNT(CASE WHEN c.status = 'completed' AND c.duration = 60 THEN 1 END) as duration_60_count,
+        COUNT(CASE WHEN c.status = 'completed' AND (c.duration NOT IN (25, 50, 60) OR c.duration IS NULL) THEN 1 END) as duration_other_count,
+        COUNT(CASE WHEN c.is_trial = 1 THEN 1 END) as trial_classes,
+        COUNT(CASE WHEN c.status = 'completed' AND (
+          c.fb_score_phonics IS NOT NULL OR c.fb_score_vocab IS NOT NULL OR 
+          c.fb_score_speaking IS NOT NULL OR c.fb_score_listening IS NOT NULL OR 
+          c.fb_score_engagement IS NOT NULL
+        ) THEN 1 END) as scored_classes_count,
+        AVG(CASE WHEN c.status = 'completed' THEN c.fb_score_phonics END) as avg_phonics,
+        AVG(CASE WHEN c.status = 'completed' THEN c.fb_score_vocab END) as avg_vocab,
+        AVG(CASE WHEN c.status = 'completed' THEN c.fb_score_speaking END) as avg_speaking,
+        AVG(CASE WHEN c.status = 'completed' THEN c.fb_score_listening END) as avg_listening,
+        AVG(CASE WHEN c.status = 'completed' THEN c.fb_score_engagement END) as avg_engagement,
+        COUNT(CASE WHEN c.status = 'completed' AND (
+          (c.fb_teacher_message IS NOT NULL AND TRIM(c.fb_teacher_message) != '') OR 
+          (c.fb_vocab IS NOT NULL AND TRIM(c.fb_vocab) != '')
+        ) THEN 1 END) as feedback_submitted_count
+      FROM classes c
+      LEFT JOIN teachers t ON t.id = c.teacher_id
+      WHERE c.date >= ? AND c.date <= ?
+        ${orgFilter}
+      GROUP BY c.teacher_id
+    `;
+
+    const rawRows = (await DB.prepare(workloadQuery).bind(...workloadParams).all()).results || [];
+
+    const teacherList = rawRows.map(row => {
+      const isUnassigned = row.teacher_id === null || row.teacher_id === undefined;
+      const teacherName = isUnassigned 
+        ? '未指定' 
+        : (row.registered_teacher_name || row.class_teacher_name || `教师 #${row.teacher_id}`);
+
+      const completedClasses = Number(row.completed_classes || 0);
+      const completedHours = Math.round(Number(row.completed_hours || 0) * 100) / 100;
+      const trialClasses = Number(row.trial_classes || 0);
+      const scoredCount = Number(row.scored_classes_count || 0);
+
+      // 计算综合评分 (五维均值的再均值)
+      const validScores = [
+        row.avg_phonics,
+        row.avg_vocab,
+        row.avg_speaking,
+        row.avg_listening,
+        row.avg_engagement
+      ].filter(v => v !== null && v !== undefined).map(Number);
+
+      const overallAvgScore = validScores.length > 0 
+        ? Math.round((validScores.reduce((a, b) => a + b, 0) / validScores.length) * 100) / 100 
+        : null;
+
+      // 反馈填报率
+      const feedbackSubmitted = Number(row.feedback_submitted_count || 0);
+      const feedbackRate = completedClasses > 0 
+        ? Math.round((feedbackSubmitted / completedClasses) * 10000) / 10000 
+        : 0;
+
+      return {
+        teacher_id: isUnassigned ? null : row.teacher_id,
+        teacher_name: teacherName,
+        completed_classes: completedClasses,
+        completed_hours: completedHours,
+        duration_breakdown: {
+          min_25: Number(row.duration_25_count || 0),
+          min_50: Number(row.duration_50_count || 0),
+          min_60: Number(row.duration_60_count || 0),
+          other: Number(row.duration_other_count || 0)
+        },
+        trial_classes: trialClasses,
+        feedback: {
+          submitted_count: feedbackSubmitted,
+          completed_classes: completedClasses,
+          feedback_rate: feedbackRate
+        },
+        score: {
+          overall_avg_score: overallAvgScore,
+          scored_classes_count: scoredCount,
+          dim_averages: {
+            phonics: row.avg_phonics !== null ? Math.round(Number(row.avg_phonics) * 100) / 100 : null,
+            vocab: row.avg_vocab !== null ? Math.round(Number(row.avg_vocab) * 100) / 100 : null,
+            speaking: row.avg_speaking !== null ? Math.round(Number(row.avg_speaking) * 100) / 100 : null,
+            listening: row.avg_listening !== null ? Math.round(Number(row.avg_listening) * 100) / 100 : null,
+            engagement: row.avg_engagement !== null ? Math.round(Number(row.avg_engagement) * 100) / 100 : null
+          }
+        }
+      };
+    });
+
+    // 排序
+    teacherList.sort((a, b) => {
+      let valA, valB;
+      if (sortBy === 'classes_count') {
+        valA = a.completed_classes;
+        valB = b.completed_classes;
+      } else if (sortBy === 'score') {
+        valA = a.score.overall_avg_score;
+        valB = b.score.overall_avg_score;
+        // 评分 null 永远置于最后
+        if (valA === null && valB === null) return 0;
+        if (valA === null) return 1;
+        if (valB === null) return -1;
+      } else {
+        // default hours
+        valA = a.completed_hours;
+        valB = b.completed_hours;
+      }
+
+      if (sortOrder === 'asc') {
+        return valA > valB ? 1 : (valA < valB ? -1 : 0);
+      } else {
+        return valA < valB ? 1 : (valA > valB ? -1 : 0);
+      }
+    });
+
+    // 分页
+    const totalRecords = teacherList.length;
+    const totalPages = Math.ceil(totalRecords / pageSize);
+    const offset = (page - 1) * pageSize;
+    const paginatedList = teacherList.slice(offset, offset + pageSize);
+
+    return c.json(success({
+      list: paginatedList,
+      pagination: {
+        page,
+        page_size: pageSize,
+        total: totalRecords,
+        pages: totalPages,
+        has_next: page < totalPages,
+        has_prev: page > 1
+      },
+      sort: {
+        sort_by: sortBy,
+        order: sortOrder
+      }
+    }, {
+      from_date: fromDate,
+      to_date: toDate,
+      organization_id: effectiveOrgId
+    }));
+
+  } catch (err) {
+    console.error('reports/teaching/workload 错误:', err);
+    return c.json(error('INTERNAL_ERROR', '获取教师负荷数据失败: ' + err.message), 500);
+  }
+});
+
 export default reports;

@@ -628,5 +628,17 @@ export const reportOps = {
       body: data
     });
     return result.data;
+  },
+  getTeachingSummary: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/teaching/summary?${query}` : '/reports/teaching/summary';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  getTeachingWorkload: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/teaching/workload?${query}` : '/reports/teaching/workload';
+    const result = await request(endpoint);
+    return result.data;
   }
 };
