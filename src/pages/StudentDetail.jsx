@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Phone, Mail, Calendar, CreditCard, Clock, Plus, Trash2, 
   AlertTriangle, MessageSquare, FileText, Edit, Loader2, User, CheckCircle, 
-  X, Calculator, FileCheck, FileSignature, BookOpen, Copy, ExternalLink
+  X, Calculator, FileCheck, FileSignature, BookOpen, Copy, ExternalLink, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { studentOps, packageOps, classOps, paymentOps, hourChangeOps } from '../store';
 import { request, textbookOps } from '../store/api';
@@ -56,11 +56,13 @@ export default function StudentDetail() {
   const [showAssessmentFeedback, setShowAssessmentFeedback] = useState(null);
   const [showProgressReportModal, setShowProgressReportModal] = useState(null);
   const [classForm, setClassForm] = useState({ date: '', hours: 1, notes: '' });
+  const [classPage, setClassPage] = useState(1);
 
   useEffect(() => {
     async function loadStudentData() {
       if (id) {
         setLoading(true);
+        setClassPage(1);
         try {
           const s = await studentOps.getById(id);
           if (s) {
@@ -306,6 +308,13 @@ export default function StudentDetail() {
       prompt('请手动复制以下链接：', url);
     }
   };
+
+  const classPageSize = 20;
+  const totalClassPages = Math.ceil(classes.length / classPageSize) || 1;
+  const currentClassPage = Math.min(Math.max(1, classPage), totalClassPages);
+  const startClassIdx = (currentClassPage - 1) * classPageSize;
+  const endClassIdx = Math.min(startClassIdx + classPageSize, classes.length);
+  const paginatedClasses = classes.slice(startClassIdx, endClassIdx);
 
   const handleOpenParentPortal = () => {
     if (!student) return;
@@ -652,7 +661,8 @@ export default function StudentDetail() {
           </CardHeader>
           <div className="p-0">
             {classes.length > 0 ? (
-              <div className="overflow-x-auto">
+              <>
+                <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-gray-50/80 border-b border-gray-100 text-gray-500 font-medium">
                     <tr>
@@ -666,7 +676,7 @@ export default function StudentDetail() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {classes.map(cls => {
+                    {paginatedClasses.map(cls => {
                       const hasFeedback = cls.content || cls.homework || cls.fb_teacher_message || cls.fb_homework || cls.fb_vocab || cls.fb_patterns || cls.fb_grammar || cls.fb_pronunciation_errors || cls.fb_grammar_errors;
                       const isTrialReport = cls.is_trial === 1 && assessments.some(a => parseInt(a.class_id) === parseInt(cls.id));
                       const teacher = cls.teacher_name || cls.teacher;
@@ -778,6 +788,39 @@ export default function StudentDetail() {
                   </tbody>
                 </table>
               </div>
+
+              {/* 分页控制 */}
+              {totalClassPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3.5 border-t border-gray-100 bg-gray-50/50">
+                  <div className="text-xs text-gray-500">
+                    显示第 <span className="font-medium text-gray-700">{startClassIdx + 1}</span> - <span className="font-medium text-gray-700">{endClassIdx}</span> 条，共 <span className="font-medium text-gray-700">{classes.length}</span> 节课（每页 20 条）
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setClassPage(p => Math.max(1, p - 1))}
+                      disabled={currentClassPage <= 1}
+                      className="h-8 px-2.5 text-xs text-gray-600 border-gray-200 hover:bg-white disabled:opacity-40"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5 mr-1" /> 上一页
+                    </Button>
+                    <span className="px-2 text-xs font-medium text-gray-600 min-w-[70px] text-center">
+                      第 {currentClassPage} / {totalClassPages} 页
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setClassPage(p => Math.min(totalClassPages, p + 1))}
+                      disabled={currentClassPage >= totalClassPages}
+                      className="h-8 px-2.5 text-xs text-gray-600 border-gray-200 hover:bg-white disabled:opacity-40"
+                    >
+                      下一页 <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              </>
             ) : (
               <div className="text-center py-16 text-gray-400">
                 <Clock className="w-12 h-12 mx-auto mb-3 opacity-20" />

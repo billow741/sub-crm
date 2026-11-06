@@ -194,7 +194,7 @@ export const packageOps = {
 // ============================================
 export const classOps = {
   getByStudent: async (studentId, params = {}) => {
-    const queryParams = { page_size: 100, ...params, student_id: studentId };
+    const queryParams = { page_size: 1000, ...params, student_id: studentId };
     const query = new URLSearchParams(queryParams).toString();
     const result = await request(`/classes?${query}`);
     return result.data?.data || result.data || [];
