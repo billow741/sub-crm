@@ -13,7 +13,7 @@ export default function Students() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [selectedOrg, setSelectedOrgState] = useState('');
   const [showModal, setShowModal] = useState(searchParams.get('action') === 'add');
   const [editingStudent, setEditingStudent] = useState(null);
@@ -29,6 +29,7 @@ export default function Students() {
     grade: '',
     parentName: '',
     notes: searchParams.get('notes') || '',
+    status: 'active',
     organization_id: '',
   });
 
