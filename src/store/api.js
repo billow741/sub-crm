@@ -590,3 +590,20 @@ export const leadOps = {
   }
 };
 
+// ============================================
+// 数据报表中心相关操作 (Reports)
+// ============================================
+export const reportOps = {
+  getLearningSummary: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/learning/summary?${query}` : '/reports/learning/summary';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  getRiskStudents: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/learning/risk-students?${query}` : '/reports/learning/risk-students';
+    const result = await request(endpoint);
+    return result.data;
+  }
+};
