@@ -16,7 +16,14 @@ import {
   CheckCircle2, 
   Info,
   DollarSign,
-  GraduationCap
+  GraduationCap,
+  Video,
+  Star,
+  UserCheck,
+  XCircle,
+  Coins,
+  X,
+  ArrowUpDown
 } from 'lucide-react';
 import { reportOps, organizationOps, getUserRole } from '../store';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
@@ -83,16 +90,41 @@ export default function Reports() {
   // 学习分析数据状态
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
-  const [summaryError, setSummaryError] = useState(null);
+  const [_summaryError, setSummaryError] = useState(null);
 
   // 流失预警列表状态
   const [riskData, setRiskData] = useState({ students: [], pagination: {}, summary: {} });
   const [riskLoading, setRiskLoading] = useState(true);
-  const [riskError, setRiskError] = useState(null);
+  const [_riskError, setRiskError] = useState(null);
   const [riskPage, setRiskPage] = useState(1);
   const [riskLevelFilter, setRiskLevelFilter] = useState('all'); // all | high | medium
   const [riskSearchInput, setRiskSearchInput] = useState('');
   const [riskSearchQuery, setRiskSearchQuery] = useState('');
+
+  // ─── 阶段 B：财务经营数据状态 ───
+  const [finSummary, setFinSummary] = useState(null);
+  const [finLoading, setFinLoading] = useState(false);
+  const [finError, setFinError] = useState(null);
+
+  const [finTrend, setFinTrend] = useState([]);
+  const [finTrendLoading, setFinTrendLoading] = useState(false);
+
+  const [fxRates, setFxRates] = useState([]);
+  const [fxModalOpen, setFxModalOpen] = useState(false);
+  const [fxForm, setFxForm] = useState({ month: '', rate: '', source: '' });
+  const [fxSubmitting, setFxSubmitting] = useState(false);
+
+  // ─── 阶段 C：教学交付数据状态 ───
+  const [teachingSummary, setTeachingSummary] = useState(null);
+  const [teachingLoading, setTeachingLoading] = useState(false);
+  const [teachingError, setTeachingError] = useState(null);
+
+  const [workloadData, setWorkloadData] = useState({ list: [], pagination: {} });
+  const [workloadLoading, setWorkloadLoading] = useState(false);
+  const [workloadError, setWorkloadError] = useState(null);
+  const [workloadSortBy, setWorkloadSortBy] = useState('hours'); // hours | classes_count | score
+  const [workloadOrder, setWorkloadOrder] = useState('desc'); // desc | asc
+  const [workloadPage, setWorkloadPage] = useState(1);
 
   // 加载机构列表 (仅超管可见)
   useEffect(() => {
@@ -159,6 +191,156 @@ export default function Reports() {
       setRiskLoading(false);
     }
   }, [riskPage, riskLevelFilter, riskSearchQuery, selectedOrgId, isSuperAdmin]);
+
+  // 财务经营数据加载
+  const fetchFinSummary = useCallback(async () => {
+    try {
+      setFinLoading(true);
+      setFinError(null);
+      const params = {
+        from_date: fromDate,
+        to_date: toDate
+      };
+      if (isSuperAdmin && selectedOrgId !== 'all') {
+        params.org_id = selectedOrgId;
+      }
+      const data = await reportOps.getFinancialSummary(params);
+      setFinSummary(data);
+    } catch (err) {
+      console.error('加载财务总览失败:', err);
+      setFinError(err.message || '加载财务报表失败');
+    } finally {
+      setFinLoading(false);
+    }
+  }, [fromDate, toDate, selectedOrgId, isSuperAdmin]);
+
+  const fetchFinTrend = useCallback(async () => {
+    if (!isSuperAdmin) return;
+    try {
+      setFinTrendLoading(true);
+      const params = {
+        from_date: fromDate,
+        to_date: toDate
+      };
+      if (selectedOrgId !== 'all') {
+        params.org_id = selectedOrgId;
+      }
+      const res = await reportOps.getFinancialTrend(params);
+      setFinTrend(res?.trend || []);
+    } catch (err) {
+      console.warn('加载财务趋势失败:', err);
+    } finally {
+      setFinTrendLoading(false);
+    }
+  }, [fromDate, toDate, selectedOrgId, isSuperAdmin]);
+
+  const fetchFxRates = useCallback(async () => {
+    try {
+      const res = await reportOps.getFxRates();
+      setFxRates(res?.rates || []);
+    } catch (err) {
+      console.warn('加载汇率列表失败:', err);
+    }
+  }, []);
+
+  const handleOpenFxModal = (item = null) => {
+    if (item) {
+      setFxForm({ month: item.month, rate: String(item.rate), source: item.source || '' });
+    } else {
+      const defaultMonth = toDate ? toDate.slice(0, 7) : new Date().toISOString().slice(0, 7);
+      setFxForm({ month: defaultMonth, rate: '0.1240', source: 'Wise 实际汇款' });
+    }
+    setFxModalOpen(true);
+  };
+
+  const handleSaveFxRate = async (e) => {
+    e.preventDefault();
+    try {
+      setFxSubmitting(true);
+      await reportOps.updateFxRate(fxForm.month, {
+        rate: parseFloat(fxForm.rate),
+        source: fxForm.source
+      });
+      setFxModalOpen(false);
+      fetchFxRates();
+      fetchFinSummary();
+      if (isSuperAdmin) fetchFinTrend();
+    } catch (err) {
+      alert('保存汇率失败: ' + err.message);
+    } finally {
+      setFxSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'financial') {
+      fetchFinSummary();
+      if (isSuperAdmin) {
+        fetchFinTrend();
+      }
+      fetchFxRates();
+    }
+  }, [fetchFinSummary, fetchFinTrend, fetchFxRates, activeTab, isSuperAdmin]);
+
+  // 教学交付数据加载 (阶段 C)
+  const fetchTeachingSummary = useCallback(async () => {
+    try {
+      setTeachingLoading(true);
+      setTeachingError(null);
+      const params = {
+        from_date: fromDate,
+        to_date: toDate
+      };
+      if (isSuperAdmin && selectedOrgId !== 'all') {
+        params.org_id = selectedOrgId;
+      }
+      const data = await reportOps.getTeachingSummary(params);
+      setTeachingSummary(data);
+    } catch (err) {
+      console.error('加载教学总览失败:', err);
+      setTeachingError(err.message || '加载教学交付报表失败');
+    } finally {
+      setTeachingLoading(false);
+    }
+  }, [fromDate, toDate, selectedOrgId, isSuperAdmin]);
+
+  const fetchTeachingWorkload = useCallback(async () => {
+    try {
+      setWorkloadLoading(true);
+      setWorkloadError(null);
+      const params = {
+        from_date: fromDate,
+        to_date: toDate,
+        sort_by: workloadSortBy,
+        order: workloadOrder,
+        page: workloadPage,
+        page_size: 10
+      };
+      if (isSuperAdmin && selectedOrgId !== 'all') {
+        params.org_id = selectedOrgId;
+      }
+      const data = await reportOps.getTeachingWorkload(params);
+      setWorkloadData(data || { list: [], pagination: {} });
+    } catch (err) {
+      console.error('加载教师负荷失败:', err);
+      setWorkloadError(err.message || '加载教师负荷报表失败');
+    } finally {
+      setWorkloadLoading(false);
+    }
+  }, [fromDate, toDate, workloadSortBy, workloadOrder, workloadPage, selectedOrgId, isSuperAdmin]);
+
+  useEffect(() => {
+    if (activeTab === 'teaching') {
+      fetchTeachingSummary();
+      setWorkloadPage(1);
+    }
+  }, [fetchTeachingSummary, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'teaching') {
+      fetchTeachingWorkload();
+    }
+  }, [fetchTeachingWorkload, activeTab]);
 
   // 当时间或机构切换时重新请求
   useEffect(() => {
@@ -245,12 +427,12 @@ export default function Reports() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   activeTab === 'financial'
                     ? 'bg-primary-600 text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
                 <DollarSign className="w-4 h-4" />
                 <span>财务经营</span>
-                <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded">待开放</span>
+                <span className="text-xs px-1.5 py-0.2 bg-white/20 rounded font-normal">已就绪</span>
               </button>
 
               <button
@@ -258,12 +440,12 @@ export default function Reports() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   activeTab === 'teaching'
                     ? 'bg-primary-600 text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
                 <GraduationCap className="w-4 h-4" />
                 <span>教学交付</span>
-                <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded">待开放</span>
+                <span className="text-xs px-1.5 py-0.2 bg-white/20 rounded font-normal">已就绪</span>
               </button>
             </div>
 
@@ -347,8 +529,8 @@ export default function Reports() {
         </CardContent>
       </Card>
 
-      {/* ─── 占位 Tab (概览 / 教学) ─── */}
-      {(activeTab === 'overview' || activeTab === 'teaching') && (
+      {/* ─── 占位 Tab (概览) ─── */}
+      {activeTab === 'overview' && (
         <Card className="border-dashed border-2 border-gray-200 bg-gray-50/50">
           <CardContent className="py-16 text-center space-y-4">
             <div className="w-16 h-16 bg-primary-50 text-primary-500 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
@@ -356,20 +538,488 @@ export default function Reports() {
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-800">
-                {activeTab === 'overview' && '概览大盘（阶段 D 交付）'}
-                {activeTab === 'teaching' && '教学交付报表（阶段 C 交付）'}
+                概览大盘（阶段 D 交付）
               </h3>
               <p className="text-sm text-gray-500 max-w-md mx-auto mt-1">
-                按照数据报表中心规划执行卡，当前仅执行【阶段 A：学习分析】与【阶段 B：财务】。
-                {activeTab === 'teaching' && '包含完课率/缺勤率、外教负荷排行、试听转化漏斗等模块即将展开。'}
-                {activeTab === 'overview' && '概览大盘将汇总前三阶段数据。'}
+                按照数据报表中心规划执行卡，当前已完成【阶段 A：学习分析】、【阶段 B：财务经营】与【阶段 C：教学交付】。概览大盘将在阶段 D 汇聚全部核心指标。
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setActiveTab('financial')}>
-              切换至财务报表
+            <Button variant="outline" size="sm" onClick={() => setActiveTab('teaching')}>
+              切换至教学交付报表
             </Button>
           </CardContent>
         </Card>
+      )}
+
+      {/* ─── 阶段 C：教学交付报表核心内容 ─── */}
+      {activeTab === 'teaching' && (
+        <div className="space-y-6">
+          {/* 加载中与错误提示 */}
+          {teachingLoading && (
+            <div className="py-12 text-center text-gray-500 space-y-2">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto text-primary-500" />
+              <p className="text-sm">正在核算教学交付数据...</p>
+            </div>
+          )}
+
+          {teachingError && (
+            <Card className="border-danger-200 bg-danger-50">
+              <CardContent className="p-4 text-sm text-danger-700 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 shrink-0" />
+                  <span>{teachingError}</span>
+                </div>
+                <Button size="sm" variant="outline" onClick={fetchTeachingSummary}>重试</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {!teachingLoading && !teachingError && teachingSummary && (
+            <>
+              {/* 1. 核心 KPI 6 卡片网格 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* 完课率 */}
+                <Card className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">完课率</span>
+                        <div className="text-2xl font-bold text-gray-900">
+                          {((teachingSummary.attendance?.completion_rate || 0) * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                      <span>已完 {teachingSummary.attendance?.completed_count || 0} / 总排 {teachingSummary.attendance?.total_classes || 0} 节</span>
+                      <span className="text-gray-400">待上 {teachingSummary.attendance?.scheduled_count || 0} 节</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 缺勤率 */}
+                <Card className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">缺勤率</span>
+                        <div className="text-2xl font-bold text-rose-600">
+                          {((teachingSummary.attendance?.absence_rate || 0) * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">
+                        <XCircle className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                      <span>缺课 {teachingSummary.attendance?.absent_count || 0} / 总排 {teachingSummary.attendance?.total_classes || 0} 节</span>
+                      <span className="text-gray-400">试听缺课 {teachingSummary.attendance?.trial_summary?.absent_count || 0} 节</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 取消率 */}
+                <Card className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">取消率</span>
+                        <div className="text-2xl font-bold text-amber-600">
+                          {((teachingSummary.attendance?.cancellation_rate || 0) * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                        <AlertTriangle className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                      <span>取消 {teachingSummary.attendance?.cancelled_count || 0} / 总排 {teachingSummary.attendance?.total_classes || 0} 节</span>
+                      <span className="text-gray-400">试听取消 {teachingSummary.attendance?.trial_summary?.cancelled_count || 0} 节</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 反馈填报率 */}
+                <Card className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">反馈填报率</span>
+                        <div className="text-2xl font-bold text-gray-900">
+                          {((teachingSummary.feedback?.feedback_rate || 0) * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                        <Award className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                      <span>已填 {teachingSummary.feedback?.submitted_count || 0} / 完课 {teachingSummary.feedback?.total_completed || 0} 节</span>
+                      <span className="text-gray-400">含评语或生词</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 录像覆盖率 */}
+                <Card className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">录像覆盖率</span>
+                        <div className="text-2xl font-bold text-gray-900">
+                          {((teachingSummary.recording?.recording_rate || 0) * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                        <Video className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                      <span>覆盖 {teachingSummary.recording?.covered_count || 0} / 完课 {teachingSummary.recording?.total_completed || 0} 节</span>
+                      <span className="text-gray-400">就绪 {teachingSummary.recording?.ready_count || 0} · 转存 {teachingSummary.recording?.pending_count || 0}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 固定教师率 */}
+                <Card className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">固定教师率</span>
+                        <div className="text-2xl font-bold text-purple-700">
+                          {((teachingSummary.fixed_teacher?.fixed_teacher_rate || 0) * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
+                        <UserCheck className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                      <span>主教师 {teachingSummary.fixed_teacher?.primary_teacher_hours || 0}h / 总 {teachingSummary.fixed_teacher?.total_completed_hours || 0}h</span>
+                      <span className="text-gray-400">{teachingSummary.fixed_teacher?.student_count || 0} 名学员</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* 2. D6 试听转化 Cohort 分析表格 */}
+              <Card className="border-gray-200">
+                <CardHeader className="border-b border-gray-100 pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                        <Users className="w-5 h-5 text-primary-600" />
+                        试听转化 Cohort 分析 (30天转化窗口)
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        按学员全历史首次试听课所在自然月归入 Cohort，追踪首次试听后 30 天内（含第 30 天）首笔正课收款转化表现
+                      </p>
+                    </div>
+                    <span className="text-xs px-2.5 py-1 bg-primary-50 text-primary-700 rounded-full font-medium self-start sm:self-auto">
+                      D6 拍板口径
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-50/80 text-gray-600 border-b border-gray-100 font-semibold">
+                        <tr>
+                          <th className="py-3 px-4">Cohort 月份</th>
+                          <th className="py-3 px-4">首次试听人数</th>
+                          <th className="py-3 px-4">30天内转化人数</th>
+                          <th className="py-3 px-4 w-48">转化率</th>
+                          <th className="py-3 px-4">平均转化天数</th>
+                          <th className="py-3 px-4 text-right">转化表现</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-gray-700">
+                        {(!teachingSummary.trial_cohort || teachingSummary.trial_cohort.length === 0) ? (
+                          <tr>
+                            <td colSpan="6" className="py-8 text-center text-gray-400">
+                              期间内暂无试听学员记录
+                            </td>
+                          </tr>
+                        ) : (
+                          teachingSummary.trial_cohort.map((item) => {
+                            const ratePct = ((item.conversion_rate || 0) * 100).toFixed(1);
+                            return (
+                              <tr key={item.month} className="hover:bg-gray-50/60 transition-colors">
+                                <td className="py-3 px-4 font-mono font-medium text-gray-900">
+                                  {item.month}
+                                </td>
+                                <td className="py-3 px-4 font-medium">
+                                  {item.trial_count} 人
+                                </td>
+                                <td className="py-3 px-4 font-medium text-emerald-600">
+                                  {item.converted_count} 人
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1 bg-gray-100 h-2 rounded-full overflow-hidden">
+                                      <div 
+                                        className="bg-emerald-500 h-full rounded-full transition-all duration-300" 
+                                        style={{ width: `${Math.min(100, item.conversion_rate * 100)}%` }}
+                                      />
+                                    </div>
+                                    <span className="w-12 text-right font-mono font-medium text-gray-800">
+                                      {ratePct}%
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 font-mono">
+                                  {item.avg_conversion_days !== null ? `${item.avg_conversion_days} 天` : <span className="text-gray-400">—</span>}
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  {item.trial_count === 0 ? (
+                                    <span className="text-gray-400 text-[11px]">无试听</span>
+                                  ) : item.conversion_rate >= 0.5 ? (
+                                    <Badge variant="primary" className="text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200">高效转化</Badge>
+                                  ) : item.converted_count > 0 ? (
+                                    <Badge variant="outline" className="text-[11px]">稳步转化</Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[11px] text-gray-400 border-gray-200">尚无转化</Badge>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="p-3.5 bg-gray-50/60 border-t border-gray-100 text-[11px] text-gray-500">
+                    💡 <strong>注</strong>：漏斗从学员首次试听课日开始追踪 30 天；转化收款排除了赠送课时（<code className="bg-gray-200/80 px-1 rounded">payment_method != &apos;gift&apos;</code> 且 <code className="bg-gray-200/80 px-1 rounded">hours &gt; 0</code>）；平均天数仅对已转化学员计算。
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 3. 教师负荷与教学质量排行表格 */}
+              <Card className="border-gray-200">
+                <CardHeader className="border-b border-gray-100 pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                        <GraduationCap className="w-5 h-5 text-primary-600" />
+                        教师负荷与交付质量排行
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        按教师聚合期间授课节数、课时量（已折 0.66 系数）、时长分档、试听量、五维评分均值与反馈填报率
+                      </p>
+                    </div>
+
+                    {/* 排序切换控制 */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-gray-500">排序:</span>
+                      <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-xs">
+                        {[
+                          { key: 'hours', label: '完成课时' },
+                          { key: 'classes_count', label: '完成节数' },
+                          { key: 'score', label: '综合评分' }
+                        ].map(s => (
+                          <button
+                            key={s.key}
+                            onClick={() => {
+                              if (workloadSortBy === s.key) {
+                                setWorkloadOrder(o => o === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setWorkloadSortBy(s.key);
+                                setWorkloadOrder('desc');
+                              }
+                            }}
+                            className={`px-2.5 py-1 rounded-md transition-all font-medium flex items-center gap-1 ${
+                              workloadSortBy === s.key
+                                ? 'bg-white text-primary-700 shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
+                            }`}
+                          >
+                            <span>{s.label}</span>
+                            {workloadSortBy === s.key && (
+                              <span className="text-[10px]">{workloadOrder === 'desc' ? '↓' : '↑'}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={fetchTeachingWorkload}
+                        className="p-1.5 text-gray-500 hover:text-gray-700"
+                        title="刷新教师负荷"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${workloadLoading ? 'animate-spin' : ''}`} />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-50/80 text-gray-600 border-b border-gray-100 font-semibold">
+                        <tr>
+                          <th className="py-3 px-4">教师姓名</th>
+                          <th className="py-3 px-4">完成节数</th>
+                          <th className="py-3 px-4">完成课时</th>
+                          <th className="py-3 px-4">时长分档 (25 / 50 / 60 / 其他)</th>
+                          <th className="py-3 px-4">试听节数</th>
+                          <th className="py-3 px-4">综合评分</th>
+                          <th className="py-3 px-4">反馈填报率</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-gray-700">
+                        {workloadLoading ? (
+                          <tr>
+                            <td colSpan="7" className="py-8 text-center text-gray-400">
+                              <RefreshCw className="w-5 h-5 animate-spin mx-auto text-primary-500 mb-1" />
+                              加载教师负荷明细中...
+                            </td>
+                          </tr>
+                        ) : workloadError ? (
+                          <tr>
+                            <td colSpan="7" className="py-6 text-center text-rose-500">
+                              <span>加载失败: {workloadError}</span>
+                              <button onClick={fetchTeachingWorkload} className="ml-2 text-primary-600 underline text-xs">重试</button>
+                            </td>
+                          </tr>
+                        ) : (!workloadData.list || workloadData.list.length === 0) ? (
+                          <tr>
+                            <td colSpan="7" className="py-8 text-center text-gray-400">
+                              期间内暂无教师上课记录
+                            </td>
+                          </tr>
+                        ) : (
+                          workloadData.list.map((teacher, idx) => {
+                            const bd = teacher.duration_breakdown || {};
+                            const score = teacher.score?.overall_avg_score;
+                            const scoredCnt = teacher.score?.scored_classes_count || 0;
+                            const fbRate = ((teacher.feedback?.feedback_rate || 0) * 100).toFixed(0);
+
+                            return (
+                              <tr key={teacher.teacher_id || `unassigned-${idx}`} className="hover:bg-gray-50/60 transition-colors">
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 font-bold flex items-center justify-center text-xs">
+                                      {teacher.teacher_name.charAt(0)}
+                                    </div>
+                                    <div>
+                                      <span className="font-semibold text-gray-900 block">{teacher.teacher_name}</span>
+                                      {teacher.teacher_id ? (
+                                        <span className="text-[10px] text-gray-400 font-mono">ID: #{teacher.teacher_id}</span>
+                                      ) : (
+                                        <span className="text-[10px] text-amber-600 bg-amber-50 px-1 rounded">未关联教师档案</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 font-mono font-medium text-gray-900">
+                                  {teacher.completed_classes} 节
+                                </td>
+                                <td className="py-3 px-4 font-mono font-bold text-primary-700">
+                                  {teacher.completed_hours} h
+                                </td>
+                                <td className="py-3 px-4 font-mono text-gray-600">
+                                  <div className="flex items-center gap-1.5 text-[11px]">
+                                    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded" title="25分钟课">{bd.min_25 || 0}</span>
+                                    <span>/</span>
+                                    <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded" title="50分钟课">{bd.min_50 || 0}</span>
+                                    <span>/</span>
+                                    <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded" title="60分钟课">{bd.min_60 || 0}</span>
+                                    <span>/</span>
+                                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded" title="其他时长">{bd.other || 0}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 font-mono text-gray-700">
+                                  {teacher.trial_classes} 节
+                                </td>
+                                <td className="py-3 px-4">
+                                  {score !== null ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />
+                                      <span className="font-mono font-bold text-gray-900">{score.toFixed(2)}</span>
+                                      <span className="text-[10px] text-gray-400">({scoredCnt}节)</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400 text-[11px]">暂无评分</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1 bg-gray-100 h-1.5 rounded-full overflow-hidden max-w-[60px]">
+                                      <div 
+                                        className="bg-blue-500 h-full rounded-full" 
+                                        style={{ width: `${Math.min(100, (teacher.feedback?.feedback_rate || 0) * 100)}%` }}
+                                      />
+                                    </div>
+                                    <span className="font-mono text-xs text-gray-700">
+                                      {fbRate}% <span className="text-[10px] text-gray-400">({teacher.feedback?.submitted_count}/{teacher.feedback?.completed_classes})</span>
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* 教师负荷分页 */}
+                  {workloadData.pagination?.pages > 1 && (
+                    <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 bg-gray-50/40">
+                      <span>
+                        共 {workloadData.pagination?.total || 0} 位教师，当前第 {workloadData.pagination?.page || 1} / {workloadData.pagination?.pages || 1} 页
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={workloadPage <= 1 || workloadLoading}
+                          onClick={() => setWorkloadPage(p => Math.max(1, p - 1))}
+                          className="flex items-center gap-1 py-1 px-2.5 text-xs"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" /> 上一页
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={!workloadData.pagination?.has_next || workloadLoading}
+                          onClick={() => setWorkloadPage(p => p + 1)}
+                          className="flex items-center gap-1 py-1 px-2.5 text-xs"
+                        >
+                          下一页 <ChevronRight className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 4. 口径注脚区 */}
+              <div className="p-4 bg-gray-50/70 border border-gray-200 rounded-xl text-[11px] text-gray-500 space-y-1.5">
+                <div className="font-semibold text-gray-700 flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-primary-500" />
+                  教学交付分析口径说明（阶段 1 / 阶段 C）：
+                </div>
+                <p>
+                  1. <strong>出勤结构分母</strong>：完课率、缺勤率、取消率的分母为期间内排课日期落入区间的全部正课节数（包含 <code className="bg-gray-200 px-1 rounded">completed</code>、<code className="bg-gray-200 px-1 rounded">absent</code>、<code className="bg-gray-200 px-1 rounded">cancelled</code>、<code className="bg-gray-200 px-1 rounded">scheduled</code>）。试听课（<code className="bg-gray-200 px-1 rounded">is_trial=1</code>）单独计数，不计入正课分母。
+                </p>
+                <p>
+                  2. <strong>反馈填报可靠标记</strong>：以课程记录中教师评语（<code className="bg-gray-200 px-1 rounded">fb_teacher_message</code>）或词汇记录（<code className="bg-gray-200 px-1 rounded">fb_vocab</code>）任一非空且去除空白后有效为准，完全兼容快捷完课打卡与教师端完整表单提交。
+                </p>
+                <p>
+                  3. <strong>固定教师率</strong>：按学员统计其当期已完成课时量最多的教师为主教师；固定教师率 = 各学员主教师完成课时总和 ÷ 当期全站总完成课时（按课时加权）。
+                </p>
+                <p>
+                  4. <strong>D6 试听转化 Cohort</strong>：以学员全历史首次试听课所在自然月归入 Cohort，首次试听后 30 天内（含第 30 天）出现首笔非 gift 且课时大于 0 的收款即计为转化，平均转化天数仅针对已转化学员计算。
+                </p>
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {/* ─── 阶段 B：财务经营报表核心内容 ─── */}
