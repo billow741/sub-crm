@@ -605,5 +605,28 @@ export const reportOps = {
     const endpoint = query ? `/reports/learning/risk-students?${query}` : '/reports/learning/risk-students';
     const result = await request(endpoint);
     return result.data;
+  },
+  getFinancialSummary: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/financial/summary?${query}` : '/reports/financial/summary';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  getFinancialTrend: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/financial/trend?${query}` : '/reports/financial/trend';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  getFxRates: async () => {
+    const result = await request('/reports/fx-rates');
+    return result.data;
+  },
+  updateFxRate: async (month, data) => {
+    const result = await request(`/reports/fx-rates/${month}`, {
+      method: 'PUT',
+      body: data
+    });
+    return result.data;
   }
 };
