@@ -23,7 +23,9 @@ import {
   XCircle,
   Coins,
   X,
-  ArrowUpDown
+  ArrowUpDown,
+  Download,
+  HelpCircle
 } from 'lucide-react';
 import { reportOps, organizationOps, getUserRole } from '../store';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
@@ -80,7 +82,14 @@ export default function Reports() {
 
   // 顶部筛选状态
   const presets = getDateRangePresets();
-  const [activeTab, setActiveTab] = useState('learning'); // overview | learning | financial | teaching
+  const [activeTab, setActiveTab] = useState('overview'); // overview | learning | financial | teaching
+
+  // ─── 阶段 D：概览大盘与导出/口径状态 ───
+  const [overviewData, setOverviewData] = useState(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState(null);
+  const [showCaliberModal, setShowCaliberModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [rangePreset, setRangePreset] = useState('this_month');
   const [fromDate, setFromDate] = useState(presets.this_month.from);
   const [toDate, setToDate] = useState(presets.this_month.to);
@@ -118,6 +127,56 @@ export default function Reports() {
   const [teachingSummary, setTeachingSummary] = useState(null);
   const [teachingLoading, setTeachingLoading] = useState(false);
   const [teachingError, setTeachingError] = useState(null);
+  // ─── 阶段 D：概览大盘数据拉取 ───
+  const fetchOverview = useCallback(async () => {
+    try {
+      setOverviewLoading(true);
+      setOverviewError(null);
+      const params = {
+        from_date: fromDate,
+        to_date: toDate
+      };
+      if (isSuperAdmin && selectedOrgId !== 'all') {
+        params.org_id = selectedOrgId;
+      }
+      const data = await reportOps.getOverview(params);
+      setOverviewData(data);
+    } catch (err) {
+      console.error('获取报表概览失败:', err);
+      setOverviewError(err.message || '获取报表概览失败');
+    } finally {
+      setOverviewLoading(false);
+    }
+  }, [fromDate, toDate, selectedOrgId, isSuperAdmin]);
+
+  useEffect(() => {
+    if (activeTab === 'overview') {
+      fetchOverview();
+    }
+  }, [fetchOverview, activeTab]);
+
+  // ─── 阶段 D：CSV 导出处理器 ───
+  const handleExportCsv = async () => {
+    if (activeTab === 'overview') return;
+    try {
+      setExporting(true);
+      const params = {
+        type: activeTab,
+        from_date: fromDate,
+        to_date: toDate
+      };
+      if (isSuperAdmin && selectedOrgId !== 'all') {
+        params.org_id = selectedOrgId;
+      }
+      await reportOps.exportReportCsv(params);
+    } catch (err) {
+      console.error('导出报表失败:', err);
+      alert(err.message || '导出报表失败');
+    } finally {
+      setExporting(false);
+    }
+  };
+
 
   const [workloadData, setWorkloadData] = useState({ list: [], pagination: {} });
   const [workloadLoading, setWorkloadLoading] = useState(false);
@@ -394,8 +453,21 @@ export default function Reports() {
       <Card className="border-gray-200 bg-white shadow-sm">
         <CardContent className="p-4 md:p-5 space-y-4">
           {/* Tab 导航 */}
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3 overflow-x-auto">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3 overflow-x-auto gap-4">
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  activeTab === 'overview'
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" />
+                <span>概览大盘</span>
+                <span className="text-xs px-1.5 py-0.2 bg-white/20 rounded font-normal">首屏</span>
+              </button>
+
               <button
                 onClick={() => setActiveTab('learning')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
@@ -410,21 +482,8 @@ export default function Reports() {
               </button>
 
               <button
-                onClick={() => setActiveTab('overview')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === 'overview'
-                    ? 'bg-primary-600 text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <TrendingUp className="w-4 h-4" />
-                <span>概览大盘</span>
-                <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded">待开放</span>
-              </button>
-
-              <button
                 onClick={() => setActiveTab('financial')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                   activeTab === 'financial'
                     ? 'bg-primary-600 text-white shadow-sm'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -437,7 +496,7 @@ export default function Reports() {
 
               <button
                 onClick={() => setActiveTab('teaching')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                   activeTab === 'teaching'
                     ? 'bg-primary-600 text-white shadow-sm'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -449,9 +508,33 @@ export default function Reports() {
               </button>
             </div>
 
-            <div className="hidden md:flex items-center gap-2 text-xs text-gray-400">
-              <Info className="w-3.5 h-3.5" />
-              <span>阶段 1 口径执行中</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCaliberModal(true)}
+                className="flex items-center gap-1.5 text-xs text-primary-700 border-primary-200 hover:bg-primary-50"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-primary-600" />
+                <span>口径说明</span>
+              </Button>
+
+              {activeTab !== 'overview' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportCsv}
+                  disabled={exporting}
+                  className="flex items-center gap-1.5 text-xs text-gray-700 hover:bg-gray-50 border-gray-300"
+                >
+                  <Download className={`w-3.5 h-3.5 ${exporting ? 'animate-bounce text-primary-600' : 'text-gray-500'}`} />
+                  <span>
+                    {exporting
+                      ? '导出中...'
+                      : `导出${activeTab === 'learning' ? '预警名单' : activeTab === 'financial' ? '财务明细' : '教学负荷'} CSV`}
+                  </span>
+                </Button>
+              )}
             </div>
           </div>
 
@@ -529,26 +612,359 @@ export default function Reports() {
         </CardContent>
       </Card>
 
-      {/* ─── 占位 Tab (概览) ─── */}
+      {/* ─── 阶段 D：概览大盘核心内容 ─── */}
       {activeTab === 'overview' && (
-        <Card className="border-dashed border-2 border-gray-200 bg-gray-50/50">
-          <CardContent className="py-16 text-center space-y-4">
-            <div className="w-16 h-16 bg-primary-50 text-primary-500 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
-              <TrendingUp className="w-8 h-8" />
+        <div className="space-y-6">
+          {/* 加载中与错误提示 */}
+          {overviewLoading && (
+            <div className="py-16 text-center text-gray-500 space-y-2">
+              <RefreshCw className="w-8 h-8 animate-spin mx-auto text-primary-500" />
+              <p className="text-sm">正在加载全站运营与经营概览数据...</p>
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-800">
-                概览大盘（阶段 D 交付）
-              </h3>
-              <p className="text-sm text-gray-500 max-w-md mx-auto mt-1">
-                按照数据报表中心规划执行卡，当前已完成【阶段 A：学习分析】、【阶段 B：财务经营】与【阶段 C：教学交付】。概览大盘将在阶段 D 汇聚全部核心指标。
-              </p>
+          )}
+
+          {overviewError && (
+            <Card className="border-red-200 bg-red-50 text-red-800">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
+                  <span className="text-sm">{overviewError}</span>
+                </div>
+                <Button variant="outline" size="sm" onClick={fetchOverview}>重试</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {!overviewLoading && !overviewError && overviewData && (
+            <div className="space-y-6">
+              {/* 1. 现金流看板 */}
+              <Card className="border-gray-200 bg-white shadow-sm overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-emerald-50/60 to-white border-b border-gray-100 py-4 px-5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-emerald-100/80 text-emerald-700 rounded-lg">
+                        <Coins className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-gray-900">现金流看板</h2>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          期间现金充值实收、赠送课时、退费课时调整与外教课酬支出
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50">
+                      收付实现口径
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* 现金收款总额 */}
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500">期间收款总额</span>
+                        <Badge variant="success" className="text-[10px] px-1.5 py-0">实收非gift</Badge>
+                      </div>
+                      <div className="text-2xl font-black text-gray-900">
+                        ¥{Number(overviewData.cash_flow?.cash_income || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        共 {overviewData.cash_flow?.cash_count || 0} 笔有效现金收款
+                      </p>
+                    </div>
+
+                    {/* 赠送课时 */}
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500">赠送课时 (gift)</span>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">不计现金收入</Badge>
+                      </div>
+                      <div className="text-2xl font-black text-indigo-600">
+                        {overviewData.cash_flow?.gift?.hours || 0} <span className="text-sm font-normal text-gray-500">课时</span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        共 {overviewData.cash_flow?.gift?.count || 0} 笔活动赠送，摊薄单价
+                      </p>
+                    </div>
+
+                    {/* 课时调整与退费估算 */}
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500">课时调整流水 (D5)</span>
+                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-medium">估算</span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-bold text-emerald-600">+{overviewData.cash_flow?.hour_adjustments?.positive_hours || 0}h</span>
+                        <span className="text-xs text-gray-400">/</span>
+                        <span className="text-sm font-bold text-red-600">-{overviewData.cash_flow?.hour_adjustments?.negative_hours || 0}h</span>
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        退款估算: <span className="font-semibold text-gray-900">¥{Number(overviewData.cash_flow?.hour_adjustments?.negative_estimated_amount || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+
+                    {/* 教师结算 (仅 super_admin) */}
+                    {overviewData.cash_flow?.teacher_payments ? (
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-500">教师结算已付/待付</span>
+                          {overviewData.cash_flow.teacher_payments.fx_missing ? (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">汇率未设置</span>
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded">PHP折算</span>
+                          )}
+                        </div>
+                        {overviewData.cash_flow.teacher_payments.fx_missing ? (
+                          <div className="text-sm font-bold text-amber-600 py-1">
+                            汇率未设置（成本未折算）
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="text-lg font-black text-gray-900">
+                              ₱{Number(overviewData.cash_flow.teacher_payments.total_php || 0).toLocaleString()}
+                              <span className="text-xs font-normal text-gray-500 ml-1">
+                                ≈ ¥{Number(overviewData.cash_flow.teacher_payments.total_cny || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-gray-500 flex items-center justify-between mt-1">
+                              <span>已付: ₱{overviewData.cash_flow.teacher_payments.paid_php}</span>
+                              <span>待付: ₱{overviewData.cash_flow.teacher_payments.pending_php}</span>
+                            </div>
+                          </div>
+                        )}
+                        <p className="text-[11px] text-gray-400">
+                          汇率: {overviewData.cash_flow.teacher_payments.rate ?? '未设'} ({overviewData.cash_flow.teacher_payments.rate_month || '无'})
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2 flex flex-col justify-center">
+                        <span className="text-xs font-medium text-gray-400">教师结算与成本</span>
+                        <p className="text-xs text-gray-400">仅总部超管可见（机构端已隔离）</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 现金流注脚 */}
+                  {overviewData.cash_flow?.hour_adjustments?.note && (
+                    <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-400 flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      <span>{overviewData.cash_flow.hour_adjustments.note}</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 2. 损益大盘 (仅 super_admin 存在 profit_and_loss 时展示) */}
+              {overviewData.profit_and_loss && (
+                <Card className="border-gray-200 bg-white shadow-sm overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-blue-50/60 to-white border-b border-gray-100 py-4 px-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-blue-100/80 text-blue-700 rounded-lg">
+                          <DollarSign className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-base font-bold text-gray-900">损益核算大盘</h2>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            消课收入估算、教师成本 CNY 折算与全站综合毛利
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="text-xs text-blue-700 border-blue-200 bg-blue-50">
+                        权责发生估算口径
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {/* 消课收入估算 */}
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-500">直营消课收入估算</span>
+                          <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-medium">估算</span>
+                        </div>
+                        <div className="text-2xl font-black text-gray-900">
+                          ¥{Number(overviewData.profit_and_loss.consumption_revenue || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          按学员混合单价现算（课时含0.66系数）
+                        </p>
+                      </div>
+
+                      {/* 消课课时与无单价课时 */}
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-500">期间消课课时</span>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">classes实耗</Badge>
+                        </div>
+                        <div className="text-2xl font-black text-gray-900">
+                          {overviewData.profit_and_loss.consumption_hours || 0} <span className="text-sm font-normal text-gray-500">课时</span>
+                        </div>
+                        <p className="text-xs text-amber-600">
+                          无单价课时: {overviewData.profit_and_loss.unpriced_hours || 0}h (收入记0不顶替)
+                        </p>
+                      </div>
+
+                      {/* 教师成本 CNY */}
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-500">教师成本 (CNY)</span>
+                          {overviewData.profit_and_loss.fx_missing ? (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">汇率未设置</span>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">月度汇率折算</Badge>
+                          )}
+                        </div>
+                        {overviewData.profit_and_loss.fx_missing ? (
+                          <div className="text-lg font-bold text-amber-600 py-1">汇率未设置</div>
+                        ) : (
+                          <div className="text-2xl font-black text-red-600">
+                            ¥{Number(overviewData.profit_and_loss.teacher_cost_cny || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          {overviewData.profit_and_loss.fx_missing 
+                            ? '需维护汇率后方能计算成本' 
+                            : `锁定汇率: ${overviewData.profit_and_loss.rate} (${overviewData.profit_and_loss.rate_month}${overviewData.profit_and_loss.rate_is_fallback ? ' 回退' : ''})`}
+                        </p>
+                      </div>
+
+                      {/* 全站毛利 */}
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-500">全站综合毛利</span>
+                          <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-medium">估算</span>
+                        </div>
+                        {overviewData.profit_and_loss.fx_missing || overviewData.profit_and_loss.overall_gross_profit_cny === null ? (
+                          <div className="text-lg font-bold text-amber-600 py-1">汇率未设置</div>
+                        ) : (
+                          <div className={`text-2xl font-black ${overviewData.profit_and_loss.overall_gross_profit_cny >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            ¥{Number(overviewData.profit_and_loss.overall_gross_profit_cny).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          直营消课收入 + 机构结算应收 - 教师成本
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* 3. 运营大盘 */}
+              <Card className="border-gray-200 bg-white shadow-sm overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-purple-50/60 to-white border-b border-gray-100 py-4 px-5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-purple-100/80 text-purple-700 rounded-lg">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-gray-900">教学运营大盘</h2>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          学员活跃度、课时存量、流失风险预警与交付履约质量
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-xs text-purple-700 border-purple-200 bg-purple-50">
+                      业务监控口径
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* 活跃学员与剩余课时 */}
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500">活跃在读学员</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">active状态</Badge>
+                      </div>
+                      <div className="text-2xl font-black text-gray-900">
+                        {overviewData.operations?.active_students_count || 0} <span className="text-sm font-normal text-gray-500">人</span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        在读学员总剩余课时: <span className="font-semibold text-gray-800">{overviewData.operations?.total_remaining_hours || 0}h</span>
+                      </p>
+                    </div>
+
+                    {/* 流失预警人数 */}
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500">流失预警人数</span>
+                        <Badge variant="warning" className="text-[10px] px-1.5 py-0">≥14天未上课</Badge>
+                      </div>
+                      <div className="text-2xl font-black text-amber-600">
+                        {overviewData.operations?.risk_students?.total_risk_count || 0} <span className="text-sm font-normal text-gray-500">人</span>
+                      </div>
+                      <div className="text-xs text-gray-500 flex items-center justify-between">
+                        <span className="text-red-600 font-medium">紧迫(≥30天): {overviewData.operations?.risk_students?.urgent_count || 0}人</span>
+                        <span className="text-amber-700">关注(14-29天): {overviewData.operations?.risk_students?.warning_count || 0}人</span>
+                      </div>
+                    </div>
+
+                    {/* 期间试听人数 */}
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500">期间试听人次</span>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">is_trial=1计数</Badge>
+                      </div>
+                      <div className="text-2xl font-black text-indigo-600">
+                        {overviewData.operations?.trial_students_count || 0} <span className="text-sm font-normal text-gray-500">人次</span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        试听课不消耗正课课时，纳入转化观察期
+                      </p>
+                    </div>
+
+                    {/* 期间完课率 */}
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500">期间完课率</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">阶段C写死口径</Badge>
+                      </div>
+                      <div className="text-2xl font-black text-emerald-600">
+                        {((overviewData.operations?.completion_rate || 0) * 100).toFixed(1)}%
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        分母含正课 completed、absent、cancelled、scheduled
+                      </p>
+                    </div>
+
+                    {/* 反馈填报率 */}
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500">教师反馈填报率</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">完课课程</Badge>
+                      </div>
+                      <div className="text-2xl font-black text-blue-600">
+                        {((overviewData.operations?.feedback_rate || 0) * 100).toFixed(1)}%
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        外教评语或词汇表有效填写占比
+                      </p>
+                    </div>
+
+                    {/* 快捷跳转指引 */}
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2 flex flex-col justify-center">
+                      <span className="text-xs font-medium text-gray-500">深入专项报表分析</span>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={() => setActiveTab('learning')} className="text-xs py-1 px-2.5">
+                          学习分析
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setActiveTab('financial')} className="text-xs py-1 px-2.5">
+                          财务经营
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setActiveTab('teaching')} className="text-xs py-1 px-2.5">
+                          教学交付
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setActiveTab('teaching')}>
-              切换至教学交付报表
-            </Button>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       )}
 
       {/* ─── 阶段 C：教学交付报表核心内容 ─── */}
@@ -2416,6 +2832,93 @@ export default function Reports() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+      {/* ─── 口径说明弹层 (D2–D6 人话版注脚) ─── */}
+      {showCaliberModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between border-b border-gray-100 p-5 shrink-0">
+              <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                <HelpCircle className="w-5 h-5 text-primary-500" />
+                数据报表中心 · 核心口径说明
+              </h3>
+              <button
+                onClick={() => setShowCaliberModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4 text-sm text-gray-600 leading-relaxed">
+              <div className="p-4 bg-gray-50 rounded-xl space-y-1.5 border border-gray-100">
+                <h4 className="font-bold text-gray-900 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-primary-500"></span>
+                  D2 消课收入：学员混合单价估算
+                </h4>
+                <p className="text-xs text-gray-600">
+                  由于已弃用课包概念，消课单价按学员累计实付总额（非 gift）除以累计总课时（students.total_hours）计算混合单价；已完课课时 classes.hours 已含 25 分钟课 0.66 系数，禁止再次折算。
+                </p>
+                <p className="text-xs text-amber-700 font-medium">
+                  诚实披露规则：无单价学员（total_hours=0 或仅有赠送课时）的消课单独汇总为 unpriced_hours 披露，收入记 0，严禁用全站均价顶替；试听课 hours=0 不产生消课收入；机构学员按机构结算单应收核算，不走直营消课单价。
+                </p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-xl space-y-1.5 border border-gray-100">
+                <h4 className="font-bold text-gray-900 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                  D3 赠送课时：摊薄单价，不计现金
+                </h4>
+                <p className="text-xs text-gray-600">
+                  付款方式标记为 gift 的记录金额恒为 0，不计入任何现金收入合计指标；其赠送课时进入学员总课时分母，自然摊薄后续消课的混合单价。收款看板中单独陈列 gift 笔数与课时数。
+                </p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-xl space-y-1.5 border border-gray-100">
+                <h4 className="font-bold text-gray-900 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  D4 教师课酬：PHP 按月锁定汇率折算
+                </h4>
+                <p className="text-xs text-gray-600">
+                  教师结算单原始金额为菲律宾比索（PHP），按结算期末月（period_end）在 report_fx_rates 表中维护的锁定汇率折算为 CNY。某月汇率一旦维护后不再随市场变动，确保历史报表稳定。
+                </p>
+                <p className="text-xs text-amber-700 font-medium">
+                  汇率回退与缺失硬门：当月无汇率时回退至最近历史月（标 rate_is_fallback: true）；若历史一条汇率都没有，成本与毛利字段直接返回 null 并标注 fx_missing: true，界面醒目提示「汇率未设置」，严禁用 0 顶替。
+                </p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-xl space-y-1.5 border border-gray-100">
+                <h4 className="font-bold text-gray-900 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  D5 课时调整与退款：按发生期冲减，估算披露
+                </h4>
+                <p className="text-xs text-gray-600">
+                  系统内退费通过 hour_changes 的调减流水（type=&apos;adjust&apos;, amount&lt;0）体现。负向调整估算金额为 |调减课时| × 学员当前混合单价。
+                </p>
+                <p className="text-xs text-gray-800 font-semibold bg-white p-2 rounded border border-gray-200">
+                  注脚原文：「退款按发生期计入；系统未记录实际退款金额，此处为按混合单价的估算。」
+                </p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-xl space-y-1.5 border border-gray-100">
+                <h4 className="font-bold text-gray-900 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                  D6 试听转化窗口与出勤结构分母
+                </h4>
+                <p className="text-xs text-gray-600">
+                  <strong>试听转化 30 天窗口</strong>：以学员首节试听课（is_trial=1）所在日期为基准，30 天内（含第 30 天）产生首笔有效正向充值（非 gift 且 hours &gt; 0）判定为转化。
+                </p>
+                <p className="text-xs text-gray-600">
+                  <strong>出勤结构分母定义（阶段 C 写死口径）</strong>：出勤统计分母为期间内排课日期落入区间的全部正课节数（COUNT(*)，含 completed、absent、cancelled 以及 scheduled 待上课）；试听课（is_trial=1）单独计数，不计入正课出勤分母。
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-gray-100 p-4 bg-gray-50 flex justify-end shrink-0">
+              <Button onClick={() => setShowCaliberModal(false)}>
+                我知道了
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
