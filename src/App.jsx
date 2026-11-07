@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import PasswordProtect from './components/PasswordProtect';
-import { LayoutDashboard, Users, CreditCard, Settings, Calendar, GraduationCap, CalendarDays, Building2, Receipt, Package, Book, Menu, X, Inbox } from 'lucide-react';
+import { LayoutDashboard, BarChart2, Users, CreditCard, Settings, Calendar, GraduationCap, CalendarDays, Building2, Receipt, Package, Book, Menu, X, Inbox } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
@@ -21,9 +21,13 @@ import OrgPortal from './pages/OrgPortal';
 import OrgSettlements from './pages/OrgSettlements';
 import OrgPackages from './pages/OrgPackages';
 import Textbooks from './pages/Textbooks';
+import Reports from './pages/Reports';
+import { getUserRole } from './store';
 
 function Sidebar({ isOpen, setIsOpen }) {
   const location = useLocation();
+  const userRole = getUserRole() || 'super_admin';
+  const canViewReports = userRole === 'super_admin' || userRole === 'org_admin';
 
   // Close sidebar on route change on mobile
   useEffect(() => {
@@ -67,6 +71,11 @@ function Sidebar({ isOpen, setIsOpen }) {
           <NavLink to="/" end className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:outline-none ${isActive ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`}>
             <LayoutDashboard size={20} aria-hidden="true" /><span>仪表盘</span>
           </NavLink>
+          {canViewReports && (
+            <NavLink to="/reports" className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:outline-none ${isActive ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`}>
+              <BarChart2 size={20} aria-hidden="true" /><span>数据报表</span>
+            </NavLink>
+          )}
           <NavLink to="/leads" className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:outline-none ${isActive ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`}>
             <Inbox size={20} aria-hidden="true" /><span>预约线索</span>
           </NavLink>
@@ -163,6 +172,7 @@ function App() {
               <MainLayout>
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
+                  <Route path="/reports" element={<Reports />} />
                   <Route path="/leads" element={<Leads />} />
                   <Route path="/students" element={<Students />} />
                   <Route path="/students/:id" element={<StudentDetail />} />

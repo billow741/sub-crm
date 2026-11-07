@@ -590,3 +590,97 @@ export const leadOps = {
   }
 };
 
+// ============================================
+// 数据报表中心相关操作 (Reports)
+// ============================================
+export const reportOps = {
+  getLearningSummary: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/learning/summary?${query}` : '/reports/learning/summary';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  getRiskStudents: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/learning/risk-students?${query}` : '/reports/learning/risk-students';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  getFinancialSummary: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/financial/summary?${query}` : '/reports/financial/summary';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  getFinancialTrend: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/financial/trend?${query}` : '/reports/financial/trend';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  getFxRates: async () => {
+    const result = await request('/reports/fx-rates');
+    return result.data;
+  },
+  updateFxRate: async (month, data) => {
+    const result = await request(`/reports/fx-rates/${month}`, {
+      method: 'PUT',
+      body: data
+    });
+    return result.data;
+  },
+  getTeachingSummary: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/teaching/summary?${query}` : '/reports/teaching/summary';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  getTeachingWorkload: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/teaching/workload?${query}` : '/reports/teaching/workload';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  getOverview: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const endpoint = query ? `/reports/overview?${query}` : '/reports/overview';
+    const result = await request(endpoint);
+    return result.data;
+  },
+  exportReportCsv: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const url = `${API_BASE_URL}/reports/export?${query}`;
+    const headers = {
+      'X-API-Key': API_KEY,
+      'X-User-Role': _userRole,
+      ...(_selectedOrgId ? { 'X-Organization-Id': _selectedOrgId } : {}),
+    };
+    if (_orgToken) {
+      headers['Authorization'] = `Bearer ${_orgToken}`;
+    }
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      let errMsg = `导出失败 (HTTP ${res.status})`;
+      try {
+        const errJson = await res.json();
+        errMsg = errJson.error?.message || errMsg;
+      } catch { /* ignore non-json error */ }
+      throw new Error(errMsg);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    let filename = `reports-${params.type || 'data'}.csv`;
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    if (match && match[1]) {
+      filename = match[1];
+    }
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(downloadUrl);
+  }
+};
