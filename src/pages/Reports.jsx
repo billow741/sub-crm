@@ -25,7 +25,11 @@ import {
   X,
   ArrowUpDown,
   Download,
-  HelpCircle
+  HelpCircle,
+  CreditCard,
+  Edit2,
+  Plus,
+  Receipt
 } from 'lucide-react';
 import { reportOps, organizationOps, getUserRole } from '../store';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
