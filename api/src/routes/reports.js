@@ -893,7 +893,7 @@ async function getRechargeSummary(DB, fromDate, toDate, effectiveOrgId = null) {
 }
 
 /**
- * 阶段 D 提取通用辅助函数：消课收入核算（已含 25 分钟课 0.66 系数，禁止按 duration 二次折算）
+ * 阶段 D 提取通用辅助函数：消课收入核算 — 个人学员课（不按 organization 过滤；organization 仅作分组明细）（已含 25 分钟课 0.66 系数，禁止按 duration 二次折算）
  */
 async function getConsumptionRevenueSummary(DB, fromDate, toDate, studentPriceMap) {
   const completedClassesQuery = `
@@ -908,25 +908,72 @@ async function getConsumptionRevenueSummary(DB, fromDate, toDate, studentPriceMa
     FROM classes c
     WHERE c.status = 'completed'
       AND c.date >= ? AND c.date <= ?
-      AND (c.organization_id = 1 OR c.organization_id IS NULL)
   `;
   const completedClassesRes = await DB.prepare(completedClassesQuery).bind(fromDate, toDate).all();
   const completedClasses = completedClassesRes.results || [];
 
+  const orgsRes = await DB.prepare('SELECT id, name FROM organizations').all();
+  const orgMap = new Map();
+  for (const org of (orgsRes.results || [])) {
+    orgMap.set(org.id, org.name);
+  }
+
   let consumptionRevenue = 0;
   let pricedHours = 0;
   let unpricedHours = 0;
+  const orgGroupMap = new Map();
 
   for (const cls of completedClasses) {
     const h = Number(cls.hours || 0);
     const stu = studentPriceMap.get(cls.student_id);
-    if (stu && stu.has_price) {
-      consumptionRevenue += h * stu.blended_price;
+    const hasPrice = Boolean(stu && stu.has_price);
+    const rev = hasPrice ? (h * stu.blended_price) : 0;
+
+    if (hasPrice) {
+      consumptionRevenue += rev;
       pricedHours += h;
     } else {
       unpricedHours += h;
     }
+
+    const orgId = cls.organization_id ?? null;
+    let grp = orgGroupMap.get(orgId);
+    if (!grp) {
+      grp = {
+        organization_id: orgId,
+        classes_count: 0,
+        total_hours: 0,
+        priced_hours: 0,
+        unpriced_hours: 0,
+        amount: 0
+      };
+      orgGroupMap.set(orgId, grp);
+    }
+    grp.classes_count += 1;
+    grp.total_hours += h;
+    if (hasPrice) {
+      grp.amount += rev;
+      grp.priced_hours += h;
+    } else {
+      grp.unpriced_hours += h;
+    }
   }
+
+  const byOrganization = Array.from(orgGroupMap.values()).map(grp => {
+    const orgId = grp.organization_id;
+    const orgName = orgId === null ? '未分组' : (orgMap.get(orgId) || `机构 #${orgId}`);
+    return {
+      organization_id: orgId,
+      organization_name: orgName,
+      classes_count: grp.classes_count,
+      total_hours: Math.round(grp.total_hours * 100) / 100,
+      priced_hours: Math.round(grp.priced_hours * 100) / 100,
+      unpriced_hours: Math.round(grp.unpriced_hours * 100) / 100,
+      amount: Math.round(grp.amount * 100) / 100
+    };
+  });
+
+  byOrganization.sort((a, b) => b.amount - a.amount);
 
   return {
     amount: Math.round(consumptionRevenue * 100) / 100,
@@ -934,6 +981,7 @@ async function getConsumptionRevenueSummary(DB, fromDate, toDate, studentPriceMa
     unpriced_hours: Math.round(unpricedHours * 100) / 100,
     total_hours: Math.round((pricedHours + unpricedHours) * 100) / 100,
     classes_count: completedClasses.length,
+    by_organization: byOrganization,
     estimated: true
   };
 }
@@ -1365,19 +1413,19 @@ reports.get('/financial/summary', async (c) => {
     // 1. 学员混合单价映射
     const studentPriceMap = await getStudentBlendedPriceMap(DB);
 
-    // 2. 消课收入（期间已完成直营课，classes.hours 已含系数，禁止按 duration 二次折算）
+    // 2. 消课收入（个人学员课（不按 organization 过滤；organization 仅作分组明细），classes.hours 已含系数，禁止按 duration 二次折算）
     const consumptionRevenueData = await getConsumptionRevenueSummary(DB, fromDate, toDate, studentPriceMap);
 
     // 3. 收款汇总（期间 payments 按 payment_method 分组；gift 单列且不计入现金收入合计）
     const rechargeData = await getRechargeSummary(DB, fromDate, toDate, effectiveOrgId);
 
-    // 4. 课时负债（时点值：直营活跃学员剩余课时 * blended_price 之和；机构侧单独给 org_packages 未付清口径）
+    // 4. 课时负债（时点值：全部活跃个人学员（不按 organization 过滤）剩余课时 * blended_price 之和；机构侧单独给 org_packages 未付清口径）
     let directLiability = 0;
     let directPricedRemHours = 0;
     let directUnpricedRemHours = 0;
 
     for (const stu of studentPriceMap.values()) {
-      if (stu.status === 'active' && (stu.organization_id === 1 || !stu.organization_id)) {
+      if (stu.status === 'active') {
         const rem = stu.remaining_hours || 0;
         if (rem > 0) {
           if (stu.has_price) {
@@ -1413,7 +1461,7 @@ reports.get('/financial/summary', async (c) => {
       overallGrossProfit = Math.round((consumptionRevenueData.amount + orgSettlementsData.amount_due_cny - teacherCostData.amount_cny) * 100) / 100;
     }
 
-    // 直营毛利估算：各教师 classes.hours 的直营/机构构成比例分摊其课酬
+    // 个人学员毛利估算：按各教师个人学员课时占其总课时比例分摊课酬
     let directGrossProfit = null;
     let directTeacherCostCny = null;
 
@@ -1422,7 +1470,7 @@ reports.get('/financial/summary', async (c) => {
         SELECT 
           c.teacher_id,
           SUM(c.hours) as total_hours,
-          SUM(CASE WHEN c.organization_id = 1 OR c.organization_id IS NULL THEN c.hours ELSE 0 END) as direct_hours
+          SUM(CASE WHEN c.student_id IN (SELECT student_id FROM payments WHERE payment_method != 'gift' OR payment_method IS NULL) THEN c.hours ELSE 0 END) as direct_hours
         FROM classes c
         WHERE c.status = 'completed'
           AND c.date >= ? AND c.date <= ?
@@ -1566,13 +1614,12 @@ reports.get('/financial/trend', async (c) => {
       `).bind(m).first();
       const rechargeCny = Math.round(Number(payRes?.total || 0) * 100) / 100;
 
-      // 2. 当月直营消课收入估算 (classes.hours * blended_price)
+      // 2. 当月消课收入估算（个人学员） (classes.hours * blended_price)
       const clsRes = await DB.prepare(`
         SELECT student_id, hours
         FROM classes
         WHERE status = 'completed'
           AND strftime('%Y-%m', date) = ?
-          AND (organization_id = 1 OR organization_id IS NULL)
       `).bind(m).all();
       let consumptionCny = 0;
       for (const cl of (clsRes.results || [])) {
