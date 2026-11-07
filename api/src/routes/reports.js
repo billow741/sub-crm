@@ -831,6 +831,376 @@ async function getOrgPackagesOverview(DB, effectiveOrgId = null) {
 }
 
 /**
+ * 阶段 D 提取通用辅助函数：收款汇总（期间 payments 按 payment_method 分组；gift 单列且不计入现金收入合计）
+ */
+async function getRechargeSummary(DB, fromDate, toDate, effectiveOrgId = null) {
+  let payQuery = `
+    SELECT 
+      COALESCE(payment_method, 'other') as method,
+      COUNT(*) as count,
+      SUM(amount) as amount,
+      SUM(COALESCE(hours, 0)) as hours
+    FROM payments
+    WHERE date >= ? AND date <= ?
+  `;
+  const payParams = [fromDate, toDate];
+  if (effectiveOrgId) {
+    payQuery += ' AND organization_id = ?';
+    payParams.push(effectiveOrgId);
+  }
+  payQuery += ' GROUP BY method';
+
+  const paymentsRes = await DB.prepare(payQuery).bind(...payParams).all();
+  const payRows = paymentsRes.results || [];
+
+  let totalCashIncome = 0;
+  let totalCashCount = 0;
+  let giftCount = 0;
+  let giftHours = 0;
+  const byMethodRaw = [];
+
+  for (const r of payRows) {
+    if (r.method === 'gift') {
+      giftCount += r.count;
+      giftHours += (r.hours || 0);
+    } else {
+      totalCashIncome += (r.amount || 0);
+      totalCashCount += r.count;
+      byMethodRaw.push({
+        method: r.method,
+        amount: Math.round((r.amount || 0) * 100) / 100,
+        count: r.count,
+        hours: Math.round((r.hours || 0) * 100) / 100
+      });
+    }
+  }
+
+  const byMethod = byMethodRaw.map(m => ({
+    ...m,
+    percentage: totalCashIncome > 0 ? Math.round((m.amount / totalCashIncome) * 1000) / 10 : 0
+  }));
+
+  return {
+    cash_income: Math.round(totalCashIncome * 100) / 100,
+    cash_count: totalCashCount,
+    gift: {
+      count: giftCount,
+      hours: Math.round(giftHours * 100) / 100,
+      amount: 0
+    },
+    by_method: byMethod
+  };
+}
+
+/**
+ * 阶段 D 提取通用辅助函数：消课收入核算（已含 25 分钟课 0.66 系数，禁止按 duration 二次折算）
+ */
+async function getConsumptionRevenueSummary(DB, fromDate, toDate, studentPriceMap) {
+  const completedClassesQuery = `
+    SELECT 
+      c.id,
+      c.student_id,
+      c.teacher_id,
+      c.teacher,
+      c.hours,
+      c.date,
+      c.organization_id
+    FROM classes c
+    WHERE c.status = 'completed'
+      AND c.date >= ? AND c.date <= ?
+      AND (c.organization_id = 1 OR c.organization_id IS NULL)
+  `;
+  const completedClassesRes = await DB.prepare(completedClassesQuery).bind(fromDate, toDate).all();
+  const completedClasses = completedClassesRes.results || [];
+
+  let consumptionRevenue = 0;
+  let pricedHours = 0;
+  let unpricedHours = 0;
+
+  for (const cls of completedClasses) {
+    const h = Number(cls.hours || 0);
+    const stu = studentPriceMap.get(cls.student_id);
+    if (stu && stu.has_price) {
+      consumptionRevenue += h * stu.blended_price;
+      pricedHours += h;
+    } else {
+      unpricedHours += h;
+    }
+  }
+
+  return {
+    amount: Math.round(consumptionRevenue * 100) / 100,
+    priced_hours: Math.round(pricedHours * 100) / 100,
+    unpriced_hours: Math.round(unpricedHours * 100) / 100,
+    total_hours: Math.round((pricedHours + unpricedHours) * 100) / 100,
+    classes_count: completedClasses.length,
+    estimated: true
+  };
+}
+
+/**
+ * 阶段 D 提取通用辅助函数：教师成本折算（以 period_end 所在月汇率折算）
+ */
+async function getTeacherCostSummary(DB, fromDate, toDate, targetMonth) {
+  const tpQuery = `
+    SELECT 
+      id,
+      teacher_id,
+      period_start,
+      period_end,
+      total_amount,
+      status
+    FROM teacher_payments
+    WHERE period_end >= ? AND period_end <= ?
+      AND status != 'cancelled'
+  `;
+  const tpRes = await DB.prepare(tpQuery).bind(fromDate, toDate).all();
+  const tpList = tpRes.results || [];
+
+  let totalPhp = 0;
+  let paidPhp = 0;
+  let pendingPhp = 0;
+
+  for (const tp of tpList) {
+    const amt = Number(tp.total_amount || 0);
+    totalPhp += amt;
+    if (tp.status === 'paid') {
+      paidPhp += amt;
+    } else if (tp.status === 'pending') {
+      pendingPhp += amt;
+    }
+  }
+
+  const fxInfo = await getFxRateForMonth(DB, targetMonth);
+
+  let amountCny = null;
+  let paidCny = null;
+  let pendingCny = null;
+
+  if (!fxInfo.fx_missing && fxInfo.rate) {
+    let totalCnyCalc = 0;
+    let paidCnyCalc = 0;
+    let pendingCnyCalc = 0;
+
+    for (const tp of tpList) {
+      const pMonth = (tp.period_end || '').slice(0, 7) || targetMonth;
+      const pFx = await getFxRateForMonth(DB, pMonth);
+      const effectiveRate = pFx.fx_missing ? fxInfo.rate : pFx.rate;
+      const amtPhp = Number(tp.total_amount || 0);
+      const cnyVal = amtPhp * effectiveRate;
+      totalCnyCalc += cnyVal;
+      if (tp.status === 'paid') {
+        paidCnyCalc += cnyVal;
+      } else if (tp.status === 'pending') {
+        pendingCnyCalc += cnyVal;
+      }
+    }
+
+    amountCny = Math.round(totalCnyCalc * 100) / 100;
+    paidCny = Math.round(paidCnyCalc * 100) / 100;
+    pendingCny = Math.round(pendingCnyCalc * 100) / 100;
+  }
+
+  return {
+    amount_php: Math.round(totalPhp * 100) / 100,
+    paid_php: Math.round(paidPhp * 100) / 100,
+    pending_php: Math.round(pendingPhp * 100) / 100,
+    rate: fxInfo.rate,
+    rate_month: fxInfo.rate_month,
+    rate_is_fallback: fxInfo.rate_is_fallback,
+    amount_cny: amountCny,
+    paid_cny: paidCny,
+    pending_cny: pendingCny,
+    fx_missing: fxInfo.fx_missing,
+    payments_count: tpList.length,
+    tpList,
+    fxInfo
+  };
+}
+
+/**
+ * 阶段 D 提取通用辅助函数：课时调整统计（D5 口径）
+ */
+async function getHourAdjustmentsSummary(DB, fromDate, toDate, effectiveOrgId = null, studentPriceMap) {
+  let hcQuery = `
+    SELECT 
+      hc.id,
+      hc.student_id,
+      hc.amount,
+      hc.created_at,
+      s.organization_id
+    FROM hour_changes hc
+    JOIN students s ON hc.student_id = s.id
+    WHERE hc.type = 'adjust'
+      AND date(hc.created_at) >= ? AND date(hc.created_at) <= ?
+  `;
+  const hcParams = [fromDate, toDate];
+  if (effectiveOrgId) {
+    hcQuery += ' AND s.organization_id = ?';
+    hcParams.push(effectiveOrgId);
+  }
+  const hcRes = await DB.prepare(hcQuery).bind(...hcParams).all();
+  const hcList = hcRes.results || [];
+
+  let posHours = 0;
+  let posCount = 0;
+  let negHours = 0;
+  let negCount = 0;
+  let negEstAmount = 0;
+  let negUnpricedHours = 0;
+
+  for (const hc of hcList) {
+    const amt = Number(hc.amount || 0);
+    if (amt > 0) {
+      posHours += amt;
+      posCount++;
+    } else if (amt < 0) {
+      const absVal = Math.abs(amt);
+      negHours += absVal;
+      negCount++;
+      const stu = studentPriceMap.get(hc.student_id);
+      if (stu && stu.has_price) {
+        negEstAmount += absVal * stu.blended_price;
+      } else {
+        negUnpricedHours += absVal;
+      }
+    }
+  }
+
+  return {
+    positive_hours: Math.round(posHours * 100) / 100,
+    positive_count: posCount,
+    negative_hours: Math.round(negHours * 100) / 100,
+    negative_count: negCount,
+    negative_estimated_amount: Math.round(negEstAmount * 100) / 100,
+    negative_unpriced_hours: Math.round(negUnpricedHours * 100) / 100,
+    note: '退款按发生期计入；系统未记录实际退款金额，此处为按混合单价的估算。'
+  };
+}
+
+/**
+ * 阶段 D 提取通用辅助函数：运营组核心指标
+ */
+async function getOperationsSummary(DB, fromDate, toDate, effectiveOrgId = null) {
+  const orgFilter = effectiveOrgId ? 'AND s.organization_id = ?' : '';
+  const orgParams = effectiveOrgId ? [effectiveOrgId] : [];
+
+  // 1. 活跃学员数与总剩余课时
+  const stuRes = await DB.prepare(`
+    SELECT 
+      COUNT(*) as active_students_count,
+      COALESCE(SUM(s.total_hours - s.used_hours), 0) as total_remaining_hours
+    FROM students s
+    WHERE s.status = 'active' ${orgFilter}
+  `).bind(...orgParams).first();
+
+  const activeStudentsCount = Number(stuRes?.active_students_count || 0);
+  const totalRemainingHours = Math.round(Number(stuRes?.total_remaining_hours || 0) * 100) / 100;
+
+  // 2. 流失预警人数（紧迫/关注分开，口径同 learning/risk-students）
+  const orgClause = effectiveOrgId ? 'AND s.organization_id = ?' : '';
+  const riskQuery = `
+    WITH student_stats AS (
+      SELECT 
+        s.id,
+        s.created_at,
+        MAX(c.date) as last_class_date
+      FROM students s
+      LEFT JOIN classes c ON c.student_id = s.id AND c.status = 'completed'
+      WHERE s.status = 'active'
+        AND (s.total_hours - s.used_hours) > 0
+        ${orgClause}
+      GROUP BY s.id
+    )
+    SELECT 
+      COUNT(*) as total_risk_students,
+      SUM(CASE 
+            WHEN (last_class_date IS NOT NULL AND julianday(date('now')) - julianday(last_class_date) >= 30)
+              OR (last_class_date IS NULL AND julianday(date('now')) - julianday(date(created_at)) >= 30)
+            THEN 1 ELSE 0 END) as high_risk_count,
+      SUM(CASE 
+            WHEN ((last_class_date IS NOT NULL AND julianday(date('now')) - julianday(last_class_date) >= 14 AND julianday(date('now')) - julianday(last_class_date) < 30)
+              OR (last_class_date IS NULL AND julianday(date('now')) - julianday(date(created_at)) >= 14 AND julianday(date('now')) - julianday(date(created_at)) < 30))
+            THEN 1 ELSE 0 END) as medium_risk_count
+    FROM student_stats
+    WHERE ((last_class_date IS NOT NULL AND julianday(date('now')) - julianday(last_class_date) >= 14)
+       OR (last_class_date IS NULL AND julianday(date('now')) - julianday(date(created_at)) >= 14))
+  `;
+  const riskRes = await DB.prepare(riskQuery).bind(...orgParams).first();
+  const urgentCount = Number(riskRes?.high_risk_count || 0);
+  const warningCount = Number(riskRes?.medium_risk_count || 0);
+  const totalRiskCount = Number(riskRes?.total_risk_students || 0);
+
+  // 3. 期间完课率与反馈填报率 (口径同 teaching/summary)
+  const classOrgFilter = effectiveOrgId ? 'AND organization_id = ?' : '';
+  const classParams = [fromDate, toDate, ...orgParams];
+
+  // 出勤结构 (正课 is_trial = 0)
+  const attRes = await DB.prepare(`
+    SELECT 
+      COUNT(*) as total_classes,
+      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_count
+    FROM classes
+    WHERE date >= ? AND date <= ? AND is_trial = 0
+      ${classOrgFilter}
+  `).bind(...classParams).first();
+
+  const totalClasses = Number(attRes?.total_classes || 0);
+  const completedCount = Number(attRes?.completed_count || 0);
+  const completionRate = totalClasses > 0 ? Math.round((completedCount / totalClasses) * 10000) / 10000 : 0;
+
+  // 反馈填报率 (期间内 completed 课程)
+  const fbRes = await DB.prepare(`
+    SELECT 
+      COUNT(*) as total_completed,
+      SUM(CASE WHEN (fb_teacher_message IS NOT NULL AND TRIM(fb_teacher_message) != '') 
+                 OR (fb_vocab IS NOT NULL AND TRIM(fb_vocab) != '') 
+               THEN 1 ELSE 0 END) as submitted_count
+    FROM classes
+    WHERE date >= ? AND date <= ? AND status = 'completed'
+      ${classOrgFilter}
+  `).bind(...classParams).first();
+
+  const feedbackTotal = Number(fbRes?.total_completed || 0);
+  const feedbackSubmitted = Number(fbRes?.submitted_count || 0);
+  const feedbackRate = feedbackTotal > 0 ? Math.round((feedbackSubmitted / feedbackTotal) * 10000) / 10000 : 0;
+
+  // 期间试听人数 (is_trial = 1 计数)
+  const trialRes = await DB.prepare(`
+    SELECT COUNT(*) as trial_count
+    FROM classes
+    WHERE date >= ? AND date <= ? AND is_trial = 1
+      ${classOrgFilter}
+  `).bind(...classParams).first();
+  const trialStudentsCount = Number(trialRes?.trial_count || 0);
+
+  return {
+    active_students_count: activeStudentsCount,
+    total_remaining_hours: totalRemainingHours,
+    risk_students: {
+      urgent_count: urgentCount,
+      warning_count: warningCount,
+      total_risk_count: totalRiskCount
+    },
+    completion_rate: completionRate,
+    feedback_rate: feedbackRate,
+    trial_students_count: trialStudentsCount
+  };
+}
+
+/**
+ * CSV 单元格转义（RFC 4180 标准）
+ */
+function toCsvCell(val) {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+/**
  * GET /api/v1/reports/fx-rates
  * 汇率列表（月份、rate、来源、更新时间/人）
  * 允许 super_admin 与 org_admin 读取
@@ -920,7 +1290,17 @@ reports.put('/fx-rates/:month', async (c) => {
 
 /**
  * GET /api/v1/reports/financial/summary
- * 财务经营报表总览
+ * 财务经营总览：
+ * 1. 期间收款汇总（按 payment_method 分类；gift 单列且不计入现金收入）
+ * 2. 直营消课收入估算（基于学员混合单价，classes.hours 已含系数，禁止二次折算）
+ * 3. 课时负债（时点值：在读学员剩余课时 * blended_price 之和）
+ * 4. 教师成本（以 period_end 落入期间为准，双币呈现，按锁定月度汇率折算）
+ * 5. 机构结算款项（org_settlements 应收合计）
+ * 6. 全站毛利与直营毛利估算（分摊教师成本）
+ * 7. 课时调整流水统计（hour_changes adjust 正负分开汇总，含负向退费估算）
+ *
+ * 权限控制：
+ * - org_admin 仅返回本机构结算相关字段，教师成本、直营消课收入、毛利等后端直接不下发
  */
 reports.get('/financial/summary', async (c) => {
   const perm = checkPermission(c);
@@ -941,42 +1321,7 @@ reports.get('/financial/summary', async (c) => {
     if (userRole === 'org_admin') {
       const orgSettlementsData = await getOrgSettlementsInPeriod(DB, fromDate, toDate, effectiveOrgId);
       const orgPackagesData = await getOrgPackagesOverview(DB, effectiveOrgId);
-
-      // 本机构期间收款
-      const payRes = await DB.prepare(`
-        SELECT 
-          COALESCE(payment_method, 'other') as method,
-          COUNT(*) as count,
-          SUM(amount) as amount,
-          SUM(COALESCE(hours, 0)) as hours
-        FROM payments
-        WHERE organization_id = ?
-          AND date >= ? AND date <= ?
-        GROUP BY method
-      `).bind(effectiveOrgId, fromDate, toDate).all();
-      const payRows = payRes.results || [];
-
-      let totalCashIncome = 0;
-      let totalCashCount = 0;
-      let giftCount = 0;
-      let giftHours = 0;
-      const byMethod = [];
-
-      for (const row of payRows) {
-        if (row.method === 'gift') {
-          giftCount += row.count;
-          giftHours += (row.hours || 0);
-        } else {
-          totalCashIncome += row.amount;
-          totalCashCount += row.count;
-          byMethod.push({
-            method: row.method,
-            amount: Math.round(row.amount * 100) / 100,
-            count: row.count,
-            hours: Math.round((row.hours || 0) * 100) / 100
-          });
-        }
-      }
+      const rechargeData = await getRechargeSummary(DB, fromDate, toDate, effectiveOrgId);
 
       return c.json(success({
         organization_id: effectiveOrgId,
@@ -1006,16 +1351,7 @@ reports.get('/financial/summary', async (c) => {
           unpaid_remaining_hours: orgPackagesData.unpaid_remaining_hours,
           packages_count: orgPackagesData.packages_count
         },
-        recharge: {
-          cash_income: Math.round(totalCashIncome * 100) / 100,
-          cash_count: totalCashCount,
-          gift: {
-            count: giftCount,
-            hours: Math.round(giftHours * 100) / 100,
-            amount: 0
-          },
-          by_method: byMethod
-        }
+        recharge: rechargeData
       }, {
         organization_id: effectiveOrgId,
         user_role: userRole
@@ -1030,105 +1366,10 @@ reports.get('/financial/summary', async (c) => {
     const studentPriceMap = await getStudentBlendedPriceMap(DB);
 
     // 2. 消课收入（期间已完成直营课，classes.hours 已含系数，禁止按 duration 二次折算）
-    // 依据前置核查结论：classes.organization_id = 1 或 NULL 为直营课；organization_id > 1 为机构课
-    const completedClassesQuery = `
-      SELECT 
-        c.id,
-        c.student_id,
-        c.teacher_id,
-        c.teacher,
-        c.hours,
-        c.date,
-        c.organization_id
-      FROM classes c
-      WHERE c.status = 'completed'
-        AND c.date >= ? AND c.date <= ?
-        AND (c.organization_id = 1 OR c.organization_id IS NULL)
-    `;
-    const completedClassesRes = await DB.prepare(completedClassesQuery).bind(fromDate, toDate).all();
-    const completedClasses = completedClassesRes.results || [];
-
-    let consumptionRevenue = 0;
-    let pricedHours = 0;
-    let unpricedHours = 0;
-
-    for (const cls of completedClasses) {
-      const h = Number(cls.hours || 0);
-      const stu = studentPriceMap.get(cls.student_id);
-      if (stu && stu.has_price) {
-        consumptionRevenue += h * stu.blended_price;
-        pricedHours += h;
-      } else {
-        unpricedHours += h;
-      }
-    }
-
-    const consumptionRevenueData = {
-      amount: Math.round(consumptionRevenue * 100) / 100,
-      priced_hours: Math.round(pricedHours * 100) / 100,
-      unpriced_hours: Math.round(unpricedHours * 100) / 100,
-      total_hours: Math.round((pricedHours + unpricedHours) * 100) / 100,
-      classes_count: completedClasses.length,
-      estimated: true
-    };
+    const consumptionRevenueData = await getConsumptionRevenueSummary(DB, fromDate, toDate, studentPriceMap);
 
     // 3. 收款汇总（期间 payments 按 payment_method 分组；gift 单列且不计入现金收入合计）
-    let payQuery = `
-      SELECT 
-        COALESCE(payment_method, 'other') as method,
-        COUNT(*) as count,
-        SUM(amount) as amount,
-        SUM(COALESCE(hours, 0)) as hours
-      FROM payments
-      WHERE date >= ? AND date <= ?
-    `;
-    const payParams = [fromDate, toDate];
-    if (effectiveOrgId) {
-      payQuery += ' AND organization_id = ?';
-      payParams.push(effectiveOrgId);
-    }
-    payQuery += ' GROUP BY method';
-
-    const paymentsRes = await DB.prepare(payQuery).bind(...payParams).all();
-    const payRows = paymentsRes.results || [];
-
-    let totalCashIncome = 0;
-    let totalCashCount = 0;
-    let giftCount = 0;
-    let giftHours = 0;
-    const byMethodRaw = [];
-
-    for (const r of payRows) {
-      if (r.method === 'gift') {
-        giftCount += r.count;
-        giftHours += (r.hours || 0);
-      } else {
-        totalCashIncome += (r.amount || 0);
-        totalCashCount += r.count;
-        byMethodRaw.push({
-          method: r.method,
-          amount: Math.round((r.amount || 0) * 100) / 100,
-          count: r.count,
-          hours: Math.round((r.hours || 0) * 100) / 100
-        });
-      }
-    }
-
-    const byMethod = byMethodRaw.map(m => ({
-      ...m,
-      percentage: totalCashIncome > 0 ? Math.round((m.amount / totalCashIncome) * 1000) / 10 : 0
-    }));
-
-    const rechargeData = {
-      cash_income: Math.round(totalCashIncome * 100) / 100,
-      cash_count: totalCashCount,
-      gift: {
-        count: giftCount,
-        hours: Math.round(giftHours * 100) / 100,
-        amount: 0
-      },
-      by_method: byMethod
-    };
+    const rechargeData = await getRechargeSummary(DB, fromDate, toDate, effectiveOrgId);
 
     // 4. 课时负债（时点值：直营活跃学员剩余课时 * blended_price 之和；机构侧单独给 org_packages 未付清口径）
     let directLiability = 0;
@@ -1161,97 +1402,22 @@ reports.get('/financial/summary', async (c) => {
     };
 
     // 5. 教师成本（以 period_end 落入期间为准，paid 与 pending 分开汇总，cancelled 排除）
-    const tpQuery = `
-      SELECT 
-        id,
-        teacher_id,
-        period_start,
-        period_end,
-        total_amount,
-        status
-      FROM teacher_payments
-      WHERE period_end >= ? AND period_end <= ?
-        AND status != 'cancelled'
-    `;
-    const tpRes = await DB.prepare(tpQuery).bind(fromDate, toDate).all();
-    const tpList = tpRes.results || [];
-
-    let totalPhp = 0;
-    let paidPhp = 0;
-    let pendingPhp = 0;
-
-    for (const tp of tpList) {
-      const amt = Number(tp.total_amount || 0);
-      totalPhp += amt;
-      if (tp.status === 'paid') {
-        paidPhp += amt;
-      } else if (tp.status === 'pending') {
-        pendingPhp += amt;
-      }
-    }
-
-    // 汇率查询：取目标月汇率及元信息
-    const fxInfo = await getFxRateForMonth(DB, targetMonth);
-
-    let amountCny = null;
-    let paidCny = null;
-    let pendingCny = null;
-
-    if (!fxInfo.fx_missing && fxInfo.rate) {
-      // 逐笔根据其 period_end 所在月份折算（若无该月则回退）
-      let totalCnyCalc = 0;
-      let paidCnyCalc = 0;
-      let pendingCnyCalc = 0;
-
-      for (const tp of tpList) {
-        const pMonth = (tp.period_end || '').slice(0, 7) || targetMonth;
-        const pFx = await getFxRateForMonth(DB, pMonth);
-        const effectiveRate = pFx.fx_missing ? fxInfo.rate : pFx.rate;
-        const amtPhp = Number(tp.total_amount || 0);
-        const cnyVal = amtPhp * effectiveRate;
-        totalCnyCalc += cnyVal;
-        if (tp.status === 'paid') {
-          paidCnyCalc += cnyVal;
-        } else if (tp.status === 'pending') {
-          pendingCnyCalc += cnyVal;
-        }
-      }
-
-      amountCny = Math.round(totalCnyCalc * 100) / 100;
-      paidCny = Math.round(paidCnyCalc * 100) / 100;
-      pendingCny = Math.round(pendingCnyCalc * 100) / 100;
-    }
-
-    const teacherCostData = {
-      amount_php: Math.round(totalPhp * 100) / 100,
-      paid_php: Math.round(paidPhp * 100) / 100,
-      pending_php: Math.round(pendingPhp * 100) / 100,
-      rate: fxInfo.rate,
-      rate_month: fxInfo.rate_month,
-      rate_is_fallback: fxInfo.rate_is_fallback,
-      amount_cny: amountCny,
-      paid_cny: paidCny,
-      pending_cny: pendingCny,
-      fx_missing: fxInfo.fx_missing,
-      payments_count: tpList.length
-    };
+    const teacherCostData = await getTeacherCostSummary(DB, fromDate, toDate, targetMonth);
 
     // 6. 期间机构应收（org_settlements 应收合计）
     const orgSettlementsData = await getOrgSettlementsInPeriod(DB, fromDate, toDate, effectiveOrgId);
 
     // 7. 毛利核算
-    // 全站毛利 = 直营消课收入 + 期间机构应收 - 教师成本 CNY；fx 缺失时为 null
     let overallGrossProfit = null;
-    if (!fxInfo.fx_missing && amountCny !== null) {
-      overallGrossProfit = Math.round((consumptionRevenueData.amount + orgSettlementsData.amount_due_cny - amountCny) * 100) / 100;
+    if (!teacherCostData.fx_missing && teacherCostData.amount_cny !== null) {
+      overallGrossProfit = Math.round((consumptionRevenueData.amount + orgSettlementsData.amount_due_cny - teacherCostData.amount_cny) * 100) / 100;
     }
 
     // 直营毛利估算：各教师 classes.hours 的直营/机构构成比例分摊其课酬
     let directGrossProfit = null;
     let directTeacherCostCny = null;
 
-    if (!fxInfo.fx_missing && amountCny !== null) {
-      // 统计当期各教师总课时及直营课时
+    if (!teacherCostData.fx_missing && teacherCostData.amount_cny !== null) {
       const teacherHoursQuery = `
         SELECT 
           c.teacher_id,
@@ -1271,10 +1437,10 @@ reports.get('/financial/summary', async (c) => {
       }
 
       let allocCostCny = 0;
-      for (const tp of tpList) {
+      for (const tp of teacherCostData.tpList) {
         const pMonth = (tp.period_end || '').slice(0, 7) || targetMonth;
         const pFx = await getFxRateForMonth(DB, pMonth);
-        const effectiveRate = pFx.fx_missing ? fxInfo.rate : pFx.rate;
+        const effectiveRate = pFx.fx_missing ? teacherCostData.fxInfo.rate : pFx.rate;
         const amtPhp = Number(tp.total_amount || 0);
         const cnyVal = amtPhp * effectiveRate;
         const ratio = teacherRatioMap.has(tp.teacher_id) ? teacherRatioMap.get(tp.teacher_id) : 1.0;
@@ -1289,71 +1455,30 @@ reports.get('/financial/summary', async (c) => {
       direct_gross_profit_cny: directGrossProfit,
       direct_teacher_cost_cny: directTeacherCostCny,
       estimated: true,
-      fx_missing: fxInfo.fx_missing
+      fx_missing: teacherCostData.fx_missing
     };
 
     // 8. 课时调整（D5）：hour_changes 中 type 为 adjust 的记录正负分开汇总
-    let hcQuery = `
-      SELECT 
-        hc.id,
-        hc.student_id,
-        hc.amount,
-        hc.created_at,
-        s.organization_id
-      FROM hour_changes hc
-      JOIN students s ON hc.student_id = s.id
-      WHERE hc.type = 'adjust'
-        AND date(hc.created_at) >= ? AND date(hc.created_at) <= ?
-    `;
-    const hcParams = [fromDate, toDate];
-    if (effectiveOrgId) {
-      hcQuery += ' AND s.organization_id = ?';
-      hcParams.push(effectiveOrgId);
-    }
-    const hcRes = await DB.prepare(hcQuery).bind(...hcParams).all();
-    const hcList = hcRes.results || [];
-
-    let posHours = 0;
-    let posCount = 0;
-    let negHours = 0;
-    let negCount = 0;
-    let negEstAmount = 0;
-    let negUnpricedHours = 0;
-
-    for (const hc of hcList) {
-      const amt = Number(hc.amount || 0);
-      if (amt > 0) {
-        posHours += amt;
-        posCount++;
-      } else if (amt < 0) {
-        const absVal = Math.abs(amt);
-        negHours += absVal;
-        negCount++;
-        const stu = studentPriceMap.get(hc.student_id);
-        if (stu && stu.has_price) {
-          negEstAmount += absVal * stu.blended_price;
-        } else {
-          negUnpricedHours += absVal;
-        }
-      }
-    }
-
-    const hourAdjustmentsData = {
-      positive_hours: Math.round(posHours * 100) / 100,
-      positive_count: posCount,
-      negative_hours: Math.round(negHours * 100) / 100,
-      negative_count: negCount,
-      negative_estimated_amount: Math.round(negEstAmount * 100) / 100,
-      negative_unpriced_hours: Math.round(negUnpricedHours * 100) / 100,
-      note: '退款按发生期计入；系统未记录实际退款金额，此处为按混合单价的估算。'
-    };
+    const hourAdjustmentsData = await getHourAdjustmentsSummary(DB, fromDate, toDate, effectiveOrgId, studentPriceMap);
 
     return c.json(success({
       period: { from_date: fromDate, to_date: toDate, target_month: targetMonth },
       consumption_revenue: consumptionRevenueData,
       recharge: rechargeData,
       class_hours_liability: liabilityData,
-      teacher_cost: teacherCostData,
+      teacher_cost: {
+        amount_php: teacherCostData.amount_php,
+        paid_php: teacherCostData.paid_php,
+        pending_php: teacherCostData.pending_php,
+        rate: teacherCostData.rate,
+        rate_month: teacherCostData.rate_month,
+        rate_is_fallback: teacherCostData.rate_is_fallback,
+        amount_cny: teacherCostData.amount_cny,
+        paid_cny: teacherCostData.paid_cny,
+        pending_cny: teacherCostData.pending_cny,
+        fx_missing: teacherCostData.fx_missing,
+        payments_count: teacherCostData.payments_count
+      },
       org_settlements: {
         amount_due_cny: orgSettlementsData.amount_due_cny,
         paid_amount_cny: orgSettlementsData.paid_amount_cny,
@@ -1977,5 +2102,458 @@ reports.get('/teaching/workload', async (c) => {
     return c.json(error('INTERNAL_ERROR', '获取教师负荷数据失败: ' + err.message), 500);
   }
 });
+
+// ============================================================================
+// 阶段 D：全站报表概览与 CSV 导出
+// ============================================================================
+
+/**
+ * GET /api/v1/reports/overview
+ * 全站报表概览：
+ * 参数：from_date, to_date, org_id (默认本月)
+ * 一次性返回三组核心指标：
+ * 1. 现金流组 (cash_flow): 期间收款总额、gift笔数与课时、课时调整正负与负向估算金额、教师结算(PHP与CNY)
+ * 2. 损益组 (profit_and_loss): 消课收入估算、消课课时、unpriced_hours、教师成本CNY、全站毛利 (org_admin 不下发)
+ * 3. 运营组 (operations): 活跃学员数、总剩余课时、流失预警人数(紧迫/关注分开)、完课率、反馈填报率、试听人数
+ *
+ * 权限控制：
+ * - super_admin: 全部 (org_id 可指定)
+ * - org_admin: 强制锁定本机构，损益组与教师结算金额字段后端直接不下发
+ * - teacher / parent: 403 Forbidden
+ */
+reports.get('/overview', async (c) => {
+  const perm = checkPermission(c);
+  if (perm.forbidden) {
+    return c.json(perm.error, 403);
+  }
+
+  const DB = c.env.DB;
+  const { effectiveOrgId, userRole } = perm;
+  const { fromDate, toDate } = resolveDateRange(c);
+  const targetMonth = toDate.slice(0, 7);
+
+  try {
+    const studentPriceMap = await getStudentBlendedPriceMap(DB);
+
+    // 1. 现金流组
+    const recharge = await getRechargeSummary(DB, fromDate, toDate, effectiveOrgId);
+    const hourAdjustments = await getHourAdjustmentsSummary(DB, fromDate, toDate, effectiveOrgId, studentPriceMap);
+
+    const cashFlow = {
+      cash_income: recharge.cash_income,
+      cash_count: recharge.cash_count,
+      gift: recharge.gift,
+      hour_adjustments: hourAdjustments
+    };
+
+    let pnl = null;
+
+    if (userRole === 'super_admin') {
+      const teacherCost = await getTeacherCostSummary(DB, fromDate, toDate, targetMonth);
+      cashFlow.teacher_payments = {
+        paid_php: teacherCost.paid_php,
+        pending_php: teacherCost.pending_php,
+        total_php: teacherCost.amount_php,
+        paid_cny: teacherCost.paid_cny,
+        pending_cny: teacherCost.pending_cny,
+        total_cny: teacherCost.amount_cny,
+        rate: teacherCost.rate,
+        rate_month: teacherCost.rate_month,
+        rate_is_fallback: teacherCost.rate_is_fallback,
+        fx_missing: teacherCost.fx_missing
+      };
+
+      // 2. 损益组
+      const consumptionRevenue = await getConsumptionRevenueSummary(DB, fromDate, toDate, studentPriceMap);
+      const orgSettlements = await getOrgSettlementsInPeriod(DB, fromDate, toDate, effectiveOrgId);
+
+      let overallGrossProfit = null;
+      if (!teacherCost.fx_missing && teacherCost.amount_cny !== null) {
+        overallGrossProfit = Math.round((consumptionRevenue.amount + orgSettlements.amount_due_cny - teacherCost.amount_cny) * 100) / 100;
+      }
+
+      pnl = {
+        consumption_revenue: consumptionRevenue.amount,
+        consumption_hours: consumptionRevenue.total_hours,
+        unpriced_hours: consumptionRevenue.unpriced_hours,
+        teacher_cost_cny: teacherCost.amount_cny,
+        overall_gross_profit_cny: overallGrossProfit,
+        rate: teacherCost.rate,
+        rate_month: teacherCost.rate_month,
+        rate_is_fallback: teacherCost.rate_is_fallback,
+        fx_missing: teacherCost.fx_missing,
+        estimated: true
+      };
+    }
+
+    // 3. 运营组
+    const operations = await getOperationsSummary(DB, fromDate, toDate, effectiveOrgId);
+
+    const responseData = {
+      cash_flow: cashFlow,
+      operations: operations
+    };
+
+    if (pnl !== null) {
+      responseData.profit_and_loss = pnl;
+    }
+
+    return c.json(success(responseData, {
+      from_date: fromDate,
+      to_date: toDate,
+      organization_id: effectiveOrgId,
+      user_role: userRole
+    }));
+  } catch (err) {
+    console.error('reports/overview 错误:', err);
+    return c.json(error('INTERNAL_ERROR', '获取报表概览失败: ' + err.message), 500);
+  }
+});
+
+/**
+ * GET /api/v1/reports/export
+ * 报表 CSV 导出：
+ * 参数：type (learning | financial | teaching，必填，非法值 400), from_date, to_date, org_id
+ * 响应为 text/csv; charset=utf-8，带 UTF-8 BOM，不走 success 信封
+ *
+ * 权限控制：
+ * - super_admin: 全部 (org_id 可指定)
+ * - org_admin: 强制锁定本机构；financial 导出不得包含教师成本与毛利行
+ * - teacher / parent: 403 Forbidden
+ */
+reports.get('/export', async (c) => {
+  const perm = checkPermission(c);
+  if (perm.forbidden) {
+    return c.json(perm.error, 403);
+  }
+
+  const type = c.req.query('type');
+  if (!type || !['learning', 'financial', 'teaching'].includes(type)) {
+    return c.json(error('VALIDATION_ERROR', '无效的导出类型，必须为 learning, financial, teaching 之一'), 400);
+  }
+
+  const DB = c.env.DB;
+  const { effectiveOrgId, userRole } = perm;
+  const { fromDate, toDate } = resolveDateRange(c);
+  const targetMonth = toDate.slice(0, 7);
+
+  try {
+    let csvContent = '';
+
+    if (type === 'learning') {
+      // 导出流失预警名单全量
+      // 列：学员,剩余课时,未上课天数,最后上课日期,剩余价值估算,预警等级
+      const orgClause = effectiveOrgId ? 'AND s.organization_id = ?' : '';
+      const params = effectiveOrgId ? [effectiveOrgId] : [];
+
+      const query = `
+        WITH student_stats AS (
+          SELECT 
+            s.id,
+            s.name,
+            s.english_name,
+            s.phone,
+            s.total_hours,
+            s.used_hours,
+            (s.total_hours - s.used_hours) as remaining_hours,
+            s.created_at,
+            MAX(c.date) as last_class_date,
+            COALESCE((
+              SELECT SUM(p.amount)
+              FROM payments p
+              WHERE p.student_id = s.id AND (p.payment_method != 'gift' OR p.payment_method IS NULL)
+            ), 0) as paid_amount
+          FROM students s
+          LEFT JOIN classes c ON c.student_id = s.id AND c.status = 'completed'
+          WHERE s.status = 'active'
+            AND (s.total_hours - s.used_hours) > 0
+            ${orgClause}
+          GROUP BY s.id
+        )
+        SELECT 
+          id,
+          name,
+          english_name,
+          total_hours,
+          remaining_hours,
+          paid_amount,
+          last_class_date,
+          CASE 
+            WHEN last_class_date IS NOT NULL THEN CAST(julianday(date('now')) - julianday(last_class_date) AS INTEGER)
+            ELSE CAST(julianday(date('now')) - julianday(date(created_at)) AS INTEGER)
+          END as inactive_days
+        FROM student_stats
+        WHERE ((last_class_date IS NOT NULL AND julianday(date('now')) - julianday(last_class_date) >= 14)
+           OR (last_class_date IS NULL AND julianday(date('now')) - julianday(date(created_at)) >= 14))
+        ORDER BY inactive_days DESC, remaining_hours ASC
+      `;
+      const res = await DB.prepare(query).bind(...params).all();
+      const rows = res.results || [];
+
+      const headers = ['学员', '剩余课时', '未上课天数', '最后上课日期', '剩余价值估算', '预警等级'];
+      const lines = [headers.map(toCsvCell).join(',')];
+
+      for (const r of rows) {
+        const studentDisplayName = r.english_name ? `${r.name} (${r.english_name})` : r.name;
+        const totalHours = Number(r.total_hours || 0);
+        const remHours = Number(r.remaining_hours || 0);
+        const paidAmount = Number(r.paid_amount || 0);
+
+        let remVal = 0;
+        if (totalHours > 0 && paidAmount > 0) {
+          const bp = Math.round((paidAmount / totalHours) * 100) / 100;
+          remVal = Math.round((remHours * bp) * 100) / 100;
+        }
+
+        const inactiveDays = Number(r.inactive_days || 0);
+        const riskLevel = inactiveDays >= 30 ? '高危预警 (≥30天未排课)' : '流失预警 (14-29天未排课)';
+
+        lines.push([
+          toCsvCell(studentDisplayName),
+          toCsvCell(remHours),
+          toCsvCell(inactiveDays),
+          toCsvCell(r.last_class_date || ''),
+          toCsvCell(remVal.toFixed(2)),
+          toCsvCell(riskLevel)
+        ].join(','));
+      }
+
+      csvContent = lines.join('\r\n');
+
+    } else if (type === 'financial') {
+      // 导出财务汇总明细行
+      // 列：项目,金额(CNY),金额(PHP原额),汇率,汇率月份,备注
+      const studentPriceMap = await getStudentBlendedPriceMap(DB);
+      const recharge = await getRechargeSummary(DB, fromDate, toDate, effectiveOrgId);
+      const hourAdjustments = await getHourAdjustmentsSummary(DB, fromDate, toDate, effectiveOrgId, studentPriceMap);
+      const orgSettlements = await getOrgSettlementsInPeriod(DB, fromDate, toDate, effectiveOrgId);
+
+      const headers = ['项目', '金额(CNY)', '金额(PHP原额)', '汇率', '汇率月份', '备注'];
+      const lines = [headers.map(toCsvCell).join(',')];
+
+      // 1. 收款项
+      lines.push([
+        toCsvCell('收款总额 (非gift)'),
+        toCsvCell(recharge.cash_income.toFixed(2)),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(`现金收款笔数: ${recharge.cash_count}`)
+      ].join(','));
+
+      lines.push([
+        toCsvCell('赠送课时 (gift)'),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(`赠送笔数: ${recharge.gift.count}, 赠送课时: ${recharge.gift.hours} (不计现金)`)
+      ].join(','));
+
+      for (const m of recharge.by_method) {
+        lines.push([
+          toCsvCell(`收款明细 - ${m.method}`),
+          toCsvCell(m.amount.toFixed(2)),
+          toCsvCell(''),
+          toCsvCell(''),
+          toCsvCell(''),
+          toCsvCell(`笔数: ${m.count}, 课时: ${m.hours}, 占比: ${m.percentage}%`)
+        ].join(','));
+      }
+
+      // 2. 消课收入估算 (直营)
+      if (userRole === 'super_admin') {
+        const consumptionRevenue = await getConsumptionRevenueSummary(DB, fromDate, toDate, studentPriceMap);
+        lines.push([
+          toCsvCell('直营消课收入估算'),
+          toCsvCell(consumptionRevenue.amount.toFixed(2)),
+          toCsvCell(''),
+          toCsvCell(''),
+          toCsvCell(''),
+          toCsvCell('估算')
+        ].join(','));
+      }
+
+      // 3. 机构结算应收
+      lines.push([
+        toCsvCell('机构结算应收'),
+        toCsvCell(orgSettlements.amount_due_cny.toFixed(2)),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(`已结算: ${orgSettlements.paid_amount_cny.toFixed(2)}, 待结算: ${orgSettlements.pending_amount_cny.toFixed(2)}, 单数: ${orgSettlements.count}`)
+      ].join(','));
+
+      // 4. 课时调整 (D5)
+      lines.push([
+        toCsvCell('课时调整 - 正向'),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(`奖励调整课时: +${hourAdjustments.positive_hours}, 笔数: ${hourAdjustments.positive_count}`)
+      ].join(','));
+
+      lines.push([
+        toCsvCell('课时调整 - 负向退款估算'),
+        toCsvCell(hourAdjustments.negative_estimated_amount.toFixed(2)),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell(''),
+        toCsvCell('估算')
+      ].join(','));
+
+      // 5. 教师成本与毛利行 (仅 super_admin 导出，org_admin 严格不得包含)
+      if (userRole === 'super_admin') {
+        const teacherCost = await getTeacherCostSummary(DB, fromDate, toDate, targetMonth);
+        const consumptionRevenue = await getConsumptionRevenueSummary(DB, fromDate, toDate, studentPriceMap);
+
+        let overallGrossProfit = null;
+        if (!teacherCost.fx_missing && teacherCost.amount_cny !== null) {
+          overallGrossProfit = Math.round((consumptionRevenue.amount + orgSettlements.amount_due_cny - teacherCost.amount_cny) * 100) / 100;
+        }
+
+        const rateStr = teacherCost.fx_missing ? '' : String(teacherCost.rate);
+        const rateMonthStr = teacherCost.fx_missing ? '' : String(teacherCost.rate_month);
+
+        // 已付教师成本
+        lines.push([
+          toCsvCell('教师成本 - 已付'),
+          toCsvCell(teacherCost.fx_missing ? '' : teacherCost.paid_cny.toFixed(2)),
+          toCsvCell(teacherCost.paid_php.toFixed(2)),
+          toCsvCell(rateStr),
+          toCsvCell(rateMonthStr),
+          toCsvCell(teacherCost.fx_missing ? '汇率未设置' : (teacherCost.rate_is_fallback ? '使用回退汇率' : '已付课酬'))
+        ].join(','));
+
+        // 待付教师成本
+        lines.push([
+          toCsvCell('教师成本 - 待付'),
+          toCsvCell(teacherCost.fx_missing ? '' : teacherCost.pending_cny.toFixed(2)),
+          toCsvCell(teacherCost.pending_php.toFixed(2)),
+          toCsvCell(rateStr),
+          toCsvCell(rateMonthStr),
+          toCsvCell(teacherCost.fx_missing ? '汇率未设置' : (teacherCost.rate_is_fallback ? '使用回退汇率' : '待付课酬'))
+        ].join(','));
+
+        // 教师成本 - 合计
+        lines.push([
+          toCsvCell('教师成本 - 合计'),
+          toCsvCell(teacherCost.fx_missing ? '' : teacherCost.amount_cny.toFixed(2)),
+          toCsvCell(teacherCost.amount_php.toFixed(2)),
+          toCsvCell(rateStr),
+          toCsvCell(rateMonthStr),
+          toCsvCell(teacherCost.fx_missing ? '汇率未设置' : (teacherCost.rate_is_fallback ? '使用回退汇率' : `结算单共 ${teacherCost.payments_count} 笔`))
+        ].join(','));
+
+        // 全站毛利
+        lines.push([
+          toCsvCell('全站毛利'),
+          toCsvCell((teacherCost.fx_missing || overallGrossProfit === null) ? '' : overallGrossProfit.toFixed(2)),
+          toCsvCell(''),
+          toCsvCell(rateStr),
+          toCsvCell(rateMonthStr),
+          toCsvCell(teacherCost.fx_missing ? '汇率未设置' : '估算')
+        ].join(','));
+      }
+
+      csvContent = lines.join('\r\n');
+
+    } else if (type === 'teaching') {
+      // 导出教师负荷全量
+      // 列：教师,完成节数,完成课时,25/50/60分钟分档节数,试听节数,平均综合评分,反馈填报率
+      const orgFilter = effectiveOrgId ? 'AND c.organization_id = ?' : '';
+      const orgParams = effectiveOrgId ? [effectiveOrgId] : [];
+
+      const query = `
+        SELECT 
+          c.teacher_id,
+          t.name as registered_teacher_name,
+          c.teacher as class_teacher_name,
+          COUNT(CASE WHEN c.status = 'completed' THEN 1 END) as completed_classes,
+          ROUND(SUM(CASE WHEN c.status = 'completed' THEN c.hours ELSE 0 END), 2) as completed_hours,
+          COUNT(CASE WHEN c.status = 'completed' AND c.duration = 25 THEN 1 END) as duration_25_count,
+          COUNT(CASE WHEN c.status = 'completed' AND c.duration = 50 THEN 1 END) as duration_50_count,
+          COUNT(CASE WHEN c.status = 'completed' AND c.duration = 60 THEN 1 END) as duration_60_count,
+          COUNT(CASE WHEN c.status = 'completed' AND (c.duration NOT IN (25, 50, 60) OR c.duration IS NULL) THEN 1 END) as duration_other_count,
+          COUNT(CASE WHEN c.is_trial = 1 THEN 1 END) as trial_classes,
+          AVG(CASE WHEN c.status = 'completed' THEN c.fb_score_phonics END) as avg_phonics,
+          AVG(CASE WHEN c.status = 'completed' THEN c.fb_score_vocab END) as avg_vocab,
+          AVG(CASE WHEN c.status = 'completed' THEN c.fb_score_speaking END) as avg_speaking,
+          AVG(CASE WHEN c.status = 'completed' THEN c.fb_score_listening END) as avg_listening,
+          AVG(CASE WHEN c.status = 'completed' THEN c.fb_score_engagement END) as avg_engagement,
+          COUNT(CASE WHEN c.status = 'completed' AND (
+            (c.fb_teacher_message IS NOT NULL AND TRIM(c.fb_teacher_message) != '') OR 
+            (c.fb_vocab IS NOT NULL AND TRIM(c.fb_vocab) != '')
+          ) THEN 1 END) as feedback_submitted_count
+        FROM classes c
+        LEFT JOIN teachers t ON t.id = c.teacher_id
+        WHERE c.date >= ? AND c.date <= ?
+          ${orgFilter}
+        GROUP BY c.teacher_id
+        ORDER BY completed_hours DESC
+      `;
+      const res = await DB.prepare(query).bind(fromDate, toDate, ...orgParams).all();
+      const rows = res.results || [];
+
+      const headers = ['教师', '完成节数', '完成课时', '25/50/60分钟分档节数', '试听节数', '平均综合评分', '反馈填报率'];
+      const lines = [headers.map(toCsvCell).join(',')];
+
+      for (const r of rows) {
+        const isUnassigned = r.teacher_id === null || r.teacher_id === undefined;
+        const teacherName = isUnassigned 
+          ? '未指定' 
+          : (r.registered_teacher_name || r.class_teacher_name || `教师 #${r.teacher_id}`);
+
+        const completedClasses = Number(r.completed_classes || 0);
+        const completedHours = Number(r.completed_hours || 0);
+        const durationBreakdown = `${r.duration_25_count || 0}/${r.duration_50_count || 0}/${r.duration_60_count || 0}`;
+        const trialClasses = Number(r.trial_classes || 0);
+
+        const validScores = [
+          r.avg_phonics,
+          r.avg_vocab,
+          r.avg_speaking,
+          r.avg_listening,
+          r.avg_engagement
+        ].filter(v => v !== null && v !== undefined).map(Number);
+
+        const overallAvgScore = validScores.length > 0 
+          ? (Math.round((validScores.reduce((a, b) => a + b, 0) / validScores.length) * 100) / 100).toFixed(2)
+          : '';
+
+        const feedbackSubmitted = Number(r.feedback_submitted_count || 0);
+        const feedbackRate = completedClasses > 0 
+          ? `${((feedbackSubmitted / completedClasses) * 100).toFixed(1)}%` 
+          : '0.0%';
+
+        lines.push([
+          toCsvCell(teacherName),
+          toCsvCell(completedClasses),
+          toCsvCell(completedHours.toFixed(2)),
+          toCsvCell(durationBreakdown),
+          toCsvCell(trialClasses),
+          toCsvCell(overallAvgScore),
+          toCsvCell(feedbackRate)
+        ].join(','));
+      }
+
+      csvContent = lines.join('\r\n');
+    }
+
+    return new Response('﻿' + csvContent, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="reports-${type}-${fromDate}-${toDate}.csv"`
+      }
+    });
+
+  } catch (err) {
+    console.error('reports/export 错误:', err);
+    return c.json(error('INTERNAL_ERROR', '导出报表数据失败: ' + err.message), 500);
+  }
+});
+
 
 export default reports;
