@@ -2029,7 +2029,7 @@ export default function Reports() {
                   数据报表中心财务经营口径规范（D2–D5 说明）：
                 </div>
                 <p>
-                  1. <strong>直营消课收入（D2）</strong>：混合单价按学员非 gift 实付总额除以总课时（<code className="bg-gray-200 px-1 rounded">blended_price = paid_amount / total_hours</code>）；期间消课收入按完课课时（已含 25 分钟 0.66 系数）乘单价汇总；无单价学员课时进 unpriced_hours 单列，收入计 0；消课按个人学员核算，不按 organization 划分（organization 仅作分组明细展示）；走机构结算的学员不并入个人消课。
+                  1. <strong>消课收入（D2）</strong>：混合单价按学员非 gift 实付总额除以总课时（<code className="bg-gray-200 px-1 rounded">blended_price = paid_amount / total_hours</code>）；期间消课收入按完课课时（已含 25 分钟 0.66 系数）乘单价汇总；无单价学员课时进 unpriced_hours 单列，收入计 0；消课按个人学员核算，不按 organization 划分（organization 仅作分组明细展示）；走机构结算的学员不并入个人消课。
                 </p>
                 <p>
                   2. <strong>赠送课时（D3）</strong>：payments 中 gift 类型的记录不计入现金收入，课时计入总课时分母自然摊薄单价。
