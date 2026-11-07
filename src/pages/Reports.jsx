@@ -784,7 +784,7 @@ export default function Reports() {
                       {/* 消课收入估算 */}
                       <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium text-gray-500">直营消课收入估算</span>
+                          <span className="text-xs font-medium text-gray-500">消课收入估算</span>
                           <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-medium">估算</span>
                         </div>
                         <div className="text-2xl font-black text-gray-900">
@@ -847,7 +847,7 @@ export default function Reports() {
                           </div>
                         )}
                         <p className="text-xs text-gray-500">
-                          直营消课收入 + 机构结算应收 - 教师成本
+                          消课收入 + 机构结算应收 - 教师成本
                         </p>
                       </div>
                     </div>
@@ -1522,12 +1522,12 @@ export default function Reports() {
                       </CardContent>
                     </Card>
 
-                    {/* 卡片 2: 直营消课收入 (估算) */}
+                    {/* 卡片 2: 消课收入 (估算) */}
                     <Card className="hover:shadow-md transition-shadow">
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">直营消课收入</span>
+                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">消课收入</span>
                             <Badge variant="warning" className="text-[10px] px-1 py-0">估算</Badge>
                           </div>
                           <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
@@ -1546,6 +1546,16 @@ export default function Reports() {
                             <span>计费 {finSummary.consumption_revenue?.priced_hours || 0}h</span>
                             <span className="text-warning-600">未定价 {finSummary.consumption_revenue?.unpriced_hours || 0}h</span>
                           </div>
+                          {finSummary.consumption_revenue?.by_organization && finSummary.consumption_revenue.by_organization.length > 0 && (
+                            <div className="pt-1.5 border-t border-gray-100 space-y-1">
+                              {finSummary.consumption_revenue.by_organization.map((org) => (
+                                <div key={org.organization_id ?? 'unassigned'} className="flex justify-between text-[11px]">
+                                  <span>{org.organization_name}</span>
+                                  <span>{org.total_hours} 课时 · ¥{(org.amount || 0).toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -1601,7 +1611,7 @@ export default function Reports() {
                         <div className="mt-2 text-xs text-gray-500 space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="flex items-center gap-1">
-                              直营估算:
+                              个人学员估算:
                               <Badge variant="neutral" className="text-[9px] px-1 py-0">估算</Badge>
                             </span>
                             <span className="font-medium text-gray-700">
@@ -1620,7 +1630,7 @@ export default function Reports() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">直营课时负债</span>
+                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">课时负债</span>
                             <Badge variant="warning" className="text-[10px] px-1 py-0">估算</Badge>
                           </div>
                           <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
@@ -1632,7 +1642,7 @@ export default function Reports() {
                         </div>
                         <div className="mt-2 text-xs text-gray-500 space-y-1">
                           <div className="flex justify-between">
-                            <span>直营计费剩余:</span>
+                            <span>计费剩余:</span>
                             <span className="font-medium text-gray-700">{finSummary.class_hours_liability?.direct_priced_remaining_hours || 0} 课时</span>
                           </div>
                           <div className="pt-1.5 border-t border-gray-100 flex justify-between text-[11px] text-amber-700">
@@ -2019,7 +2029,7 @@ export default function Reports() {
                   数据报表中心财务经营口径规范（D2–D5 说明）：
                 </div>
                 <p>
-                  1. <strong>直营消课收入（D2）</strong>：混合单价按学员非 gift 实付总额除以总课时（<code className="bg-gray-200 px-1 rounded">blended_price = paid_amount / total_hours</code>）；期间消课收入按完课课时（已含 25 分钟 0.66 系数）乘单价汇总；无单价学员课时进 unpriced_hours 单列，收入计 0；机构课不走学员单价，从直营消课中剔除。
+                  1. <strong>消课收入（D2）</strong>：混合单价按学员非 gift 实付总额除以总课时（<code className="bg-gray-200 px-1 rounded">blended_price = paid_amount / total_hours</code>）；期间消课收入按完课课时（已含 25 分钟 0.66 系数）乘单价汇总；无单价学员课时进 unpriced_hours 单列，收入计 0；消课按个人学员核算，不按 organization 划分（organization 仅作分组明细展示）；走机构结算的学员不并入个人消课。
                 </p>
                 <p>
                   2. <strong>赠送课时（D3）</strong>：payments 中 gift 类型的记录不计入现金收入，课时计入总课时分母自然摊薄单价。
@@ -2031,7 +2041,7 @@ export default function Reports() {
                   4. <strong>退款估算（D5）</strong>：系统未设退款金额字段，按当期负向课时调整（adjust）乘学员混合单价估算发生期冲减金额。
                 </p>
                 <p>
-                  5. <strong>课时负债</strong>：直营在读学员剩余课时乘混合单价；机构未付清课时包单独核算，不并入直营负债。
+                  5. <strong>课时负债</strong>：全部在读个人学员（不限 organization）剩余课时乘混合单价；机构未付清课时包单独核算，不并入直营负债。
                 </p>
               </div>
             </>
@@ -2864,7 +2874,7 @@ export default function Reports() {
                   由于已弃用课包概念，消课单价按学员累计实付总额（非 gift）除以累计总课时（students.total_hours）计算混合单价；已完课课时 classes.hours 已含 25 分钟课 0.66 系数，禁止再次折算。
                 </p>
                 <p className="text-xs text-amber-700 font-medium">
-                  诚实披露规则：无单价学员（total_hours=0 或仅有赠送课时）的消课单独汇总为 unpriced_hours 披露，收入记 0，严禁用全站均价顶替；试听课 hours=0 不产生消课收入；机构学员按机构结算单应收核算，不走直营消课单价。
+                  诚实披露规则：无单价学员（total_hours=0 或仅有赠送课时）的消课单独汇总为 unpriced_hours 披露，收入记 0，严禁用全站均价顶替；试听课 hours=0 不产生消课收入；走机构结算的学员按结算单应收核算，不并入个人消课；现网学员均为个人课时包，按个人混合单价核算。
                 </p>
               </div>
 
