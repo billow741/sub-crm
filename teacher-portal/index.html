@@ -584,9 +584,8 @@
   <!-- 📅 Lesson Info -->
   <div class="border rounded-lg p-3">
     <h3 class="font-semibold text-gray-800 text-sm mb-3">📅 Lesson Info</h3>
-    <div class="grid grid-cols-2 gap-3">
+    <div class="grid grid-cols-1 gap-3">
       <div><label class="block text-xs text-gray-500 mb-1">Level</label><select id="fb-level" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"><option value="">Select level</option><option value="Pre-A1">Pre-A1</option><option value="A1">A1</option><option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option></select></div>
-      <div class="grid grid-cols-2 gap-2"><div><label class="block text-xs text-gray-500 mb-1">Unit</label><input id="fb-unit" type="text" placeholder="e.g. 5" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></div><div><label class="block text-xs text-gray-500 mb-1">Lesson</label><input id="fb-lesson" type="text" placeholder="e.g. 3" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500"></div></div>
     </div>
     <!-- 📖 Textbook Page Reference (parent portal displays PDF page scans) -->
     <div class="mt-3 pt-3 border-t border-gray-100">
@@ -1701,7 +1700,7 @@ async function onTextbookChange() {
   }
 }
 
-// When unit selection changes, auto-fill pages, sync Lesson Info and suggestions
+// When unit selection changes, auto-fill pages and suggestions
 async function onUnitSelectChange() {
   var code = document.getElementById('fb-textbook-code').value;
   var unitSelect = document.getElementById('fb-unit-select');
@@ -1711,18 +1710,6 @@ async function onUnitSelectChange() {
   var pageToInput = document.getElementById('fb-page-to');
 
   if (unitNumInput) unitNumInput.value = unitVal;
-
-  // Sync Lesson Info Unit/Lesson fields
-  var isLesson = code.startsWith('WE');
-  var fbUnitInput = document.getElementById('fb-unit');
-  var fbLessonInput = document.getElementById('fb-lesson');
-  if (unitVal !== '') {
-    if (isLesson) {
-      if (fbLessonInput && !fbLessonInput.value) fbLessonInput.value = unitVal;
-    } else {
-      if (fbUnitInput && !fbUnitInput.value) fbUnitInput.value = unitVal;
-    }
-  }
 
   // Auto-fetch real page range from R2 and populate Page from / Page to
   if (code && unitVal !== '') {
@@ -3198,8 +3185,6 @@ function openFeedback(cls) {
 
   // Fill lesson info — prefill Level from student grade
   document.getElementById('fb-level').value = cls.fb_lesson_level || cls.student_grade || '';
-  document.getElementById('fb-unit').value = cls.fb_unit || '';
-  document.getElementById('fb-lesson').value = cls.fb_lesson || '';
   document.getElementById('fb-vocab').value = cls.fb_vocab || '';
   document.getElementById('fb-patterns').value = cls.fb_patterns || '';
   document.getElementById('fb-grammar').value = cls.fb_grammar || '';
@@ -3511,20 +3496,6 @@ if (unitSelEl) {
   }
 });
 
-// If teacher edits Lesson or Unit to a cross-unit range (like 12-13), auto-refresh suggestions
-['fb-lesson', 'fb-unit'].forEach(function(id) {
-  var el = document.getElementById(id);
-  if (el) {
-    el.addEventListener('input', function() {
-      var val = el.value.trim();
-      if (val && (val.includes('-') || val.includes(','))) {
-        refreshTextbookSuggestions(val);
-      }
-    });
-  }
-});
-
-
 // ===== Submit Feedback from History =====
 function openFeedbackFromHistory(idx) {
 var cls = window_allPastClasses[idx];
@@ -3611,8 +3582,6 @@ document.getElementById('feedback-form').addEventListener('submit', async functi
 
   var data = {
     fb_lesson_level: document.getElementById('fb-level').value,
-    fb_unit: document.getElementById('fb-unit').value,
-    fb_lesson: document.getElementById('fb-lesson').value,
     fb_vocab: document.getElementById('fb-vocab').value,
     fb_patterns: document.getElementById('fb-patterns').value,
     fb_grammar: document.getElementById('fb-grammar').value,
