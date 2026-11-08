@@ -5,7 +5,7 @@ import {
   AlertTriangle, MessageSquare, FileText, Edit, Loader2, User, CheckCircle, 
   X, Calculator, FileCheck, FileSignature, BookOpen, Copy, ExternalLink, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { studentOps, packageOps, classOps, paymentOps, hourChangeOps } from '../store';
+import { studentOps, packageOps, classOps, paymentOps, hourChangeOps, API_BASE_URL } from '../store';
 import { request, textbookOps } from '../store/api';
 import AdjustHoursModal from '../components/AdjustHoursModal';
 import { Card, CardHeader } from '../components/ui/Card';

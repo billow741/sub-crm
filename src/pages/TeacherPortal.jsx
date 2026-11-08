@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Clock, User, BookOpen, CheckCircle, XCircle, Calendar, Edit, Plus, X, Search } from 'lucide-react';
+import { Clock, User, BookOpen, CheckCircle, XCircle, Calendar, Edit, Plus, X, Search, FileText, Trash2 } from 'lucide-react';
 import { teacherOps, classOps, packageOps, API_BASE_URL } from '../store';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -40,6 +40,7 @@ export default function TeacherPortal() {
   const [feedbackForm, setFeedbackForm] = useState({});
   const [pronErrors, setPronErrors] = useState([]);
   const [gramErrors, setGramErrors] = useState([]);
+  const [vocabList, setVocabList] = useState([]);
   const [textbooksList, setTextbooksList] = useState([]);
   const [suggestData, setSuggestData] = useState(null);
   const [loadingSuggest, setLoadingSuggest] = useState(false);
@@ -139,6 +140,10 @@ export default function TeacherPortal() {
     });
     try { setPronErrors(JSON.parse(cls.fb_pronunciation_errors || '[]')); } catch { setPronErrors([]); }
     try { setGramErrors(JSON.parse(cls.fb_grammar_errors || '[]')); } catch { setGramErrors([]); }
+    setVocabList((cls.fb_vocab || '').split(/[,，\n]/).map(s => s.trim()).filter(Boolean).map(item => {
+      const m = item.match(/^(\S+)\s+(.+)$/);
+      return m ? { word: m[1], meaning: m[2].trim() } : { word: item, meaning: '' };
+    }));
     setShowFeedbackModal(true);
   };
 
@@ -147,6 +152,7 @@ export default function TeacherPortal() {
     try {
       await classOps.update(selectedClass.id, {
         ...feedbackForm,
+        fb_vocab: vocabList.filter(v => v.word.trim()).map(v => v.meaning.trim() ? `${v.word.trim()} ${v.meaning.trim()}` : v.word.trim()).join(', '),
         fb_pronunciation_errors: pronErrors.length ? JSON.stringify(pronErrors) : null,
         fb_grammar_errors: gramErrors.length ? JSON.stringify(gramErrors) : null,
         status: feedbackForm.status
@@ -173,6 +179,10 @@ export default function TeacherPortal() {
   const addGramError = () => setGramErrors([...gramErrors, { wrong: '', right: '' }]);
   const removeGramError = (i) => setGramErrors(gramErrors.filter((_, idx) => idx !== i));
   const updateGramError = (i, field, val) => setGramErrors(gramErrors.map((e, idx) => idx === i ? { ...e, [field]: val } : e));
+
+  const addVocab = () => setVocabList([...vocabList, { word: '', meaning: '' }]);
+  const removeVocab = (i) => setVocabList(vocabList.filter((_, idx) => idx !== i));
+  const updateVocab = (i, field, val) => setVocabList(vocabList.map((v, idx) => idx === i ? { ...v, [field]: val } : v));
 
   if (loading) {
     return (
@@ -461,7 +471,7 @@ export default function TeacherPortal() {
 
               {/* 右侧：反馈表单区 */}
               <div className="w-full md:w-7/12 flex-1 overflow-y-auto p-5 space-y-5">
-                <form id="feedbackForm" onSubmit={submitFeedback} className="space-y-6">
+                <form id="feedbackForm" onSubmit={handleSubmitFeedback} className="space-y-6">
                   
                   {/* Block 1: 新词汇 */}
                   <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
