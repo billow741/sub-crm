@@ -175,6 +175,15 @@ assessments.post('/', validate(assessmentSchema), async (c) => {
 
   const assessmentId = result.meta.last_row_id;
 
+  // ── 同步学生等级：将体验课评估建议级别同步至学生档案 ──
+  if (data.recommended_level && cls.student_id) {
+    try {
+      await DB.prepare("UPDATE students SET grade = ?, updated_at = datetime('now') WHERE id = ?").bind(data.recommended_level, cls.student_id).run();
+    } catch (gradeErr) {
+      console.warn('Sync recommended_level to student grade failed:', gradeErr.message);
+    }
+  }
+
   if (data.fb_recording !== undefined) {
     try {
       await DB.prepare('UPDATE classes SET fb_recording = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(data.fb_recording, data.class_id).run();
@@ -230,6 +239,16 @@ assessments.patch('/:id', validateParams(idParamSchema), validate(assessmentUpda
 
   if (fields.length > 1) {
     await DB.prepare(`UPDATE assessments SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+
+  // ── 同步学生等级：将体验课评估建议级别同步至学生档案 ──
+  const targetStudentId = existing.student_id;
+  if (data.recommended_level && targetStudentId) {
+    try {
+      await DB.prepare("UPDATE students SET grade = ?, updated_at = datetime('now') WHERE id = ?").bind(data.recommended_level, targetStudentId).run();
+    } catch (gradeErr) {
+      console.warn('Sync recommended_level to student grade failed:', gradeErr.message);
+    }
   }
 
   const updated = await DB.prepare(`
