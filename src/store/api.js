@@ -323,6 +323,37 @@ export const teacherPaymentOps = {
     const result = await request(`/teacher-payments/${id}`);
     return result.data;
   },
+  getBoardSummary: async () => {
+    const result = await request('/teacher-payments/board-summary');
+    return result.data;
+  },
+  getVouchers: async (params = {}) => {
+    const cleanParams = Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined && v !== ''));
+    const q = new URLSearchParams(cleanParams).toString();
+    const result = await request('/teacher-payments/vouchers' + (q ? '?' + q : ''));
+    return result.data;
+  },
+  createVoucher: async (data) => {
+    const result = await request('/teacher-payments/vouchers', {
+      method: 'POST',
+      body: data,
+    });
+    return result.data;
+  },
+  deleteVoucher: async (id) => {
+    const result = await request(`/teacher-payments/vouchers/${id}`, {
+      method: 'DELETE',
+    });
+    return result.data;
+  },
+  getStats: async (teacherId) => {
+    const result = await request(`/teacher-payments/stats/${teacherId}`);
+    return result.data;
+  },
+  getDetails: async (id) => {
+    const result = await request(`/teacher-payments/${id}/details`);
+    return result.data;
+  },
   create: async (data) => {
     const result = await request('/teacher-payments', {
       method: 'POST',
