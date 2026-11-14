@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Calendar, CheckCircle, XCircle, Plus, RefreshCw, Trash2, CreditCard, Edit2, ChevronDown, ChevronUp, Filter, Clock, User } from 'lucide-react';
+import { DollarSign, Calendar, CheckCircle, XCircle, Plus, RefreshCw, Trash2, CreditCard, Edit2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Filter, Clock, User } from 'lucide-react';
 import { teacherOps, teacherPaymentOps } from '../store';
 import { request } from '../store/api';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
@@ -28,6 +28,7 @@ export default function TeacherPayments() {
   const [filterTeacher, setFilterTeacher] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   
   const [formData, setFormData] = useState({
     teacher_id: '',
@@ -103,7 +104,18 @@ export default function TeacherPayments() {
     });
   };
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterTeacher, filterMonth, filterStatus]);
+
   const filteredPayments = getFilteredPayments();
+
+  const pageSize = 20;
+  const totalPages = Math.ceil(filteredPayments.length / pageSize) || 1;
+  const curPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIdx = (curPage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, filteredPayments.length);
+  const paginatedPayments = filteredPayments.slice(startIdx, endIdx);
 
   const stats = {
     pending: payments.filter(p => p.status === 'pending'),
@@ -359,7 +371,7 @@ export default function TeacherPayments() {
             </CardContent>
           </Card>
         ) : (
-          filteredPayments.map(payment => (
+          paginatedPayments.map(payment => (
             <Card key={payment.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex-1 space-y-2">
@@ -423,6 +435,38 @@ export default function TeacherPayments() {
           ))
         )}
       </div>
+
+      {/* 📄 分页控制 */}
+      {totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 bg-white rounded-xl border border-gray-200 shadow-sm mt-4">
+          <div className="text-xs text-gray-500">
+            显示第 <span className="font-medium text-gray-700">{startIdx + 1}</span> - <span className="font-medium text-gray-700">{endIdx}</span> 条，共 <span className="font-medium text-gray-700">{filteredPayments.length}</span> 条结算记录（每页 20 条）
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={curPage <= 1}
+              className="h-8 px-2.5 text-xs text-gray-600 border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+            >
+              <ChevronLeft className="w-3.5 h-3.5 mr-1" /> 上一页
+            </Button>
+            <span className="px-2 text-xs font-medium text-gray-600 min-w-[70px] text-center">
+              第 {curPage} / {totalPages} 页
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={curPage >= totalPages}
+              className="h-8 px-2.5 text-xs text-gray-600 border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+            >
+              下一页 <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* ⚙️ 教师时薪设置 */}
       <Card className="mt-8 border-dashed shadow-none bg-transparent">
