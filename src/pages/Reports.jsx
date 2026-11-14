@@ -80,6 +80,42 @@ function getDateRangePresets() {
   };
 }
 
+// ─── 生成平滑三阶贝塞尔曲线 SVG 路径 ───
+function getSmoothCurvePath(points) {
+  if (!points || points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  if (points.length === 2) {
+    return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)} L ${points[1].x.toFixed(1)} ${points[1].y.toFixed(1)}`;
+  }
+  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(i - 1, 0)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(i + 2, points.length - 1)];
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+// ─── 生成曲线下方的半透明渐变区域填充路径 ───
+function getSmoothAreaPath(points, zeroY) {
+  if (!points || points.length === 0) return '';
+  if (points.length === 1) {
+    return `M ${(points[0].x - 14).toFixed(1)} ${zeroY.toFixed(1)} L ${(points[0].x - 14).toFixed(1)} ${points[0].y.toFixed(1)} L ${(points[0].x + 14).toFixed(1)} ${points[0].y.toFixed(1)} L ${(points[0].x + 14).toFixed(1)} ${zeroY.toFixed(1)} Z`;
+  }
+  const curveD = getSmoothCurvePath(points);
+  const first = points[0];
+  const last = points[points.length - 1];
+  return `${curveD} L ${last.x.toFixed(1)} ${zeroY.toFixed(1)} L ${first.x.toFixed(1)} ${zeroY.toFixed(1)} Z`;
+}
+
 export default function Reports() {
   const userRole = getUserRole() || 'super_admin';
   const isSuperAdmin = userRole === 'super_admin';
@@ -121,6 +157,8 @@ export default function Reports() {
 
   const [finTrend, setFinTrend] = useState([]);
   const [finTrendLoading, setFinTrendLoading] = useState(false);
+  const [trendScope, setTrendScope] = useState('6m'); // '6m' (近6月) | '12m' (近12月) | 'sync' (跟随时间筛选)
+  const [hoveredTrendIdx, setHoveredTrendIdx] = useState(null);
 
   const [fxRates, setFxRates] = useState([]);
   const [fxModalOpen, setFxModalOpen] = useState(false);
@@ -277,13 +315,36 @@ export default function Reports() {
     }
   }, [fromDate, toDate, selectedOrgId, isSuperAdmin]);
 
-  const fetchFinTrend = useCallback(async () => {
+  const fetchFinTrend = useCallback(async (scope = trendScope) => {
     if (!isSuperAdmin) return;
     try {
       setFinTrendLoading(true);
+      let pFrom = fromDate;
+      let pTo = toDate;
+
+      if (scope === '6m') {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth();
+        const startD = new Date(y, m - 5, 1);
+        const endD = new Date(y, m + 1, 0);
+        const pad = n => String(n).padStart(2, '0');
+        pFrom = `${startD.getFullYear()}-${pad(startD.getMonth() + 1)}-01`;
+        pTo = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())}`;
+      } else if (scope === '12m') {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth();
+        const startD = new Date(y, m - 11, 1);
+        const endD = new Date(y, m + 1, 0);
+        const pad = n => String(n).padStart(2, '0');
+        pFrom = `${startD.getFullYear()}-${pad(startD.getMonth() + 1)}-01`;
+        pTo = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())}`;
+      }
+
       const params = {
-        from_date: fromDate,
-        to_date: toDate
+        from_date: pFrom,
+        to_date: pTo
       };
       if (selectedOrgId !== 'all') {
         params.org_id = selectedOrgId;
@@ -295,7 +356,12 @@ export default function Reports() {
     } finally {
       setFinTrendLoading(false);
     }
-  }, [fromDate, toDate, selectedOrgId, isSuperAdmin]);
+  }, [fromDate, toDate, selectedOrgId, isSuperAdmin, trendScope]);
+
+  const handleTrendScopeChange = (newScope) => {
+    setTrendScope(newScope);
+    fetchFinTrend(newScope);
+  };
 
   const fetchFxRates = useCallback(async () => {
     try {
@@ -327,7 +393,7 @@ export default function Reports() {
       setFxModalOpen(false);
       fetchFxRates();
       fetchFinSummary();
-      if (isSuperAdmin) fetchFinTrend();
+      if (isSuperAdmin) fetchFinTrend(trendScope);
     } catch (err) {
       alert('保存汇率失败: ' + err.message);
     } finally {
@@ -339,11 +405,11 @@ export default function Reports() {
     if (activeTab === 'financial') {
       fetchFinSummary();
       if (isSuperAdmin) {
-        fetchFinTrend();
+        fetchFinTrend(trendScope);
       }
       fetchFxRates();
     }
-  }, [fetchFinSummary, fetchFinTrend, fetchFxRates, activeTab, isSuperAdmin]);
+  }, [fetchFinSummary, fetchFinTrend, fetchFxRates, activeTab, isSuperAdmin, trendScope]);
 
   // 教学交付数据加载 (阶段 C)
   const fetchTeachingSummary = useCallback(async () => {
@@ -1767,33 +1833,349 @@ export default function Reports() {
                     </Card>
                   </div>
 
-                  {/* 第三行：财务月度趋势对比 (轻量原生绘制) */}
-                  <Card>
+                  {/* 第三行：财务月度趋势对比 (原生平滑 SVG 曲线图与月度明细) */}
+                  <Card className="shadow-sm">
                     <CardHeader className="pb-3 border-b border-gray-100">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                         <div>
                           <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
                             <BarChart2 className="w-4 h-4 text-primary-500" />
                             财务月度经营趋势（充值、消课收入、教师成本、毛利）
                           </h3>
-                          <p className="text-xs text-gray-400 mt-0.5">按业务发生月份归集四线指标序列，纯原生可视化</p>
+                          <p className="text-xs text-gray-400 mt-0.5">按业务发生月份归集四线指标序列，纯原生平滑曲线可视化</p>
                         </div>
-                        <div className="flex items-center gap-3 text-xs">
-                          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm inline-block"></span>充值现金</span>
-                          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-blue-500 rounded-sm inline-block"></span>消课收入估算</span>
-                          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-sm inline-block"></span>教师成本 CNY</span>
-                          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-amber-500 rounded-sm inline-block"></span>毛利 CNY</span>
+                        
+                        <div className="flex flex-wrap items-center gap-4">
+                          {/* 时间跨度快捷切换 */}
+                          <div className="inline-flex rounded-lg bg-gray-100 p-0.5 text-xs font-medium text-gray-600">
+                            <button
+                              type="button"
+                              onClick={() => handleTrendScopeChange('6m')}
+                              className={`px-2.5 py-1 rounded-md transition-all ${
+                                trendScope === '6m' ? 'bg-white text-gray-900 font-bold shadow-sm' : 'hover:text-gray-900'
+                              }`}
+                            >
+                              近 6 个月
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleTrendScopeChange('12m')}
+                              className={`px-2.5 py-1 rounded-md transition-all ${
+                                trendScope === '12m' ? 'bg-white text-gray-900 font-bold shadow-sm' : 'hover:text-gray-900'
+                              }`}
+                            >
+                              近 12 个月
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleTrendScopeChange('sync')}
+                              className={`px-2.5 py-1 rounded-md transition-all ${
+                                trendScope === 'sync' ? 'bg-white text-gray-900 font-bold shadow-sm' : 'hover:text-gray-900'
+                              }`}
+                            >
+                              跟随时间筛选
+                            </button>
+                          </div>
+
+                          {/* 四线图例 */}
+                          <div className="flex items-center gap-3 text-xs">
+                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-full inline-block"></span>充值现金</span>
+                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-blue-500 rounded-full inline-block"></span>消课收入估算</span>
+                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-full inline-block"></span>教师成本 CNY</span>
+                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-amber-500 rounded-full inline-block"></span>毛利 CNY</span>
+                          </div>
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="p-5">
+                    <CardContent className="p-5 space-y-5">
                       {finTrendLoading ? (
-                        <div className="py-8 text-center text-xs text-gray-400">加载趋势数据中...</div>
+                        <div className="py-16 text-center text-xs text-gray-400">
+                          <div className="w-6 h-6 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin mx-auto mb-2"></div>
+                          加载经营走势数据中...
+                        </div>
                       ) : finTrend?.length > 0 ? (
-                        <div className="space-y-4">
+                        <>
+                          {/* ── 原生 SVG 四线平滑经营趋势曲线图 ── */}
+                          {(() => {
+                            const N = finTrend.length;
+                            const padL = 60;
+                            const padR = 30;
+                            const padT = 25;
+                            const padB = 35;
+                            const W = 840;
+                            const H = 240;
+                            const graphW = W - padL - padR;
+                            const graphH = H - padT - padB;
+
+                            const allVals = finTrend.flatMap(t => [
+                              t.recharge_cny || 0,
+                              t.consumption_revenue_cny || 0,
+                              t.teacher_cost_cny || 0,
+                              t.gross_profit_cny || 0
+                            ]);
+                            const rawMax = Math.max(...allVals, 100);
+                            const rawMin = Math.min(...allVals, 0);
+                            const maxVal = Math.max(500, Math.ceil(rawMax * 1.15 / 500) * 500);
+                            const minVal = Math.min(0, Math.floor(rawMin / 500) * 500);
+                            const range = maxVal - minVal || 1;
+
+                            const getX = (i) => (N === 1 ? padL + graphW / 2 : padL + (i / (N - 1)) * graphW);
+                            const getY = (val) => padT + graphH - ((val - minVal) / range) * graphH;
+                            const zeroY = getY(0);
+
+                            const ptsRecharge = finTrend.map((t, i) => ({ x: getX(i), y: getY(t.recharge_cny || 0), val: t.recharge_cny || 0 }));
+                            const ptsConsumption = finTrend.map((t, i) => ({ x: getX(i), y: getY(t.consumption_revenue_cny || 0), val: t.consumption_revenue_cny || 0 }));
+                            const ptsCost = finTrend.map((t, i) => ({ x: getX(i), y: getY(t.teacher_cost_cny || 0), val: t.teacher_cost_cny, fxMissing: t.fx_missing }));
+                            const ptsProfit = finTrend.map((t, i) => ({ x: getX(i), y: getY(t.gross_profit_cny || 0), val: t.gross_profit_cny, fxMissing: t.fx_missing }));
+
+                            const yTicks = [0, 0.25, 0.5, 0.75, 1].map(r => minVal + r * range);
+                            const hoveredItem = hoveredTrendIdx !== null ? finTrend[hoveredTrendIdx] : null;
+
+                            return (
+                              <div className="relative bg-white rounded-xl border border-gray-100 p-2 sm:p-4 shadow-sm">
+                                <div className="w-full overflow-x-auto">
+                                  <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-56 sm:h-64 overflow-visible select-none">
+                                    <defs>
+                                      <linearGradient id="gradRecharge" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.18" />
+                                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                                      </linearGradient>
+                                      <linearGradient id="gradConsumption" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.14" />
+                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+                                      </linearGradient>
+                                    </defs>
+
+                                    {/* 水平网格线与 Y 轴刻度 */}
+                                    {yTicks.map((tickVal, idx) => {
+                                      const y = getY(tickVal);
+                                      return (
+                                        <g key={idx}>
+                                          <line
+                                            x1={padL}
+                                            x2={W - padR}
+                                            y1={y}
+                                            y2={y}
+                                            stroke="#f1f5f9"
+                                            strokeWidth="1"
+                                            strokeDasharray={tickVal === 0 ? '0' : '4 4'}
+                                          />
+                                          <text
+                                            x={padL - 8}
+                                            y={y + 3.5}
+                                            textAnchor="end"
+                                            fontSize="10"
+                                            fill="#94a3b8"
+                                            className="font-mono"
+                                          >
+                                            ¥{Math.round(tickVal).toLocaleString()}
+                                          </text>
+                                        </g>
+                                      );
+                                    })}
+
+                                    {/* 零刻度基准线 */}
+                                    {minVal < 0 && (
+                                      <line x1={padL} x2={W - padR} y1={zeroY} y2={zeroY} stroke="#cbd5e1" strokeWidth="1.5" />
+                                    )}
+
+                                    {/* X 轴刻度线与月份文字 */}
+                                    {finTrend.map((t, i) => {
+                                      const x = getX(i);
+                                      return (
+                                        <g key={t.month}>
+                                          <line x1={x} x2={x} y1={padT + graphH} y2={padT + graphH + 5} stroke="#cbd5e1" />
+                                          <text
+                                            x={x}
+                                            y={padT + graphH + 20}
+                                            textAnchor="middle"
+                                            fontSize="11"
+                                            fill={hoveredTrendIdx === i ? '#0f172a' : '#64748b'}
+                                            fontWeight={hoveredTrendIdx === i ? 'bold' : 'normal'}
+                                          >
+                                            {t.month}
+                                          </text>
+                                        </g>
+                                      );
+                                    })}
+
+                                    {/* 面积渐变阴影 (充值与消课) */}
+                                    {N > 1 && (
+                                      <>
+                                        <path d={getSmoothAreaPath(ptsRecharge, zeroY)} fill="url(#gradRecharge)" />
+                                        <path d={getSmoothAreaPath(ptsConsumption, zeroY)} fill="url(#gradConsumption)" />
+                                      </>
+                                    )}
+
+                                    {/* 四线曲线路径 */}
+                                    {N > 1 && (
+                                      <>
+                                        <path
+                                          d={getSmoothCurvePath(ptsRecharge)}
+                                          fill="none"
+                                          stroke="#10b981"
+                                          strokeWidth="2.5"
+                                          strokeLinecap="round"
+                                        />
+                                        <path
+                                          d={getSmoothCurvePath(ptsConsumption)}
+                                          fill="none"
+                                          stroke="#3b82f6"
+                                          strokeWidth="2.5"
+                                          strokeLinecap="round"
+                                        />
+                                        <path
+                                          d={getSmoothCurvePath(ptsCost)}
+                                          fill="none"
+                                          stroke="#6366f1"
+                                          strokeWidth="2"
+                                          strokeLinecap="round"
+                                          strokeDasharray="5 3"
+                                        />
+                                        <path
+                                          d={getSmoothCurvePath(ptsProfit)}
+                                          fill="none"
+                                          stroke="#f59e0b"
+                                          strokeWidth="2.5"
+                                          strokeLinecap="round"
+                                        />
+                                      </>
+                                    )}
+
+                                    {/* 悬停竖线 */}
+                                    {hoveredTrendIdx !== null && (
+                                      <line
+                                        x1={getX(hoveredTrendIdx)}
+                                        x2={getX(hoveredTrendIdx)}
+                                        y1={padT}
+                                        y2={padT + graphH}
+                                        stroke="#94a3b8"
+                                        strokeWidth="1.5"
+                                        strokeDasharray="3 3"
+                                      />
+                                    )}
+
+                                    {/* 点标记 */}
+                                    {ptsRecharge.map((p, i) => (
+                                      <circle
+                                        key={`r-${i}`}
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r={hoveredTrendIdx === i ? 6 : 3.5}
+                                        fill="white"
+                                        stroke="#10b981"
+                                        strokeWidth="2"
+                                        className="transition-all"
+                                      />
+                                    ))}
+                                    {ptsConsumption.map((p, i) => (
+                                      <circle
+                                        key={`c-${i}`}
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r={hoveredTrendIdx === i ? 6 : 3.5}
+                                        fill="white"
+                                        stroke="#3b82f6"
+                                        strokeWidth="2"
+                                        className="transition-all"
+                                      />
+                                    ))}
+                                    {ptsCost.map((p, i) => p.val !== null && (
+                                      <circle
+                                        key={`k-${i}`}
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r={hoveredTrendIdx === i ? 5 : 3}
+                                        fill="white"
+                                        stroke="#6366f1"
+                                        strokeWidth="2"
+                                        className="transition-all"
+                                      />
+                                    ))}
+                                    {ptsProfit.map((p, i) => p.val !== null && (
+                                      <circle
+                                        key={`m-${i}`}
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r={hoveredTrendIdx === i ? 6 : 3.5}
+                                        fill="white"
+                                        stroke="#f59e0b"
+                                        strokeWidth="2"
+                                        className="transition-all"
+                                      />
+                                    ))}
+
+                                    {/* 鼠标感应交互矩形 */}
+                                    {finTrend.map((t, i) => {
+                                      const x = getX(i);
+                                      const stepW = N > 1 ? graphW / (N - 1) : graphW;
+                                      return (
+                                        <rect
+                                          key={`hit-${t.month}`}
+                                          x={x - stepW / 2}
+                                          y={0}
+                                          width={stepW}
+                                          height={H}
+                                          fill="transparent"
+                                          className="cursor-pointer"
+                                          onMouseEnter={() => setHoveredTrendIdx(i)}
+                                          onMouseLeave={() => setHoveredTrendIdx(null)}
+                                        />
+                                      );
+                                    })}
+                                  </svg>
+                                </div>
+
+                                {/* 悬停 Tooltip 浮窗 */}
+                                {hoveredItem && (
+                                  <div
+                                    className="pointer-events-none absolute z-20 bg-slate-900/90 text-white rounded-xl px-3 py-2 text-xs shadow-xl backdrop-blur-sm border border-slate-700 space-y-1 transition-all"
+                                    style={{
+                                      left: `${Math.min(85, Math.max(15, (getX(hoveredTrendIdx) / W) * 100))}%`,
+                                      top: '12px',
+                                      transform: 'translateX(-50%)'
+                                    }}
+                                  >
+                                    <div className="font-bold border-b border-slate-700 pb-1 text-slate-200 flex items-center justify-between gap-4">
+                                      <span>{hoveredItem.month}</span>
+                                      <span className="text-[10px] text-slate-400">汇率: {hoveredItem.rate || '未设'}</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 pt-0.5">
+                                      <span className="text-emerald-400">充值: ¥{hoveredItem.recharge_cny?.toLocaleString()}</span>
+                                      <span className="text-blue-400">消课: ¥{hoveredItem.consumption_revenue_cny?.toLocaleString()}</span>
+                                      <span className="text-indigo-300">
+                                        成本: {hoveredItem.fx_missing ? '未折算' : `¥${hoveredItem.teacher_cost_cny?.toLocaleString()}`}
+                                      </span>
+                                      <span className="text-amber-400 font-bold">
+                                        毛利: {hoveredItem.fx_missing ? '未核算' : `¥${hoveredItem.gross_profit_cny?.toLocaleString()}`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* 单月提示 */}
+                                {N === 1 && (
+                                  <div className="mt-2 text-center text-xs text-gray-500 bg-amber-50/70 border border-amber-200/60 rounded-lg py-1.5 px-3">
+                                    💡 当前选择仅包含 <b>{finTrend[0].month}</b> 单月数据点。您可以点击右上角<b>【近 6 个月】</b>或<b>【近 12 个月】</b>切换至多月连续经营走势曲线。
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {/* 月度卡片列表 */}
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-                            {finTrend.map((t) => (
-                              <div key={t.month} className="p-3 bg-gray-50/70 border border-gray-200 rounded-xl space-y-2">
+                            {finTrend.map((t, idx) => (
+                              <div
+                                key={t.month}
+                                onMouseEnter={() => setHoveredTrendIdx(idx)}
+                                onMouseLeave={() => setHoveredTrendIdx(null)}
+                                className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                                  hoveredTrendIdx === idx 
+                                    ? 'bg-primary-50/50 border-primary-300 shadow-sm ring-1 ring-primary-200' 
+                                    : 'bg-gray-50/70 border-gray-200 hover:border-gray-300'
+                                }`}
+                              >
                                 <div className="flex items-center justify-between font-semibold text-xs text-gray-800 border-b border-gray-200 pb-1.5">
                                   <span>{t.month}</span>
                                   {t.fx_missing ? (
@@ -1802,7 +2184,7 @@ export default function Reports() {
                                     <span className="text-[10px] text-gray-400">r: {t.rate}</span>
                                   )}
                                 </div>
-                                <div className="space-y-1 text-xs">
+                                <div className="space-y-1 text-xs pt-1">
                                   <div className="flex justify-between text-emerald-700">
                                     <span>充值:</span>
                                     <span className="font-medium">¥{t.recharge_cny?.toLocaleString()}</span>
@@ -1827,7 +2209,7 @@ export default function Reports() {
                               </div>
                             ))}
                           </div>
-                        </div>
+                        </>
                       ) : (
                         <div className="py-8 text-center text-xs text-gray-400">所选时间范围内暂无趋势记录</div>
                       )}
