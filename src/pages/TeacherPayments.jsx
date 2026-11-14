@@ -81,7 +81,6 @@ export default function TeacherPayments() {
   const [editingRateTeacher, setEditingRateTeacher] = useState(null);
   const [rateValue, setRateValue] = useState('');
   const [rateValue25, setRateValue25] = useState('');
-  const [showRateSection, setShowRateSection] = useState(false);
 
   // ── 初始化加载 ──
   useEffect(() => {
@@ -1150,44 +1149,6 @@ export default function TeacherPayments() {
           )}
         </div>
       )}
-
-      {/* ════════════════════════════════════════════════════════════════
-          教师时薪基准折叠栏
-         ════════════════════════════════════════════════════════════════ */}
-      <Card className="mt-8 border-dashed shadow-none bg-transparent">
-        <button
-          onClick={() => setShowRateSection(!showRateSection)}
-          className="w-full flex items-center justify-between p-4 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-        >
-          <div className="flex items-center gap-2 font-bold text-gray-700">
-            <Edit2 className="w-4 h-4 text-primary-600" /> 教师时薪基准统一配置
-          </div>
-          {showRateSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-        </button>
-        
-        {showRateSection && (
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {activeTeachers.map(teacher => (
-                <div key={teacher.id} className="flex items-center justify-between bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:border-primary-300 transition-colors">
-                  <div>
-                    <div className="font-bold text-gray-800 text-sm mb-0.5">{teacher.name}</div>
-                    <div className="text-xs text-primary-600 font-semibold">
-                      50min: ₱{teacher.hourly_rate || 0}/节
-                    </div>
-                    <div className="text-xs text-amber-600 font-semibold">
-                      25min: ₱{teacher.hourly_rate_25 || 80}/节
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleEditRate(teacher)} className="p-2 h-auto text-gray-400 hover:text-primary-600">
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        )}
-      </Card>
 
       {/* ════════════════════════════════════════════════════════════════
           MODAL 1: 新建薪资结算单
