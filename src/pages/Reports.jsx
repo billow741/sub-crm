@@ -164,6 +164,7 @@ export default function Reports() {
   const [fxModalOpen, setFxModalOpen] = useState(false);
   const [fxForm, setFxForm] = useState({ month: '', rate: '', source: '' });
   const [fxSubmitting, setFxSubmitting] = useState(false);
+  const [fxPage, setFxPage] = useState(1);
 
   // ─── 阶段 C：教学交付数据状态 ───
   const [teachingSummary, setTeachingSummary] = useState(null);
@@ -2247,27 +2248,36 @@ export default function Reports() {
                           </thead>
                           <tbody className="divide-y divide-gray-100 text-gray-700">
                             {fxRates?.length > 0 ? (
-                              fxRates.map((fx) => (
-                                <tr key={fx.month} className="hover:bg-gray-50/50 transition-colors">
-                                  <td className="py-3 px-4 font-bold text-gray-900">{fx.month}</td>
-                                  <td className="py-3 px-4 font-mono font-semibold text-primary-700">
-                                    {fx.rate}
-                                  </td>
-                                  <td className="py-3 px-4 text-gray-500">{fx.source || '—'}</td>
-                                  <td className="py-3 px-4 text-gray-500">{fx.updated_by || 'system'}</td>
-                                  <td className="py-3 px-4 text-gray-400">{fx.updated_at}</td>
-                                  <td className="py-3 px-4 text-right">
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => handleOpenFxModal(fx)}
-                                      className="text-primary-600 hover:text-primary-700 h-7 px-2 text-xs"
-                                    >
-                                      <Edit2 className="w-3 h-3 mr-1" /> 编辑
-                                    </Button>
-                                  </td>
-                                </tr>
-                              ))
+                              (() => {
+                                const fxPageSize = 6;
+                                const fxTotalPages = Math.ceil(fxRates.length / fxPageSize) || 1;
+                                const curFxPage = Math.min(Math.max(1, fxPage), fxTotalPages);
+                                const fxStartIdx = (curFxPage - 1) * fxPageSize;
+                                const fxEndIdx = Math.min(fxStartIdx + fxPageSize, fxRates.length);
+                                const paginatedFxRates = fxRates.slice(fxStartIdx, fxEndIdx);
+
+                                return paginatedFxRates.map((fx) => (
+                                  <tr key={fx.month} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="py-3 px-4 font-bold text-gray-900">{fx.month}</td>
+                                    <td className="py-3 px-4 font-mono font-semibold text-primary-700">
+                                      {fx.rate}
+                                    </td>
+                                    <td className="py-3 px-4 text-gray-500">{fx.source || '—'}</td>
+                                    <td className="py-3 px-4 text-gray-500">{fx.updated_by || 'system'}</td>
+                                    <td className="py-3 px-4 text-gray-400">{fx.updated_at}</td>
+                                    <td className="py-3 px-4 text-right">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleOpenFxModal(fx)}
+                                        className="text-primary-600 hover:text-primary-700 h-7 px-2 text-xs"
+                                      >
+                                        <Edit2 className="w-3 h-3 mr-1" /> 编辑
+                                      </Button>
+                                    </td>
+                                  </tr>
+                                ));
+                              })()
                             ) : (
                               <tr>
                                 <td colSpan="6" className="py-8 text-center text-gray-400">
@@ -2278,6 +2288,46 @@ export default function Reports() {
                           </tbody>
                         </table>
                       </div>
+
+                      {/* 📄 分页控制 (每页 6 项) */}
+                      {fxRates?.length > 6 && (() => {
+                        const fxPageSize = 6;
+                        const fxTotalPages = Math.ceil(fxRates.length / fxPageSize) || 1;
+                        const curFxPage = Math.min(Math.max(1, fxPage), fxTotalPages);
+                        const fxStartIdx = (curFxPage - 1) * fxPageSize;
+                        const fxEndIdx = Math.min(fxStartIdx + fxPageSize, fxRates.length);
+
+                        return (
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-gray-50/50 border-t border-gray-100 text-xs">
+                            <div className="text-gray-500">
+                              显示第 <span className="font-semibold text-gray-700">{fxStartIdx + 1}</span> - <span className="font-semibold text-gray-700">{fxEndIdx}</span> 项，共 <span className="font-semibold text-gray-700">{fxRates.length}</span> 项汇率记录（每页 6 项）
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setFxPage(p => Math.max(1, p - 1))}
+                                disabled={curFxPage <= 1}
+                                className="h-7 px-2.5 text-xs text-gray-600 border-gray-200 hover:bg-white disabled:opacity-40"
+                              >
+                                <ChevronLeft className="w-3.5 h-3.5 mr-1" /> 上一页
+                              </Button>
+                              <span className="px-2 text-xs font-semibold text-gray-600 min-w-[70px] text-center">
+                                第 {curFxPage} / {fxTotalPages} 页
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setFxPage(p => Math.min(fxTotalPages, p + 1))}
+                                disabled={curFxPage >= fxTotalPages}
+                                className="h-7 px-2.5 text-xs text-gray-600 border-gray-200 hover:bg-white disabled:opacity-40"
+                              >
+                                下一页 <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 </>
