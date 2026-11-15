@@ -558,12 +558,12 @@ communication.get('/admin/conversation', async (c) => {
 const adminForwardSchema = z.object({
   message_id: z.coerce.number().int().positive(),
   teacher_id: z.coerce.number().int().positive().optional(),
-  content_en: z.string().min(1)
+  content_en: z.string().max(2000).optional().default('')
 });
 
 /**
  * POST /api/v1/communication/admin/forward
- * 把家长留言转交外教。content_en 是 Roger 手写的英文版
+ * 把家长留言转交外教。content_en 是 Roger 手写的英文版 (选填，留空则回落家长留言原文)
  * routing_type=to_teacher, relay_status=forwarded_to_teacher, 记 forwarded_at+handled_by
  */
 communication.post('/admin/forward', validate(adminForwardSchema), async (c) => {
@@ -603,7 +603,15 @@ communication.post('/admin/forward', validate(adminForwardSchema), async (c) => 
     return c.json(error('BAD_REQUEST', '指定的教师不存在'), 400);
   }
 
-  // 更新家长留言转交状态
+  // 转交内容：未填或纯空白时，回落为家长留言原文 (content_zh)，禁止 content_en 留空入库
+  const trimmedEn = (content_en || '').trim();
+  const targetContentEn = trimmedEn || (message.content_zh || '').trim();
+
+  if (!targetContentEn) {
+    return c.json(error('BAD_REQUEST', '转交内容不能为空（未填英文且家长留言无有效文本）'), 400);
+  }
+
+  // 更新家长留言转交状态（不改动 content_zh 原文）
   await DB.prepare(
     `UPDATE parent_conversation_messages
      SET content_en = ?,
@@ -612,7 +620,7 @@ communication.post('/admin/forward', validate(adminForwardSchema), async (c) => 
          forwarded_at = datetime('now'),
          handled_by = 'roger'
      WHERE id = ?`
-  ).bind(content_en, message.id).run();
+  ).bind(targetContentEn, message.id).run();
 
   // 更新会话绑定老师与最后活跃时间
   await DB.prepare(
@@ -677,12 +685,12 @@ communication.post('/admin/direct-reply', validate(adminDirectReplySchema), asyn
 
 const adminPublishSchema = z.object({
   message_id: z.coerce.number().int().positive(),
-  content_zh: z.string().min(1)
+  content_zh: z.string().max(2000).optional().default('')
 });
 
 /**
  * POST /api/v1/communication/admin/publish
- * 放行老师回复。content_zh 是 Roger 手写的中文版
+ * 放行老师回复。content_zh 是 Roger 手写的中文版 (选填)
  * relay_status=published，记 published_at＋handled_by；更新 last_message_at 并写 notification_history
  */
 communication.post('/admin/publish', validate(adminPublishSchema), async (c) => {
@@ -707,15 +715,27 @@ communication.post('/admin/publish', validate(adminPublishSchema), async (c) => 
     return c.json(error('NOT_FOUND', '所属会话不存在'), 404);
   }
 
-  // 放行老师回复
-  await DB.prepare(
-    `UPDATE parent_conversation_messages
-     SET content_zh = ?,
-         relay_status = 'published',
-         published_at = datetime('now'),
-         handled_by = 'roger'
-     WHERE id = ?`
-  ).bind(content_zh, message.id).run();
+  const trimmedZh = (content_zh || '').trim();
+
+  // 放行老师回复：非空时写入 content_zh，为空时不覆盖原值
+  if (trimmedZh) {
+    await DB.prepare(
+      `UPDATE parent_conversation_messages
+       SET content_zh = ?,
+           relay_status = 'published',
+           published_at = datetime('now'),
+           handled_by = 'roger'
+       WHERE id = ?`
+    ).bind(trimmedZh, message.id).run();
+  } else {
+    await DB.prepare(
+      `UPDATE parent_conversation_messages
+       SET relay_status = 'published',
+           published_at = datetime('now'),
+           handled_by = 'roger'
+       WHERE id = ?`
+    ).bind(message.id).run();
+  }
 
   // 会话中对应的转发消息也标记 published
   await DB.prepare(
@@ -724,8 +744,9 @@ communication.post('/admin/publish', validate(adminPublishSchema), async (c) => 
 
   await DB.prepare("UPDATE parent_conversations SET last_message_at = datetime('now') WHERE id = ?").bind(conversation.id).run();
 
-  // 联动通知家长
-  await notifyParentReply(DB, conversation.student_id, '💬 老师回复通知', content_zh);
+  // 联动通知家长：非空用中文，为空回落老师原文，绝不发空正文
+  const notifyBody = trimmedZh || (message.content_en || '').trim() || '老师已回复';
+  await notifyParentReply(DB, conversation.student_id, '💬 老师回复通知', notifyBody);
 
   const publishedMsg = await DB.prepare('SELECT * FROM parent_conversation_messages WHERE id = ?').bind(message.id).first();
 

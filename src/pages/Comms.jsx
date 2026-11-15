@@ -200,10 +200,6 @@ export default function Comms() {
     const contentEn = (form.contentEn || '').trim();
     const teacherId = form.teacherId ? parseInt(form.teacherId, 10) : defaultTeacherId;
 
-    if (!contentEn) {
-      setErrorMessage('请填写转交外教的英文内容 (content_en)');
-      return;
-    }
     if (!teacherId) {
       setErrorMessage('学员暂无上课老师，请手动选择接收外教');
       return;
@@ -277,11 +273,6 @@ export default function Comms() {
     const form = actionForms[message.id] || {};
     const contentZh = (form.contentZh || '').trim();
 
-    if (!contentZh) {
-      setErrorMessage('请填写手写中文翻译后放行 (content_zh)');
-      return;
-    }
-
     setSubmitting((prev) => ({ ...prev, [`publish_${message.id}`]: true }));
     setErrorMessage('');
     setSuccessMessage('');
@@ -291,7 +282,11 @@ export default function Comms() {
         message_id: message.id,
         content_zh: contentZh,
       });
-      setSuccessMessage('已成功放行老师回复，双语内容已发布给家长');
+      setSuccessMessage(
+        contentZh
+          ? '已成功放行老师回复，双语内容已发布给家长'
+          : '已成功放行老师回复，已发布给家长'
+      );
       setActionForms((prev) => {
         const next = { ...prev };
         delete next[message.id];
@@ -728,7 +723,7 @@ export default function Comms() {
                             <div className="mt-2 p-2.5 bg-blue-50/60 rounded-lg border border-blue-100 text-xs space-y-1">
                               <div className="font-semibold text-blue-800 flex items-center gap-1">
                                 <ArrowRight size={12} />
-                                <span>外教阅读版 (手写英文翻译):</span>
+                                <span>外教阅读版：</span>
                               </div>
                               <div className="text-gray-700 whitespace-pre-wrap">{msg.content_en}</div>
                             </div>
@@ -804,7 +799,7 @@ export default function Comms() {
 
                                   <div className="space-y-1">
                                     <label className="text-xs font-medium text-gray-700">
-                                      手写英文翻译 (必填，转交给外教阅读):
+                                      手写英文翻译（选填，家长留言本身就是英文时留空，直接用原文转交）:
                                     </label>
                                     <textarea
                                       rows={3}
@@ -820,10 +815,7 @@ export default function Comms() {
                                   <div className="flex justify-end">
                                     <Button
                                       size="sm"
-                                      disabled={
-                                        submitting[`forward_${msg.id}`] ||
-                                        !(formState.contentEn || '').trim()
-                                      }
+                                      disabled={submitting[`forward_${msg.id}`]}
                                       onClick={() =>
                                         handleForward(
                                           msg,
@@ -944,7 +936,7 @@ export default function Comms() {
                             <div className="mt-3 pt-3 border-t border-indigo-200 space-y-2 bg-white/80 p-3 rounded-lg">
                               <div className="space-y-1">
                                 <label className="text-xs font-medium text-indigo-950">
-                                  手写中文翻译放行 (必填，提交后双语同时呈现给家长并触发通知):
+                                  手写中文翻译（选填，留空则直接用老师原文回复家长）:
                                 </label>
                                 <textarea
                                   rows={3}
@@ -960,10 +952,7 @@ export default function Comms() {
                               <div className="flex justify-end">
                                 <Button
                                   size="sm"
-                                  disabled={
-                                    submitting[`publish_${msg.id}`] ||
-                                    !(formState.contentZh || '').trim()
-                                  }
+                                  disabled={submitting[`publish_${msg.id}`]}
                                   onClick={() => handlePublish(msg)}
                                   className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5"
                                 >
