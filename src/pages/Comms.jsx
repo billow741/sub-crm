@@ -188,7 +188,7 @@ export default function Comms() {
     setActionForms((prev) => ({
       ...prev,
       [msgId]: {
-        ...(prev[msgId] || {}),
+        ...(prev[msgId] || { actionType: 'forward' }),
         [field]: val,
       },
     }));
