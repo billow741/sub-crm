@@ -192,8 +192,32 @@
       <div id="milestone-pending-list" class="mt-4 space-y-2.5 relative z-10"></div>
     </div>
 
+    <!-- Section Navigation Tabs -->
+    <div class="flex items-center gap-2 border-b border-gray-200 pb-3 overflow-x-auto" id="teacher-tabs-nav">
+      <button type="button" id="tab-btn-today" onclick="switchTeacherTab('today')" class="teacher-nav-tab active px-4 py-2 text-sm font-semibold rounded-xl transition-all bg-purple-600 text-white shadow-sm flex items-center gap-2 whitespace-nowrap cursor-pointer">
+        <i data-lucide="calendar" class="w-4 h-4"></i>
+        <span>Today's Classes</span>
+        <span id="tab-today-badge" class="px-2 py-0.5 bg-purple-700/60 text-white text-xs rounded-full">0</span>
+      </button>
+      <button type="button" id="tab-btn-upcoming" onclick="switchTeacherTab('upcoming')" class="teacher-nav-tab px-4 py-2 text-sm font-semibold rounded-xl transition-all bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 flex items-center gap-2 whitespace-nowrap cursor-pointer">
+        <i data-lucide="calendar" class="w-4 h-4"></i>
+        <span>Upcoming</span>
+        <span id="tab-upcoming-badge" class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">0</span>
+      </button>
+      <button type="button" id="tab-btn-history" onclick="switchTeacherTab('history')" class="teacher-nav-tab px-4 py-2 text-sm font-semibold rounded-xl transition-all bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 flex items-center gap-2 whitespace-nowrap cursor-pointer">
+        <i data-lucide="clock" class="w-4 h-4"></i>
+        <span>History</span>
+        <span id="tab-history-badge" class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">0</span>
+      </button>
+      <button type="button" id="tab-btn-feedback" onclick="switchTeacherTab('feedback')" class="teacher-nav-tab px-4 py-2 text-sm font-semibold rounded-xl transition-all bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 flex items-center gap-2 whitespace-nowrap cursor-pointer relative">
+        <span>💬</span>
+        <span>Parent Feedback</span>
+        <span id="feedback-unread-badge" class="hidden px-2 py-0.5 bg-red-500 text-white font-bold text-xs rounded-full shadow-xs">0</span>
+      </button>
+    </div>
+
     <!-- Today's Classes -->
-    <section>
+    <section id="today-section">
       <h2 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
         <i data-lucide="calendar" class="w-5 h-5 text-purple-600"></i>
         Today's Classes (<span id="today-count">0</span>)
@@ -251,6 +275,43 @@
         </table>
       </div>
       <div id="history-pagination" class="flex items-center justify-between mt-3 text-sm text-gray-600"></div>
+    </section>
+
+    <!-- Parent Feedback -->
+    <section id="parent-feedback-section" class="hidden">
+      <!-- Header with Refresh Button -->
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <h2 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <span>💬</span>
+            Parent Feedback
+          </h2>
+          <span id="feedback-section-count" class="text-xs text-gray-500 font-normal"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="feedback-refresh-status" class="text-xs text-gray-400 hidden sm:inline"></span>
+          <button type="button" id="feedback-refresh-btn" onclick="refreshParentFeedback()" class="px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Information Banner -->
+      <div class="bg-purple-50/70 border border-purple-100 rounded-xl p-3.5 mb-4 text-xs text-purple-900 flex items-start gap-2.5 leading-relaxed">
+        <span class="text-base leading-none mt-0.5">ℹ️</span>
+        <div>
+          <span class="font-semibold">How it works:</span> Parent questions and pedagogical feedback are forwarded by Roger with an English translation. Please reply in English. Roger will review and translate your reply into Chinese before publishing it to the parent.
+        </div>
+      </div>
+
+      <!-- Conversation List Container -->
+      <div id="feedback-conversations-list" class="space-y-4">
+        <div class="text-center py-12 bg-white rounded-xl border border-gray-200 p-8 text-gray-400 text-sm">
+          <div class="spinner mx-auto mb-3"></div>
+          Loading conversations...
+        </div>
+      </div>
     </section>
   </div>
 </div>
@@ -929,6 +990,11 @@ var window_pendingMilestones = [];
 var window_studentStatusMap = {};
 var window_currentMilestoneReportId = null;
 var pendingPromptClass = null, pendingPromptMilestone = null, pendingPromptReportType = null;
+var currentTeacherTab = 'today';
+var window_feedbackConversations = [];
+var window_expandedConvId = null;
+var window_commsTimer = null;
+var window_isInboxLoading = false;
 
 // ===== XOR Encryption =====
 function xorEncode(str, key) {
@@ -1060,51 +1126,115 @@ function getLocalDate() {
 }
 
 // ===== API Requests =====
+function getEffectiveApiBase() {
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:8787/api/v1';
+  }
+  return API_BASE;
+}
+
 async function apiGet(endpoint) {
-  var res = await fetch(API_BASE + endpoint, { headers: { 'X-API-Key': API_KEY } });
-  var json = await res.json();
-  if (!res.ok) throw new Error(json.error?.message || json.message || ('Error ' + res.status));
-  return json;
+  var isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  var urls = isLocal
+    ? ['http://localhost:8787/api/v1' + endpoint, API_BASE + endpoint]
+    : [API_BASE + endpoint, 'http://localhost:8787/api/v1' + endpoint];
+
+  var lastErr = null;
+  for (var i = 0; i < urls.length; i++) {
+    var url = urls[i];
+    try {
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function() { controller.abort(); }, 8000);
+      var res = await fetch(url, { headers: { 'X-API-Key': API_KEY }, signal: controller.signal });
+      clearTimeout(timeoutId);
+      var json = await res.json();
+      if (!res.ok) {
+        var msg = json.error?.message || json.message || ('Error ' + res.status);
+        throw new Error(msg);
+      }
+      return json;
+    } catch (err) {
+      lastErr = err;
+      if (err.name !== 'AbortError' && err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError') && !err.message.includes('Load failed')) {
+        throw err;
+      }
+    }
+  }
+  throw lastErr || new Error('Network error');
 }
 
 async function apiPatch(endpoint, data) {
-  var res = await fetch(API_BASE + endpoint, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-    body: JSON.stringify(data)
-  });
-  var text = await res.text();
-  var json;
-  try {
-    json = JSON.parse(text);
-  } catch (e) {
-    throw new Error('Server error (' + res.status + '): ' + text.slice(0, 100));
+  var isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  var urls = isLocal
+    ? ['http://localhost:8787/api/v1' + endpoint, API_BASE + endpoint]
+    : [API_BASE + endpoint, 'http://localhost:8787/api/v1' + endpoint];
+
+  var lastErr = null;
+  for (var i = 0; i < urls.length; i++) {
+    var url = urls[i];
+    try {
+      var res = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify(data)
+      });
+      var text = await res.text();
+      var json;
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Server error (' + res.status + '): ' + text.slice(0, 100));
+      }
+      if (!res.ok) throw new Error(json.error?.message || json.message || ('Error ' + res.status));
+      return json;
+    } catch (err) {
+      lastErr = err;
+      if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError') && !err.message.includes('Load failed')) {
+        throw err;
+      }
+    }
   }
-  if (!res.ok) throw new Error(json.error?.message || json.message || ('Error ' + res.status));
-  return json;
+  throw lastErr || new Error('Network error');
 }
 
 async function apiPost(endpoint, data) {
-  var res = await fetch(API_BASE + endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-    body: JSON.stringify(data)
-  });
-  var text = await res.text();
-  var json;
-  try {
-    json = JSON.parse(text);
-  } catch (e) {
-    throw new Error('Server error (' + res.status + '): ' + text.slice(0, 100));
-  }
-  if (!res.ok) {
-    var errorMsg = json.error?.message || json.message || ('Error ' + res.status);
-    if (json.error?.details && Array.isArray(json.error.details) && json.error.details.length > 0) {
-      errorMsg += ' (' + json.error.details.map(function(d){ return (d.field ? d.field + ': ' : '') + d.message; }).join('; ') + ')';
+  var isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  var urls = isLocal
+    ? ['http://localhost:8787/api/v1' + endpoint, API_BASE + endpoint]
+    : [API_BASE + endpoint, 'http://localhost:8787/api/v1' + endpoint];
+
+  var lastErr = null;
+  for (var i = 0; i < urls.length; i++) {
+    var url = urls[i];
+    try {
+      var res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify(data)
+      });
+      var text = await res.text();
+      var json;
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Server error (' + res.status + '): ' + text.slice(0, 100));
+      }
+      if (!res.ok) {
+        var errorMsg = json.error?.message || json.message || ('Error ' + res.status);
+        if (json.error?.details && Array.isArray(json.error.details) && json.error.details.length > 0) {
+          errorMsg += ' (' + json.error.details.map(function(d){ return (d.field ? d.field + ': ' : '') + d.message; }).join('; ') + ')';
+        }
+        throw new Error(errorMsg);
+      }
+      return json;
+    } catch (err) {
+      lastErr = err;
+      if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError') && !err.message.includes('Load failed')) {
+        throw err;
+      }
     }
-    throw new Error(errorMsg);
   }
-  return json;
+  throw lastErr || new Error('Network error');
 }
 
 // ===== View Feedback Modal =====
@@ -1436,6 +1566,12 @@ async function loadTeacherData() {
 
     // Dynamically fetch textbooks list to populate dropdown
     loadTextbookOptions();
+
+    // Sync current tab view
+    switchTeacherTab(currentTeacherTab || 'today');
+
+    // Quietly fetch Parent Feedback inbox to display real unread badge count
+    loadFeedbackInbox(true);
 
 } catch (err) {
  console.error('Load failed:', err);
@@ -2112,6 +2248,14 @@ function refreshNextLessonPreviewOptions() {
 function renderTodayClasses(classes) {
   window_todayClasses = classes;
   document.getElementById('today-count').textContent = classes.length;
+  var tbEl = document.getElementById('tab-today-badge');
+  if (tbEl) tbEl.textContent = classes.length;
+
+  var todaySec = document.getElementById('today-section');
+  if (todaySec) {
+    if (currentTeacherTab === 'today') todaySec.classList.remove('hidden');
+    else todaySec.classList.add('hidden');
+  }
 
   if (classes.length === 0) {
     document.getElementById('today-classes').innerHTML = '<div class="col-span-full text-center py-8 text-gray-500 bg-white rounded-lg">No classes scheduled for today</div>';
@@ -2210,11 +2354,20 @@ function getDayOfWeek(dateStr) {
 
 // ===== Render Upcoming =====
 function renderUpcoming(classes) {
+  var ubEl = document.getElementById('tab-upcoming-badge');
+  if (ubEl) ubEl.textContent = classes.length;
+  document.getElementById('upcoming-count').textContent = classes.length;
+
+  var upSec = document.getElementById('upcoming-section');
+
   if (classes.length === 0) {
-    document.getElementById('upcoming-section').classList.add('hidden');
+    document.getElementById('upcoming-body').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500 bg-white">No upcoming classes scheduled</td></tr>';
+    if (upSec) {
+      if (currentTeacherTab === 'upcoming') upSec.classList.remove('hidden');
+      else upSec.classList.add('hidden');
+    }
     return;
   }
-  document.getElementById('upcoming-count').textContent = classes.length;
 
   var html = '';
   for (var i = 0; i < classes.length; i++) {
@@ -2242,7 +2395,10 @@ function renderUpcoming(classes) {
   }
 
   document.getElementById('upcoming-body').innerHTML = html;
-  document.getElementById('upcoming-section').classList.remove('hidden');
+  if (upSec) {
+    if (currentTeacherTab === 'upcoming') upSec.classList.remove('hidden');
+    else upSec.classList.add('hidden');
+  }
 }
 
 // ===== Render History (Paginated) =====
@@ -2250,8 +2406,17 @@ function renderHistory() {
   var all = window_allPastClasses || [];
   window_historyClasses = all;
 
+  var hbEl = document.getElementById('tab-history-badge');
+  if (hbEl) hbEl.textContent = all.length;
+
+  var histSec = document.getElementById('history-section');
+
   if (all.length === 0) {
-    document.getElementById('history-section').classList.add('hidden');
+    document.getElementById('history-body').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500 bg-white">No class history found</td></tr>';
+    if (histSec) {
+      if (currentTeacherTab === 'history') histSec.classList.remove('hidden');
+      else histSec.classList.add('hidden');
+    }
     return;
   }
 
@@ -2309,7 +2474,10 @@ function renderHistory() {
   }
 
   document.getElementById('history-body').innerHTML = html;
-  document.getElementById('history-section').classList.remove('hidden');
+  if (histSec) {
+    if (currentTeacherTab === 'history') histSec.classList.remove('hidden');
+    else histSec.classList.add('hidden');
+  }
 
   // Pagination
   var pagHtml = '<span>' + (start + 1) + '-' + Math.min(end, all.length) + ' / ' + all.length + '</span>';
@@ -4162,6 +4330,509 @@ async function checkExistingAssessment(classId, callback) {
   } catch(e) { /* no existing assessment, that's fine */ }
   if (callback) callback(null);
   return null;
+}
+
+// ===== Parent Feedback System (Comms Ticket C) =====
+
+function switchTeacherTab(tab) {
+  var prevTab = currentTeacherTab;
+  currentTeacherTab = tab;
+
+  // Update tab buttons appearance
+  var tabKeys = ['today', 'upcoming', 'history', 'feedback'];
+  tabKeys.forEach(function(k) {
+    var btn = document.getElementById('tab-btn-' + k);
+    if (!btn) return;
+    if (k === tab) {
+      btn.className = 'teacher-nav-tab active px-4 py-2 text-sm font-semibold rounded-xl transition-all bg-purple-600 text-white shadow-sm flex items-center gap-2 whitespace-nowrap cursor-pointer';
+    } else {
+      btn.className = 'teacher-nav-tab px-4 py-2 text-sm font-semibold rounded-xl transition-all bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 flex items-center gap-2 whitespace-nowrap cursor-pointer';
+    }
+  });
+
+  // Section visibility toggling
+  var todaySec = document.getElementById('today-section');
+  var upcomingSec = document.getElementById('upcoming-section');
+  var historySec = document.getElementById('history-section');
+  var feedbackSec = document.getElementById('parent-feedback-section');
+
+  if (todaySec) {
+    if (tab === 'today') todaySec.classList.remove('hidden');
+    else todaySec.classList.add('hidden');
+  }
+  if (upcomingSec) {
+    if (tab === 'upcoming') upcomingSec.classList.remove('hidden');
+    else upcomingSec.classList.add('hidden');
+  }
+  if (historySec) {
+    if (tab === 'history') historySec.classList.remove('hidden');
+    else historySec.classList.add('hidden');
+  }
+  if (feedbackSec) {
+    if (tab === 'feedback') {
+      feedbackSec.classList.remove('hidden');
+      loadFeedbackInbox(false);
+      startCommsTimer();
+    } else {
+      feedbackSec.classList.add('hidden');
+      if (prevTab === 'feedback') {
+        stopCommsTimer();
+      }
+    }
+  }
+
+  if (window.lucide && typeof lucide.createIcons === 'function') {
+    try { lucide.createIcons(); } catch(e) {}
+  }
+}
+
+function startCommsTimer() {
+  stopCommsTimer();
+  window_commsTimer = setInterval(function() {
+    if (currentTeacherTab === 'feedback') {
+      loadFeedbackInbox(true);
+    } else {
+      stopCommsTimer();
+    }
+  }, 60000);
+}
+
+function stopCommsTimer() {
+  if (window_commsTimer) {
+    clearInterval(window_commsTimer);
+    window_commsTimer = null;
+  }
+}
+
+function updateFeedbackBadge(pendingCount) {
+  var badge = document.getElementById('feedback-unread-badge');
+  if (!badge) return;
+  badge.textContent = pendingCount > 99 ? '99+' : String(pendingCount);
+  if (pendingCount > 0) {
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function refreshParentFeedback() {
+  loadFeedbackInbox(false);
+  startCommsTimer();
+}
+
+function formatDateTime(str) {
+  if (!str) return '';
+  var s = String(str).replace('T', ' ');
+  if (s.length >= 16) {
+    return s.substring(0, 16);
+  }
+  return s;
+}
+
+function getLastParentMessageSnippet(conv) {
+  if (!conv.messages || conv.messages.length === 0) return 'No messages yet';
+  var parentMsgs = conv.messages.filter(function(m) { return m.sender_role === 'parent'; });
+  var target = parentMsgs.length > 0 ? parentMsgs[parentMsgs.length - 1] : conv.messages[conv.messages.length - 1];
+  var text = (target.content_en && target.content_en.trim())
+    ? target.content_en.trim()
+    : ((target.content_zh && target.content_zh.trim()) ? target.content_zh.trim() : '');
+  if (!text) return 'No message content';
+  var firstLine = text.split(/[\r\n]+/)[0];
+  return firstLine;
+}
+
+function renderThreadMessages(messages) {
+  if (!messages || messages.length === 0) {
+    return '<div class="text-center py-6 text-gray-400 text-xs italic">No messages in this conversation.</div>';
+  }
+
+  var html = '';
+  for (var i = 0; i < messages.length; i++) {
+    var msg = messages[i];
+    var timeStr = formatDateTime(msg.created_at);
+
+    if (msg.sender_role === 'parent') {
+      // Parent message: English on top, Chinese on bottom
+      var hasEn = (msg.content_en && msg.content_en.trim().length > 0);
+      var enHtml = hasEn
+        ? '<div class="text-sm text-gray-900 font-medium leading-relaxed whitespace-pre-wrap">' + escapeHtml(msg.content_en) + '</div>'
+        : '<div class="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200 inline-block mb-1 font-medium">Roger 尚未附英文版</div>';
+
+      var zhHtml = msg.content_zh
+        ? '<div class="text-xs text-gray-500 ' + (hasEn ? 'mt-2 pt-2 border-t border-gray-100' : '') + ' leading-relaxed whitespace-pre-wrap"><span class="text-gray-400 mr-1 font-sans">原文:</span>' + escapeHtml(msg.content_zh) + '</div>'
+        : '';
+
+      html += '<div class="flex flex-col items-start max-w-2xl">';
+      html += '  <div class="flex items-center gap-2 mb-1 px-1">';
+      html += '    <span class="text-xs font-bold text-gray-700 flex items-center gap-1"><span>👨‍👩‍👧</span> ' + escapeHtml(msg.sender_name || 'Parent') + '</span>';
+      html += '    <span class="text-[11px] text-gray-400">' + timeStr + '</span>';
+      html += '  </div>';
+      html += '  <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm p-3.5 shadow-2xs w-full">';
+      html += enHtml;
+      html += zhHtml;
+      html += '  </div>';
+      html += '</div>';
+
+    } else if (msg.sender_role === 'teacher') {
+      // Teacher reply: right-aligned
+      // If replied_by_teacher: English only, status "等待 Roger 审核发布"
+      // If published: English + Chinese, status "已发布给家长"
+      var isReplied = (msg.relay_status === 'replied_by_teacher');
+      var isPublished = (msg.relay_status === 'published');
+      var replyTime = formatDateTime(msg.replied_at || msg.created_at);
+
+      var teacherEn = '<div class="text-sm text-purple-950 font-medium leading-relaxed whitespace-pre-wrap">' + escapeHtml(msg.content_en || '') + '</div>';
+      var teacherZh = (isPublished && msg.content_zh)
+        ? '<div class="text-xs text-purple-700/80 mt-2 pt-2 border-t border-purple-150 leading-relaxed whitespace-pre-wrap"><span class="text-purple-400 mr-1 font-sans">中文译文:</span>' + escapeHtml(msg.content_zh) + '</div>'
+        : '';
+
+      var statusTag = '';
+      if (isReplied) {
+        statusTag = '<div class="mt-2 flex items-center justify-end gap-1.5 text-xs text-amber-700 font-medium">' +
+          '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-full">' +
+          '<span>⏳</span><span>等待 Roger 审核发布</span>' +
+          '</span>' +
+          '</div>';
+      } else if (isPublished) {
+        statusTag = '<div class="mt-2 flex items-center justify-end gap-1.5 text-xs text-green-700 font-medium">' +
+          '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 border border-green-200 rounded-full">' +
+          '<span>✓</span><span>已发布给家长</span>' +
+          '</span>' +
+          '</div>';
+      }
+
+      html += '<div class="flex flex-col items-end ml-auto max-w-2xl">';
+      html += '  <div class="flex items-center gap-2 mb-1 px-1">';
+      html += '    <span class="text-[11px] text-gray-400">' + replyTime + '</span>';
+      html += '    <span class="text-xs font-bold text-purple-800 flex items-center gap-1"><span>👩‍🏫</span> ' + escapeHtml(msg.sender_name || 'You (Teacher)') + '</span>';
+      html += '  </div>';
+      html += '  <div class="bg-purple-50/80 border border-purple-200 rounded-2xl rounded-tr-sm p-3.5 shadow-2xs w-full text-left">';
+      html += teacherEn;
+      html += teacherZh;
+      html += statusTag;
+      html += '  </div>';
+      html += '</div>';
+
+    } else if (msg.sender_role === 'advisor') {
+      var advEn = msg.content_en
+        ? '<div class="text-sm text-gray-900 font-medium leading-relaxed whitespace-pre-wrap">' + escapeHtml(msg.content_en) + '</div>'
+        : '';
+      var advZh = msg.content_zh
+        ? '<div class="text-xs text-gray-600 ' + (msg.content_en ? 'mt-2 pt-2 border-t border-gray-100' : '') + ' leading-relaxed whitespace-pre-wrap">' + escapeHtml(msg.content_zh) + '</div>'
+        : '';
+      var advStatus = msg.relay_status === 'published'
+        ? '<div class="mt-2 text-right"><span class="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full font-medium">✓ 已发布给家长</span></div>'
+        : '';
+
+      html += '<div class="flex flex-col items-start max-w-2xl">';
+      html += '  <div class="flex items-center gap-2 mb-1 px-1">';
+      html += '    <span class="text-xs font-bold text-blue-700 flex items-center gap-1"><span>🧑‍💼</span> ' + escapeHtml(msg.sender_name || 'Advisor') + '</span>';
+      html += '    <span class="text-[11px] text-gray-400">' + timeStr + '</span>';
+      html += '  </div>';
+      html += '  <div class="bg-blue-50/50 border border-blue-200 rounded-2xl rounded-tl-sm p-3.5 shadow-2xs w-full">';
+      html += advEn;
+      html += advZh;
+      html += advStatus;
+      html += '  </div>';
+      html += '</div>';
+    }
+  }
+  return html;
+}
+
+function renderFeedbackConversations(convs) {
+  var listEl = document.getElementById('feedback-conversations-list');
+  if (!listEl) return;
+
+  if (convs.length === 0) {
+    listEl.innerHTML = '<div class="text-center py-12 bg-white rounded-xl border border-gray-200 p-8 text-gray-500">' +
+      '<div class="text-4xl mb-3">💬</div>' +
+      '<div class="font-semibold text-gray-700 text-base mb-1">No Parent Feedback Yet</div>' +
+      '<div class="text-xs text-gray-400 max-w-md mx-auto leading-relaxed">When parents send messages and Roger forwards teaching inquiries to you, they will appear here.</div>' +
+      '</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < convs.length; i++) {
+    var conv = convs[i];
+    var isExpanded = (window_expandedConvId === conv.id);
+
+    // Student display name
+    var studentDisplay = escapeHtml(conv.student_name || 'Student');
+    if (conv.student_english_name) {
+      studentDisplay += ' (' + escapeHtml(conv.student_english_name) + ')';
+    }
+
+    // Pending count badge (0 则不显示)
+    var pendingBadge = '';
+    if (conv.pending_reply_count && conv.pending_reply_count > 0) {
+      pendingBadge = '<span class="px-2.5 py-0.5 bg-red-100 text-red-700 font-bold text-xs rounded-full border border-red-200 flex items-center gap-1 shrink-0">' +
+        '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>' +
+        conv.pending_reply_count + ' Pending' +
+        '</span>';
+    }
+
+    // Last message snippet: English first line if present, else Chinese first line
+    var snippet = getLastParentMessageSnippet(conv);
+
+    // Last message timestamp
+    var timeStr = formatDateTime(conv.last_message_at);
+
+    html += '<div class="bg-white rounded-xl shadow-xs border border-gray-200 overflow-hidden transition-all duration-200" id="conv-card-' + conv.id + '">';
+    
+    // Card header
+    html += '<div onclick="toggleConversation(' + conv.id + ')" class="p-4 sm:p-5 cursor-pointer hover:bg-gray-50/80 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none">';
+    html += '  <div class="flex-1 min-w-0">';
+    html += '    <div class="flex items-center gap-2.5 flex-wrap">';
+    html += '      <span class="font-bold text-gray-900 text-base">' + studentDisplay + '</span>';
+    html += pendingBadge;
+    html += '    </div>';
+    html += '    <div class="text-xs text-gray-600 mt-2 line-clamp-1 truncate font-normal">';
+    html += '      <span class="text-gray-400 font-medium mr-1">Latest:</span>';
+    html += '      <span class="text-gray-700">' + escapeHtml(snippet) + '</span>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '  <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">';
+    html += '    <span class="text-xs text-gray-400 font-normal whitespace-nowrap">' + timeStr + '</span>';
+    html += '    <div id="conv-arrow-' + conv.id + '" class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 transition-transform duration-200 text-xs font-bold">' + (isExpanded ? '▲' : '▼') + '</div>';
+    html += '  </div>';
+    html += '</div>';
+
+    // Collapsible thread
+    html += '<div id="conv-thread-' + conv.id + '" class="' + (isExpanded ? '' : 'hidden') + ' border-t border-gray-100 bg-slate-50/60 p-4 sm:p-5">';
+    html += '  <div id="thread-messages-' + conv.id + '" class="space-y-4 mb-5 max-h-[500px] overflow-y-auto pr-1">';
+    html += renderThreadMessages(conv.messages || []);
+    html += '  </div>';
+
+    // Reply Box
+    var studentRefName = escapeHtml(conv.student_english_name || conv.student_name || 'Student');
+    html += '  <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-2xs">';
+    html += '    <div class="flex items-center justify-between mb-1.5">';
+    html += '      <label for="reply-input-' + conv.id + '" class="text-xs font-semibold text-gray-700">Reply in English to ' + studentRefName + '\'s parent:</label>';
+    html += '      <span id="reply-count-' + conv.id + '" class="text-xs text-gray-400 font-mono">0 / 3000</span>';
+    html += '    </div>';
+    html += '    <textarea id="reply-input-' + conv.id + '" rows="3" maxlength="3000" oninput="updateReplyCount(' + conv.id + ')" placeholder="Type your detailed pedagogical feedback in English (up to 3000 characters)..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-y min-h-[85px]"></textarea>';
+    html += '    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mt-2.5">';
+    html += '      <p class="text-xs text-amber-700 flex items-center gap-1.5">';
+    html += '        <span>⚠️</span>';
+    html += '        <span>Reply will be reviewed and translated into Chinese by Roger before being published.</span>';
+    html += '      </p>';
+    html += '      <button type="button" id="reply-btn-' + conv.id + '" onclick="sendTeacherReply(' + conv.id + ')" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs rounded-lg transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0">';
+    html += '        <i data-lucide="send" class="w-3.5 h-3.5"></i>';
+    html += '        <span>Send Reply</span>';
+    html += '      </button>';
+    html += '    </div>';
+    html += '    <div id="reply-error-' + conv.id + '" class="hidden mt-2.5 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 font-medium"></div>';
+    html += '  </div>';
+
+    html += '</div>'; // End conv-thread
+    html += '</div>'; // End conv-card
+  }
+
+  listEl.innerHTML = html;
+
+  if (window.lucide && typeof lucide.createIcons === 'function') {
+    try { lucide.createIcons(); } catch(e) {}
+  }
+}
+
+function toggleConversation(convId) {
+  if (window_expandedConvId === convId) {
+    window_expandedConvId = null;
+  } else {
+    window_expandedConvId = convId;
+  }
+  renderFeedbackConversations(window_feedbackConversations || []);
+  if (window_expandedConvId) {
+    var cardEl = document.getElementById('conv-card-' + convId);
+    if (cardEl) {
+      cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+}
+
+function updateReplyCount(convId) {
+  var input = document.getElementById('reply-input-' + convId);
+  var counter = document.getElementById('reply-count-' + convId);
+  if (!input || !counter) return;
+  var len = (input.value || '').length;
+  counter.textContent = len + ' / 3000';
+  if (len > 3000) {
+    counter.className = 'text-xs text-red-600 font-mono font-bold';
+  } else {
+    counter.className = 'text-xs text-gray-400 font-mono';
+  }
+}
+
+async function sendTeacherReply(convId) {
+  var input = document.getElementById('reply-input-' + convId);
+  var btn = document.getElementById('reply-btn-' + convId);
+  var errEl = document.getElementById('reply-error-' + convId);
+  if (!input || !btn) return;
+
+  var text = (input.value || '').trim();
+  if (!text) {
+    if (errEl) {
+      errEl.textContent = 'Please enter your reply content in English.';
+      errEl.classList.remove('hidden');
+    }
+    input.focus();
+    return;
+  }
+
+  // Word count guard: > 3000 characters intercepted on frontend
+  if (text.length > 3000) {
+    if (errEl) {
+      errEl.textContent = 'Reply exceeds 3000 characters limit (' + text.length + ' / 3000). Please shorten your message.';
+      errEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  var params = new URLSearchParams(window.location.search);
+  var token = params.get('token');
+  if (!token) {
+    if (errEl) {
+      errEl.textContent = 'Teacher authentication token missing from URL (?token=...).';
+      errEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (errEl) {
+    errEl.textContent = '';
+    errEl.classList.add('hidden');
+  }
+
+  // Disable button and input to prevent duplicate submission
+  btn.disabled = true;
+  input.disabled = true;
+  var originalBtnText = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner inline-block w-3.5 h-3.5 mr-1.5 align-middle border-2" style="border-top-color:white;"></span><span>Sending...</span>';
+
+  try {
+    var res = await apiPost('/communication/teacher/reply', {
+      conversation_id: convId,
+      token: token,
+      content_en: text
+    });
+
+    var newMsg = (res && res.data) ? res.data : null;
+    if (!newMsg) {
+      throw new Error('Server returned empty reply response');
+    }
+
+    // Reset input
+    input.value = '';
+    input.disabled = false;
+    btn.disabled = false;
+    btn.innerHTML = originalBtnText;
+    updateReplyCount(convId);
+
+    // Update conversation in memory
+    var conv = (window_feedbackConversations || []).find(function(c) { return c.id === convId; });
+    if (conv) {
+      if (!conv.messages) conv.messages = [];
+      conv.messages.push(newMsg);
+      conv.last_message_at = newMsg.created_at || new Date().toISOString();
+      
+      // Update thread messages container immediately
+      var threadEl = document.getElementById('thread-messages-' + convId);
+      if (threadEl) {
+        threadEl.innerHTML = renderThreadMessages(conv.messages);
+        threadEl.scrollTop = threadEl.scrollHeight;
+      }
+    }
+
+    // Silent background refresh to sync unread counts
+    loadFeedbackInbox(true);
+
+  } catch (err) {
+    console.error('Failed to send reply:', err);
+    input.disabled = false;
+    btn.disabled = false;
+    btn.innerHTML = originalBtnText;
+    if (errEl) {
+      errEl.textContent = err.message || 'Failed to send reply. Please try again.';
+      errEl.classList.remove('hidden');
+    }
+  }
+}
+
+async function loadFeedbackInbox(silent) {
+  var teacherId = currentTeacherId || (typeof getTeacherId === 'function' ? getTeacherId() : null);
+  var params = new URLSearchParams(window.location.search);
+  var token = params.get('token');
+
+  if (!teacherId || !token) {
+    console.warn('Teacher id or token missing for feedback inbox');
+    return;
+  }
+
+  if (!silent) {
+    var statusEl = document.getElementById('feedback-refresh-status');
+    if (statusEl) statusEl.textContent = 'Refreshing...';
+    var listEl = document.getElementById('feedback-conversations-list');
+    if (listEl && (!window_feedbackConversations || window_feedbackConversations.length === 0)) {
+      listEl.innerHTML = '<div class="text-center py-12 text-gray-500 bg-white rounded-xl border border-gray-200 p-8"><div class="spinner mx-auto mb-3"></div>Loading Parent Feedback...</div>';
+    }
+  }
+
+  try {
+    window_isInboxLoading = true;
+    var res = await apiGet('/communication/teacher/inbox?teacher_id=' + encodeURIComponent(teacherId) + '&token=' + encodeURIComponent(token));
+    var convs = (res && res.data) ? res.data : [];
+    if (!Array.isArray(convs)) convs = [];
+
+    // Sort by last_message_at DESC
+    convs.sort(function(a, b) {
+      return (b.last_message_at || '').localeCompare(a.last_message_at || '');
+    });
+
+    window_feedbackConversations = convs;
+
+    // Calculate total pending replies across all conversations
+    var totalPending = convs.reduce(function(sum, c) {
+      return sum + (c.pending_reply_count || 0);
+    }, 0);
+
+    updateFeedbackBadge(totalPending);
+
+    var countEl = document.getElementById('feedback-section-count');
+    if (countEl) {
+      countEl.textContent = '(' + convs.length + ' conversation' + (convs.length === 1 ? '' : 's') + (totalPending > 0 ? ', ' + totalPending + ' pending reply' : '') + ')';
+    }
+
+    // Default expand the first conversation if none expanded yet and there are conversations
+    if (window_expandedConvId === null && convs.length > 0) {
+      var pendingConv = convs.find(function(c) { return (c.pending_reply_count || 0) > 0; });
+      window_expandedConvId = pendingConv ? pendingConv.id : convs[0].id;
+    }
+
+    renderFeedbackConversations(convs);
+
+    var statusEl = document.getElementById('feedback-refresh-status');
+    if (statusEl) {
+      var d = new Date();
+      var hh = String(d.getHours()).padStart(2, '0');
+      var mm = String(d.getMinutes()).padStart(2, '0');
+      var ss = String(d.getSeconds()).padStart(2, '0');
+      statusEl.textContent = 'Updated at ' + hh + ':' + mm + ':' + ss;
+    }
+  } catch (err) {
+    console.error('Failed to load feedback inbox:', err);
+    var statusEl = document.getElementById('feedback-refresh-status');
+    if (statusEl) statusEl.textContent = 'Update failed';
+    if (!silent) {
+      var listEl = document.getElementById('feedback-conversations-list');
+      if (listEl && (!window_feedbackConversations || window_feedbackConversations.length === 0)) {
+        listEl.innerHTML = '<div class="text-center py-12 text-red-500 bg-white rounded-xl border border-red-200 p-6">Failed to load parent feedback: ' + escapeHtml(err.message) + '</div>';
+      }
+    }
+  } finally {
+    window_isInboxLoading = false;
+  }
 }
 
 // ===== Escape HTML helper (already defined above, but exportble for report window) =====
