@@ -715,3 +715,46 @@ export const reportOps = {
     window.URL.revokeObjectURL(downloadUrl);
   }
 };
+
+// ============================================
+// 家校沟通（管理端）相关操作
+// ============================================
+export const commsOps = {
+  getQueue: async () => {
+    const result = await request('/communication/admin/queue');
+    return result.data?.data || result.data || [];
+  },
+  getConversation: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const result = await request(`/communication/admin/conversation${query ? `?${query}` : ''}`);
+    return result.data?.data || result.data || null;
+  },
+  forward: async ({ message_id, teacher_id, content_en }) => {
+    const result = await request('/communication/admin/forward', {
+      method: 'POST',
+      body: { message_id, teacher_id, content_en },
+    });
+    return result.data?.data || result.data;
+  },
+  publish: async ({ message_id, content_zh }) => {
+    const result = await request('/communication/admin/publish', {
+      method: 'POST',
+      body: { message_id, content_zh },
+    });
+    return result.data?.data || result.data;
+  },
+  directReply: async ({ conversation_id, content_zh }) => {
+    const result = await request('/communication/admin/direct-reply', {
+      method: 'POST',
+      body: { conversation_id, content_zh },
+    });
+    return result.data?.data || result.data;
+  },
+  addInternalNote: async ({ conversation_id, content }) => {
+    const result = await request('/communication/admin/internal-note', {
+      method: 'POST',
+      body: { conversation_id, content },
+    });
+    return result.data?.data || result.data;
+  },
+};
