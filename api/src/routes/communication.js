@@ -63,19 +63,14 @@ function verifyAdmin(c) {
   const apiKeyHeader = c.req.header('X-API-Key');
   let token = authHeader || '';
   if (token.startsWith('Bearer ')) {
-    token = token.slice(7).trim();
-  } else if (token.startsWith('dev-api-key') || token.startsWith('sunnybridge-')) {
-    token = token.trim();
+    token = token.slice(7);
   }
   if (!token && apiKeyHeader) {
-    token = apiKeyHeader.trim();
+    token = apiKeyHeader;
   }
-
-  const validKeys = [c.env.API_KEY || 'dev-api-key', 'sunnybridge-dev-key-2024'];
-  if (!token || !validKeys.includes(token)) {
-    return false;
-  }
-  return true;
+  // 与 middleware/auth.js 一致：只认 env.API_KEY（未配时为 dev-api-key），不留任何写死在代码里的备用 key
+  const validApiKey = c.env.API_KEY || 'dev-api-key';
+  return !!token && token === validApiKey;
 }
 
 /**
