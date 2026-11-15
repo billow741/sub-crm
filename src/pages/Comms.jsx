@@ -277,11 +277,6 @@ export default function Comms() {
     const form = actionForms[message.id] || {};
     const contentZh = (form.contentZh || '').trim();
 
-    if (!contentZh) {
-      setErrorMessage('请填写手写中文翻译后放行 (content_zh)');
-      return;
-    }
-
     setSubmitting((prev) => ({ ...prev, [`publish_${message.id}`]: true }));
     setErrorMessage('');
     setSuccessMessage('');
@@ -291,7 +286,11 @@ export default function Comms() {
         message_id: message.id,
         content_zh: contentZh,
       });
-      setSuccessMessage('已成功放行老师回复，双语内容已发布给家长');
+      setSuccessMessage(
+        contentZh
+          ? '已成功放行老师回复，双语内容已发布给家长'
+          : '已成功放行老师回复，已发布给家长'
+      );
       setActionForms((prev) => {
         const next = { ...prev };
         delete next[message.id];
@@ -944,7 +943,7 @@ export default function Comms() {
                             <div className="mt-3 pt-3 border-t border-indigo-200 space-y-2 bg-white/80 p-3 rounded-lg">
                               <div className="space-y-1">
                                 <label className="text-xs font-medium text-indigo-950">
-                                  手写中文翻译放行 (必填，提交后双语同时呈现给家长并触发通知):
+                                  手写中文翻译（选填，留空则直接用老师原文回复家长）:
                                 </label>
                                 <textarea
                                   rows={3}
@@ -960,10 +959,7 @@ export default function Comms() {
                               <div className="flex justify-end">
                                 <Button
                                   size="sm"
-                                  disabled={
-                                    submitting[`publish_${msg.id}`] ||
-                                    !(formState.contentZh || '').trim()
-                                  }
+                                  disabled={submitting[`publish_${msg.id}`]}
                                   onClick={() => handlePublish(msg)}
                                   className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5"
                                 >

@@ -677,12 +677,12 @@ communication.post('/admin/direct-reply', validate(adminDirectReplySchema), asyn
 
 const adminPublishSchema = z.object({
   message_id: z.coerce.number().int().positive(),
-  content_zh: z.string().min(1)
+  content_zh: z.string().max(2000).optional().default('')
 });
 
 /**
  * POST /api/v1/communication/admin/publish
- * 放行老师回复。content_zh 是 Roger 手写的中文版
+ * 放行老师回复。content_zh 是 Roger 手写的中文版 (选填)
  * relay_status=published，记 published_at＋handled_by；更新 last_message_at 并写 notification_history
  */
 communication.post('/admin/publish', validate(adminPublishSchema), async (c) => {
@@ -707,15 +707,27 @@ communication.post('/admin/publish', validate(adminPublishSchema), async (c) => 
     return c.json(error('NOT_FOUND', '所属会话不存在'), 404);
   }
 
-  // 放行老师回复
-  await DB.prepare(
-    `UPDATE parent_conversation_messages
-     SET content_zh = ?,
-         relay_status = 'published',
-         published_at = datetime('now'),
-         handled_by = 'roger'
-     WHERE id = ?`
-  ).bind(content_zh, message.id).run();
+  const trimmedZh = (content_zh || '').trim();
+
+  // 放行老师回复：非空时写入 content_zh，为空时不覆盖原值
+  if (trimmedZh) {
+    await DB.prepare(
+      `UPDATE parent_conversation_messages
+       SET content_zh = ?,
+           relay_status = 'published',
+           published_at = datetime('now'),
+           handled_by = 'roger'
+       WHERE id = ?`
+    ).bind(trimmedZh, message.id).run();
+  } else {
+    await DB.prepare(
+      `UPDATE parent_conversation_messages
+       SET relay_status = 'published',
+           published_at = datetime('now'),
+           handled_by = 'roger'
+       WHERE id = ?`
+    ).bind(message.id).run();
+  }
 
   // 会话中对应的转发消息也标记 published
   await DB.prepare(
@@ -724,8 +736,9 @@ communication.post('/admin/publish', validate(adminPublishSchema), async (c) => 
 
   await DB.prepare("UPDATE parent_conversations SET last_message_at = datetime('now') WHERE id = ?").bind(conversation.id).run();
 
-  // 联动通知家长
-  await notifyParentReply(DB, conversation.student_id, '💬 老师回复通知', content_zh);
+  // 联动通知家长：非空用中文，为空回落老师原文，绝不发空正文
+  const notifyBody = trimmedZh || (message.content_en || '').trim() || '老师已回复';
+  await notifyParentReply(DB, conversation.student_id, '💬 老师回复通知', notifyBody);
 
   const publishedMsg = await DB.prepare('SELECT * FROM parent_conversation_messages WHERE id = ?').bind(message.id).first();
 

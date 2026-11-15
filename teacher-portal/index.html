@@ -297,14 +297,6 @@
         </div>
       </div>
 
-      <!-- Information Banner -->
-      <div class="bg-purple-50/70 border border-purple-100 rounded-xl p-3.5 mb-4 text-xs text-purple-900 flex items-start gap-2.5 leading-relaxed">
-        <span class="text-base leading-none mt-0.5">ℹ️</span>
-        <div>
-          <span class="font-semibold">How it works:</span> Parent questions and pedagogical feedback are forwarded by Roger with an English translation. Please reply in English. Roger will review and translate your reply into Chinese before publishing it to the parent.
-        </div>
-      </div>
-
       <!-- Conversation List Container -->
       <div id="feedback-conversations-list" class="space-y-4">
         <div class="text-center py-12 bg-white rounded-xl border border-gray-200 p-8 text-gray-400 text-sm">
@@ -4480,29 +4472,26 @@ function renderThreadMessages(messages) {
       html += '</div>';
 
     } else if (msg.sender_role === 'teacher') {
-      // Teacher reply: right-aligned
-      // If replied_by_teacher: English only, status "等待 Roger 审核发布"
-      // If published: English + Chinese, status "已发布给家长"
+      // Teacher reply: right-aligned (English only)
+      // If replied_by_teacher: English only, status "⏳"
+      // If published: English only, status "✓"
       var isReplied = (msg.relay_status === 'replied_by_teacher');
       var isPublished = (msg.relay_status === 'published');
       var replyTime = formatDateTime(msg.replied_at || msg.created_at);
 
       var teacherEn = '<div class="text-sm text-purple-950 font-medium leading-relaxed whitespace-pre-wrap">' + escapeHtml(msg.content_en || '') + '</div>';
-      var teacherZh = (isPublished && msg.content_zh)
-        ? '<div class="text-xs text-purple-700/80 mt-2 pt-2 border-t border-purple-150 leading-relaxed whitespace-pre-wrap"><span class="text-purple-400 mr-1 font-sans">中文译文:</span>' + escapeHtml(msg.content_zh) + '</div>'
-        : '';
 
       var statusTag = '';
       if (isReplied) {
         statusTag = '<div class="mt-2 flex items-center justify-end gap-1.5 text-xs text-amber-700 font-medium">' +
-          '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-full">' +
-          '<span>⏳</span><span>等待 Roger 审核发布</span>' +
+          '<span class="inline-flex items-center px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-full" title="等待 Roger 审核发布">' +
+          '<span>⏳</span>' +
           '</span>' +
           '</div>';
       } else if (isPublished) {
         statusTag = '<div class="mt-2 flex items-center justify-end gap-1.5 text-xs text-green-700 font-medium">' +
-          '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 border border-green-200 rounded-full">' +
-          '<span>✓</span><span>已发布给家长</span>' +
+          '<span class="inline-flex items-center px-2 py-0.5 bg-green-50 border border-green-200 rounded-full" title="已发布给家长">' +
+          '<span>✓</span>' +
           '</span>' +
           '</div>';
       }
@@ -4514,7 +4503,6 @@ function renderThreadMessages(messages) {
       html += '  </div>';
       html += '  <div class="bg-purple-50/80 border border-purple-200 rounded-2xl rounded-tr-sm p-3.5 shadow-2xs w-full text-left">';
       html += teacherEn;
-      html += teacherZh;
       html += statusTag;
       html += '  </div>';
       html += '</div>';
