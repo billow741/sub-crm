@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import PasswordProtect from './components/PasswordProtect';
-import { LayoutDashboard, BarChart2, Users, CreditCard, Settings, Calendar, GraduationCap, CalendarDays, Building2, Receipt, Package, Book, Menu, X, Inbox } from 'lucide-react';
+import { LayoutDashboard, BarChart2, Users, CreditCard, Settings, Calendar, GraduationCap, CalendarDays, Building2, Receipt, Package, Book, Menu, X, Inbox, MessageSquare } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
+import Comms from './pages/Comms';
 import Students from './pages/Students';
 import StudentDetail from './pages/StudentDetail';
 import Payments from './pages/Payments';
@@ -78,6 +79,9 @@ function Sidebar({ isOpen, setIsOpen }) {
           )}
           <NavLink to="/leads" className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:outline-none ${isActive ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`}>
             <Inbox size={20} aria-hidden="true" /><span>预约线索</span>
+          </NavLink>
+          <NavLink to="/comms" className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:outline-none ${isActive ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`}>
+            <MessageSquare size={20} aria-hidden="true" /><span>💬 家校沟通</span>
           </NavLink>
           <NavLink to="/students" className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:outline-none ${isActive ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`}>
             <Users size={20} aria-hidden="true" /><span>学生管理</span>
@@ -174,6 +178,7 @@ function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/reports" element={<Reports />} />
                   <Route path="/leads" element={<Leads />} />
+                  <Route path="/comms" element={<Comms />} />
                   <Route path="/students" element={<Students />} />
                   <Route path="/students/:id" element={<StudentDetail />} />
                   <Route path="/payments" element={<Payments />} />

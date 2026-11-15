@@ -459,6 +459,102 @@ communication.get('/admin/queue', async (c) => {
   return c.json(success(items));
 });
 
+/**
+ * GET /api/v1/communication/admin/conversation?conversation_id= OR ?student_id=
+ * 取一个会话的完整 thread。
+ * 包含内部备注 (visibility='internal')，时间正序
+ * 返回：会话记录 + 全部消息 + 学生上下文 (姓名、英文名、剩余课时、当前老师、最近上课日期)
+ */
+communication.get('/admin/conversation', async (c) => {
+  if (!verifyAdmin(c)) {
+    return c.json(error('UNAUTHORIZED', '管理员认证失败，缺少有效凭据'), 401);
+  }
+
+  const DB = c.env.DB;
+  const convIdParam = c.req.query('conversation_id');
+  const studentIdParam = c.req.query('student_id');
+
+  if (!convIdParam && !studentIdParam) {
+    return c.json(error('BAD_REQUEST', '缺少 conversation_id 或 student_id 参数'), 400);
+  }
+
+  let conversation = null;
+  if (convIdParam) {
+    const convId = parseInt(convIdParam, 10);
+    if (isNaN(convId) || convId <= 0) {
+      return c.json(error('BAD_REQUEST', '无效的 conversation_id'), 400);
+    }
+    conversation = await DB.prepare(
+      'SELECT * FROM parent_conversations WHERE id = ?'
+    ).bind(convId).first();
+  } else {
+    const studentId = parseInt(studentIdParam, 10);
+    if (isNaN(studentId) || studentId <= 0) {
+      return c.json(error('BAD_REQUEST', '无效的 student_id'), 400);
+    }
+    conversation = await DB.prepare(
+      'SELECT * FROM parent_conversations WHERE student_id = ?'
+    ).bind(studentId).first();
+  }
+
+  if (!conversation) {
+    return c.json(error('NOT_FOUND', '会话不存在'), 404);
+  }
+
+  // 获取学生上下文
+  const student = await DB.prepare(
+    'SELECT id, name, english_name, total_hours, used_hours, last_class_at FROM students WHERE id = ?'
+  ).bind(conversation.student_id).first();
+
+  let studentContext = null;
+  if (student) {
+    const derivedTeacherId = await getCurrentTeacherId(DB, student.id);
+    let derivedTeacherName = null;
+    if (derivedTeacherId) {
+      const teacherRow = await DB.prepare('SELECT name FROM teachers WHERE id = ?').bind(derivedTeacherId).first();
+      derivedTeacherName = teacherRow ? teacherRow.name : null;
+    }
+
+    let recentClassDate = student.last_class_at;
+    const lastClassRow = await DB.prepare(
+      'SELECT date FROM classes WHERE student_id = ? ORDER BY date DESC, id DESC LIMIT 1'
+    ).bind(student.id).first();
+    if (lastClassRow && lastClassRow.date) {
+      recentClassDate = lastClassRow.date;
+    }
+
+    const totalHours = student.total_hours || 0;
+    const usedHours = student.used_hours || 0;
+
+    studentContext = {
+      id: student.id,
+      name: student.name,
+      english_name: student.english_name,
+      total_hours: totalHours,
+      used_hours: usedHours,
+      remaining_hours: totalHours - usedHours,
+      current_teacher_id: derivedTeacherId,
+      current_teacher_name: derivedTeacherName,
+      last_class_date: recentClassDate
+    };
+  }
+
+  // 全部消息（时间正序，含 visibility='internal' 的内部备注，仅管理端可见）
+  const messagesResult = await DB.prepare(
+    `SELECT id, conversation_id, sender_role, sender_name, content_zh, content_en,
+            routing_type, relay_status, visibility, handled_by, forwarded_at, replied_at, published_at, created_at
+     FROM parent_conversation_messages
+     WHERE conversation_id = ?
+     ORDER BY created_at ASC, id ASC`
+  ).bind(conversation.id).all();
+
+  return c.json(success({
+    conversation,
+    student: studentContext,
+    messages: messagesResult.results || []
+  }));
+});
+
 const adminForwardSchema = z.object({
   message_id: z.coerce.number().int().positive(),
   teacher_id: z.coerce.number().int().positive().optional(),
@@ -600,6 +696,10 @@ communication.post('/admin/publish', validate(adminPublishSchema), async (c) => 
   const message = await DB.prepare('SELECT * FROM parent_conversation_messages WHERE id = ?').bind(message_id).first();
   if (!message) {
     return c.json(error('NOT_FOUND', '消息不存在'), 404);
+  }
+
+  if (message.relay_status !== 'replied_by_teacher') {
+    return c.json(error('BAD_REQUEST', '该消息不是待放行的老师回复'), 400);
   }
 
   const conversation = await DB.prepare('SELECT * FROM parent_conversations WHERE id = ?').bind(message.conversation_id).first();

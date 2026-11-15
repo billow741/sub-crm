@@ -13,6 +13,7 @@ build/
 # Wrangler (local dev artifacts)
 api/.wrangler/
 api/wrangler.toml.local
+api/.dev.vars
 
 # Logs
 *.log
