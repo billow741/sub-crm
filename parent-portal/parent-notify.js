@@ -1,7 +1,11 @@
+/* global API_BASE, API_KEY, getStudentId, escapeHtml, spEsc, apiGet, spSwitchTab */
 // --- Notification System ---
 const PUBLIC_VAPID_KEY = "BOA2LGHT-fbTvPMpNOahcwDtsDJRMebMSXGf99sGONyOO7sE3_CkPPvl4sQxsP_dQK3rxt8feaJ4Ryfjt_e1hyo";
 
 function getPortalApiBase() {
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:8787/api/v1';
+  }
   if (typeof API_BASE !== 'undefined') return API_BASE;
   if (window.API_BASE) return window.API_BASE;
   return 'https://api.sunnybridge.qzz.io/api/v1';
@@ -15,7 +19,6 @@ function getPortalApiKey() {
 
 function setupNotifications() {
   const bellBtn = document.getElementById('notify-bell-btn');
-  const badge = document.getElementById('notify-badge');
   if (!bellBtn) return;
   
   // Create Dropdown
@@ -159,11 +162,24 @@ async function loadNotifications(onlyCount = false) {
     
     const unreadCount = data.filter(n => !n.is_read).length;
     const badge = document.getElementById('notify-badge');
-    if (unreadCount > 0) {
-      badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
-      badge.style.display = 'inline-block';
-    } else {
-      badge.style.display = 'none';
+    if (badge) {
+      if (unreadCount > 0) {
+        badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+        badge.style.display = 'inline-block';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    const commsBadge = document.getElementById('sp-comms-badge');
+    if (commsBadge) {
+      const commsUnreadCount = data.filter(n => !n.is_read && n.action_type === 'parent_message_reply').length;
+      if (commsUnreadCount > 0) {
+        commsBadge.textContent = commsUnreadCount > 99 ? '99+' : commsUnreadCount;
+        commsBadge.style.display = 'inline-block';
+      } else {
+        commsBadge.style.display = 'none';
+      }
     }
     
     if (onlyCount) return;
@@ -179,14 +195,14 @@ async function loadNotifications(onlyCount = false) {
     let html = '';
     data.forEach(n => {
       const bg = n.is_read ? '#fff' : '#f0fdf4';
-      const icon = n.action_type === 'cancelled' ? '⚠️' : (n.action_type === 'updated' ? '⏰' : (n.action_type === 'milestone_report' ? '🏆' : '📅'));
+      const icon = n.action_type === 'cancelled' ? '⚠️' : (n.action_type === 'updated' ? '⏰' : (n.action_type === 'milestone_report' ? '🏆' : (n.action_type === 'parent_message_reply' ? '💬' : '📅')));
       html += `<div onclick="markNotifyRead(${n.id}, '${n.action_type || ''}')" style="padding:12px 16px; border-bottom:1px solid #f1f5f9; background:${bg}; cursor:pointer; transition:background 0.2s;">
         <div style="display:flex; align-items:start; gap:10px;">
           <span style="font-size:18px; margin-top:2px;">${icon}</span>
           <div style="flex:1;">
             <div style="display:flex; align-items:center; gap:6px;">
               <div style="font-size:13px; font-weight:600; color:#1e293b; margin-bottom:4px;">${safeEscape(n.title)}</div>
-              ${n.action_type === 'milestone_report' ? '<span style="background:#F59E0B;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-bottom:4px;">报告</span>' : ''}
+              ${n.action_type === 'milestone_report' ? '<span style="background:#F59E0B;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-bottom:4px;">报告</span>' : (n.action_type === 'parent_message_reply' ? '<span style="background:#3B82F6;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-bottom:4px;">家校</span>' : '')}
             </div>
             <div style="font-size:12px; color:#475569; line-height:1.4;">${safeEscape(n.body)}</div>
             <div style="font-size:11px; color:#94a3b8; margin-top:6px;">${formatNotifyTime(n.created_at)}</div>
@@ -214,6 +230,14 @@ window.markNotifyRead = async function(id, actionType) {
       if (modal) modal.style.display = 'none';
       if (typeof spSwitchTab === 'function') {
         spSwitchTab('reports');
+      }
+    } else if (actionType === 'parent_message_reply') {
+      const modal = document.getElementById('notify-modal');
+      if (modal) modal.style.display = 'none';
+      const dropdown = document.getElementById('notify-dropdown');
+      if (dropdown) dropdown.style.display = 'none';
+      if (typeof spSwitchTab === 'function') {
+        spSwitchTab('communication');
       }
     }
   } catch (e) {
