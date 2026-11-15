@@ -33,6 +33,7 @@ import classComplete from './routes/classComplete.js';
 import notifications from './routes/notifications.js';
 import content from './routes/content.js';
 import reports from './routes/reports.js';
+import communication from './routes/communication.js';
 
 const app = new Hono();
 
@@ -56,7 +57,8 @@ app.get('/', (c) => {
       settings: '/api/v1/settings',
       search: '/api/v1/search',
       dashboard: '/api/v1/dashboard',
-      reports: '/api/v1/reports'
+      reports: '/api/v1/reports',
+      communication: '/api/v1/communication'
     },
     documentation: '/api/v1/docs'
   });
@@ -101,6 +103,7 @@ app.route('/api/v1/classes', classComplete); // 自动扣课时相关端点：/s
 app.route('/api/v1/notifications', notifications);
 app.route('/api/v1/content', content);
 app.route('/api/v1/reports', reports);
+app.route('/api/v1/communication', communication);
 
 // 404 处理
 app.notFound(notFound);
