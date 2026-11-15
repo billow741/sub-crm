@@ -4456,7 +4456,9 @@ function renderThreadMessages(messages) {
       var hasEn = (msg.content_en && msg.content_en.trim().length > 0);
       var enHtml = hasEn
         ? '<div class="text-sm text-gray-900 font-medium leading-relaxed whitespace-pre-wrap">' + escapeHtml(msg.content_en) + '</div>'
-        : '<div class="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200 inline-block mb-1 font-medium">Roger 尚未附英文版</div>';
+        : (msg.relay_status === 'pending'
+            ? '<div class="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200 inline-block mb-1 font-medium">Roger 尚未附英文版</div>'
+            : '');
 
       var zhHtml = msg.content_zh
         ? '<div class="text-xs text-gray-500 ' + (hasEn ? 'mt-2 pt-2 border-t border-gray-100' : '') + ' leading-relaxed whitespace-pre-wrap"><span class="text-gray-400 mr-1 font-sans">原文:</span>' + escapeHtml(msg.content_zh) + '</div>'
