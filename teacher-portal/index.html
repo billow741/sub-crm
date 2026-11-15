@@ -4430,15 +4430,24 @@ function formatDateTime(str) {
 }
 
 function getLastParentMessageSnippet(conv) {
-  if (!conv.messages || conv.messages.length === 0) return 'No messages yet';
-  var parentMsgs = conv.messages.filter(function(m) { return m.sender_role === 'parent'; });
-  var target = parentMsgs.length > 0 ? parentMsgs[parentMsgs.length - 1] : conv.messages[conv.messages.length - 1];
-  var text = (target.content_en && target.content_en.trim())
-    ? target.content_en.trim()
-    : ((target.content_zh && target.content_zh.trim()) ? target.content_zh.trim() : '');
+  if (!conv || !conv.messages || conv.messages.length === 0) return 'No message content';
+  var parentMsgs = conv.messages.filter(function(m) {
+    return m.sender_role === 'parent' && m.content_en && m.content_en.trim().length > 0;
+  });
+  var text = '';
+  if (parentMsgs.length > 0) {
+    text = parentMsgs[parentMsgs.length - 1].content_en.trim();
+  } else {
+    var teacherMsgs = conv.messages.filter(function(m) {
+      return m.sender_role === 'teacher' && m.content_en && m.content_en.trim().length > 0;
+    });
+    if (teacherMsgs.length > 0) {
+      text = teacherMsgs[teacherMsgs.length - 1].content_en.trim();
+    }
+  }
   if (!text) return 'No message content';
-  var firstLine = text.split(/[\r\n]+/)[0];
-  return firstLine;
+  var firstLine = text.split(/[\r\n]+/)[0].trim();
+  return firstLine || 'No message content';
 }
 
 function renderThreadMessages(messages) {
@@ -4452,17 +4461,13 @@ function renderThreadMessages(messages) {
     var timeStr = formatDateTime(msg.created_at);
 
     if (msg.sender_role === 'parent') {
-      // Parent message: English on top, Chinese on bottom
+      // Parent message: only forwarded content in English; messages without content_en are not rendered
       var hasEn = (msg.content_en && msg.content_en.trim().length > 0);
-      var enHtml = hasEn
-        ? '<div class="text-sm text-gray-900 font-medium leading-relaxed whitespace-pre-wrap">' + escapeHtml(msg.content_en) + '</div>'
-        : (msg.relay_status === 'pending'
-            ? '<div class="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200 inline-block mb-1 font-medium">Roger 尚未附英文版</div>'
-            : '');
+      if (!hasEn) {
+        continue;
+      }
 
-      var zhHtml = msg.content_zh
-        ? '<div class="text-xs text-gray-500 ' + (hasEn ? 'mt-2 pt-2 border-t border-gray-100' : '') + ' leading-relaxed whitespace-pre-wrap"><span class="text-gray-400 mr-1 font-sans">原文:</span>' + escapeHtml(msg.content_zh) + '</div>'
-        : '';
+      var enHtml = '<div class="text-sm text-gray-900 font-medium leading-relaxed whitespace-pre-wrap">' + escapeHtml(msg.content_en) + '</div>';
 
       html += '<div class="flex flex-col items-start max-w-2xl">';
       html += '  <div class="flex items-center gap-2 mb-1 px-1">';
@@ -4471,7 +4476,6 @@ function renderThreadMessages(messages) {
       html += '  </div>';
       html += '  <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm p-3.5 shadow-2xs w-full">';
       html += enHtml;
-      html += zhHtml;
       html += '  </div>';
       html += '</div>';
 
@@ -4516,29 +4520,15 @@ function renderThreadMessages(messages) {
       html += '</div>';
 
     } else if (msg.sender_role === 'advisor') {
-      var advEn = msg.content_en
-        ? '<div class="text-sm text-gray-900 font-medium leading-relaxed whitespace-pre-wrap">' + escapeHtml(msg.content_en) + '</div>'
-        : '';
-      var advZh = msg.content_zh
-        ? '<div class="text-xs text-gray-600 ' + (msg.content_en ? 'mt-2 pt-2 border-t border-gray-100' : '') + ' leading-relaxed whitespace-pre-wrap">' + escapeHtml(msg.content_zh) + '</div>'
-        : '';
-      var advStatus = msg.relay_status === 'published'
-        ? '<div class="mt-2 text-right"><span class="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full font-medium">✓ 已发布给家长</span></div>'
-        : '';
-
-      html += '<div class="flex flex-col items-start max-w-2xl">';
-      html += '  <div class="flex items-center gap-2 mb-1 px-1">';
-      html += '    <span class="text-xs font-bold text-blue-700 flex items-center gap-1"><span>🧑‍💼</span> ' + escapeHtml(msg.sender_name || 'Advisor') + '</span>';
-      html += '    <span class="text-[11px] text-gray-400">' + timeStr + '</span>';
-      html += '  </div>';
-      html += '  <div class="bg-blue-50/50 border border-blue-200 rounded-2xl rounded-tl-sm p-3.5 shadow-2xs w-full">';
-      html += advEn;
-      html += advZh;
-      html += advStatus;
-      html += '  </div>';
-      html += '</div>';
+      // 课程顾问直接回复家长的消息，非转交老师内容，整条不渲染
+      continue;
     }
   }
+
+  if (!html) {
+    return '<div class="text-center py-6 text-gray-400 text-xs italic">No messages in this conversation.</div>';
+  }
+
   return html;
 }
 
@@ -4575,7 +4565,7 @@ function renderFeedbackConversations(convs) {
         '</span>';
     }
 
-    // Last message snippet: English first line if present, else Chinese first line
+    // Last message snippet: English only (forwarded parent message or teacher reply)
     var snippet = getLastParentMessageSnippet(conv);
 
     // Last message timestamp
