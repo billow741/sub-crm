@@ -3,7 +3,7 @@ import {
   DollarSign, Calendar, CheckCircle, XCircle, Plus, RefreshCw, Trash2, 
   CreditCard, Edit2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, 
   Filter, Clock, User, Users, Receipt, Wallet, Coins, AlertCircle, 
-  ArrowRight, FileText, Check, Layers, ExternalLink 
+  ArrowRight, FileText, Check, Layers, ExternalLink, Calculator 
 } from 'lucide-react';
 import { teacherOps, teacherPaymentOps } from '../store';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
@@ -41,6 +41,8 @@ export default function TeacherPayments() {
   const [showModal, setShowModal] = useState(false);
   const [creatingSettlement, setCreatingSettlement] = useState(false);
   const [teacherAdvanceInfo, setTeacherAdvanceInfo] = useState({ balance: 0, count: 0 });
+  const [settlementPreview, setSettlementPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [formData, setFormData] = useState({
     teacher_id: '',
     period_start: '',
@@ -227,6 +229,38 @@ export default function TeacherPayments() {
     setFormData(prev => ({ ...prev, teacher_id: teacherId, period_start: periodStart }));
   };
 
+  // 监听起止日期和教师，获取实时课酬测算预览
+  useEffect(() => {
+    if (!showModal || !formData.teacher_id || !formData.period_start || !formData.period_end) {
+      setSettlementPreview(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchPreview = async () => {
+      setPreviewLoading(true);
+      try {
+        const stats = await teacherPaymentOps.getStats(
+          formData.teacher_id,
+          formData.period_start,
+          formData.period_end
+        );
+        if (!cancelled) {
+          setSettlementPreview(stats);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSettlementPreview(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setPreviewLoading(false);
+        }
+      }
+    };
+    fetchPreview();
+    return () => { cancelled = true; };
+  }, [showModal, formData.teacher_id, formData.period_start, formData.period_end]);
+
   // 打开新建结算单弹窗
   const openCreateSettlementModal = (prefilledTeacherId = '') => {
     const initialTeacherId = prefilledTeacherId ? String(prefilledTeacherId) : '';
@@ -236,6 +270,7 @@ export default function TeacherPayments() {
       period_end: '',
       notes: ''
     });
+    setSettlementPreview(null);
     setShowModal(true);
     if (initialTeacherId) {
       handleTeacherChangeInSettlement(initialTeacherId);
@@ -250,11 +285,11 @@ export default function TeacherPayments() {
     setCreatingSettlement(true);
     try {
       const result = await teacherPaymentOps.create(formData);
-      const c50 = result.count_50min || 0;
-      const c25 = result.count_25min || 0;
-      const r50 = result.rate_50min || result.hourly_rate || 0;
-      const r25 = result.rate_25min || 0;
-      const appliedAdv = result.applied_advance || 0;
+      const c50 = result.count_50min ?? 0;
+      const c25 = result.count_25min ?? 0;
+      const r50 = result.rate_50min ?? result.hourly_rate ?? 0;
+      const r25 = result.rate_25min ?? 0;
+      const appliedAdv = result.applied_advance !== undefined ? result.applied_advance : (result.advance_deducted || 0);
       const balDue = result.balance_due !== undefined ? result.balance_due : (result.total_amount - appliedAdv);
 
       let msg = `✅ 结算单创建成功！\n\n`;
@@ -843,8 +878,13 @@ export default function TeacherPayments() {
                           <span>{payment.period_start} ~ {payment.period_end}</span>
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs sm:text-sm text-gray-500">
+                        <div className="flex items-center gap-3 text-xs sm:text-sm text-gray-500 flex-wrap">
                           <span>课时: <b className="text-gray-800">{payment.total_classes}</b> 节</span>
+                          {(payment.count_50min > 0 || payment.count_25min > 0) && (
+                            <span className="text-[11px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded font-medium">
+                              {payment.count_50min || 0}节50m + {payment.count_25min || 0}节25m
+                            </span>
+                          )}
                           <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                           <span>工时: <b className="text-gray-800">{payment.total_hours}</b> 小时</span>
                           <span className="w-1 h-1 rounded-full bg-gray-300"></span>
@@ -1233,6 +1273,66 @@ export default function TeacherPayments() {
                     placeholder="如：2026年11月第一周课酬"
                   />
                 </div>
+
+                {/* 实时课酬核算预览 */}
+                {formData.teacher_id && formData.period_start && formData.period_end && (
+                  <div className="rounded-xl border border-primary-100 bg-primary-50/50 p-3.5 space-y-2 text-xs">
+                    <div className="font-bold text-gray-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-primary-800">
+                        <Calculator className="w-4 h-4 text-primary-600" />
+                        周期课酬实时测算
+                      </span>
+                      {previewLoading && (
+                        <span className="text-[11px] text-gray-400 font-normal flex items-center gap-1">
+                          <RefreshCw className="w-3 h-3 animate-spin text-primary-500" />
+                          测算中...
+                        </span>
+                      )}
+                    </div>
+                    {settlementPreview ? (
+                      <div className="space-y-1.5 text-gray-700">
+                        <div className="flex justify-between items-center py-0.5 border-b border-primary-100">
+                          <span>50分钟课时:</span>
+                          <span className="font-semibold text-gray-900">
+                            {settlementPreview.count_50min || 0} 节 × ₱{settlementPreview.rate_50min} = ₱{(settlementPreview.count_50min || 0) * (settlementPreview.rate_50min || 0)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5 border-b border-primary-100">
+                          <span>25分钟课时:</span>
+                          <span className="font-semibold text-gray-900">
+                            {settlementPreview.count_25min || 0} 节 × ₱{settlementPreview.rate_25min} = ₱{(settlementPreview.count_25min || 0) * (settlementPreview.rate_25min || 0)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5 font-bold text-sm text-primary-700">
+                          <span>应结总额:</span>
+                          <span>₱{settlementPreview.total_amount || 0}</span>
+                        </div>
+                        {(settlementPreview.advance_balance > 0 && settlementPreview.total_amount > 0) && (
+                          <div className="flex justify-between items-center py-0.5 text-sky-700 text-[11px]">
+                            <span>⚡ 自动核销预付:</span>
+                            <span>-₱{Math.min(settlementPreview.advance_balance, settlementPreview.total_amount)}</span>
+                          </div>
+                        )}
+                        {(settlementPreview.advance_balance > 0 && settlementPreview.total_amount > 0) && (
+                          <div className="flex justify-between items-center py-0.5 font-bold text-xs text-gray-900">
+                            <span>预计待付余额:</span>
+                            <span>₱{Math.max(0, settlementPreview.total_amount - settlementPreview.advance_balance)}</span>
+                          </div>
+                        )}
+                        {settlementPreview.total_classes === 0 && (
+                          <div className="text-amber-700 bg-amber-50 p-2 rounded-lg text-[11px] mt-1 flex items-start gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                            <span>该周期内暂无状态为「已完课」的课程记录，生成结算单金额将为 ₱0。</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      !previewLoading && (
+                        <div className="text-gray-400 text-[11px]">正在读取课程与时薪数据...</div>
+                      )
+                    )}
+                  </div>
+                )}
 
                 <div className="flex gap-3 pt-4 border-t border-gray-100">
                   <Button type="button" variant="outline" className="flex-1" onClick={() => setShowModal(false)}>取消</Button>

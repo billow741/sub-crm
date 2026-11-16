@@ -255,8 +255,38 @@ teacherPayments.get('/stats/:teacher_id', async (c) => {
   const startDate = c.req.query('start_date');
   const endDate = c.req.query('end_date');
 
+  // 获取教师单价（50分钟 + 25分钟）
+  const teacher = await DB.prepare(`
+    SELECT hourly_rate, hourly_rate_25 FROM teachers WHERE id = ?
+  `).bind(teacherId).first();
+
+  if (!teacher) {
+    return c.json(error('NOT_FOUND', '教师不存在'), 404);
+  }
+
+  const rate50 = teacher.hourly_rate || 0;
+  const rate25 = teacher.hourly_rate_25 || 80;
+
+  // 查询该教师当前可用的预付款余额
+  const advanceData = await DB.prepare(`
+    SELECT
+      COALESCE(SUM(unallocated_amount), 0) as balance,
+      COUNT(*) as count
+    FROM teacher_payment_vouchers
+    WHERE teacher_id = ? AND voucher_type = 'advance' AND status IN ('unallocated', 'partially_allocated') AND unallocated_amount > 0
+  `).bind(teacherId).first();
+
+  // 若未提供起止日期，则直接返回费率及预付款余额
   if (!startDate || !endDate) {
-    return c.json(error('BAD_REQUEST', '请提供开始和结束日期'), 400);
+    return c.json(success({
+      teacher_id: teacherId,
+      hourly_rate: rate50,
+      hourly_rate_25: rate25,
+      rate_50min: rate50,
+      rate_25min: rate25,
+      advance_balance: advanceData?.balance || 0,
+      advance_count: advanceData?.count || 0
+    }));
   }
 
   // 查询该周期已完成的课程 — 按次数区分
@@ -273,30 +303,10 @@ teacherPayments.get('/stats/:teacher_id', async (c) => {
       AND status = 'completed'
   `).bind(teacherId, startDate, endDate).first();
 
-  // 获取教师单价（50分钟 + 25分钟）
-  const teacher = await DB.prepare(`
-    SELECT hourly_rate, hourly_rate_25 FROM teachers WHERE id = ?
-  `).bind(teacherId).first();
-
-  if (!teacher) {
-    return c.json(error('NOT_FOUND', '教师不存在'), 404);
-  }
-
-  const rate50 = teacher.hourly_rate || 0;
-  const rate25 = teacher.hourly_rate_25 || 80;
   const totalHours = classes?.total_hours || 0;
   const count50 = classes?.count_50min || 0;
   const count25 = classes?.count_25min || 0;
   const totalAmount = count50 * rate50 + count25 * rate25;
-
-  // 查询该教师当前可用的预付款余额
-  const advanceData = await DB.prepare(`
-    SELECT
-      COALESCE(SUM(unallocated_amount), 0) as balance,
-      COUNT(*) as count
-    FROM teacher_payment_vouchers
-    WHERE teacher_id = ? AND voucher_type = 'advance' AND status IN ('unallocated', 'partially_allocated') AND unallocated_amount > 0
-  `).bind(teacherId).first();
 
   return c.json(success({
     teacher_id: teacherId,
@@ -464,10 +474,15 @@ teacherPayments.post('/', async (c) => {
     total_classes: totalClasses,
     total_hours: totalHours,
     hourly_rate: rate50,
+    count_50min: count50,
+    count_25min: count25,
+    rate_50min: rate50,
+    rate_25min: rate25,
     total_amount: totalAmount,
     paid_amount: totalDeductedAdvance,
     balance_due: Math.max(0, remainingSettlementBalance),
     status: remainingSettlementBalance <= 0.001 && totalAmount > 0 ? 'paid' : (totalDeductedAdvance > 0 ? 'partial' : 'pending'),
+    applied_advance: totalDeductedAdvance,
     advance_deducted: totalDeductedAdvance
   }), 201);
 });

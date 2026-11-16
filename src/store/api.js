@@ -346,8 +346,12 @@ export const teacherPaymentOps = {
     });
     return result.data;
   },
-  getStats: async (teacherId) => {
-    const result = await request(`/teacher-payments/stats/${teacherId}`);
+  getStats: async (teacherId, startDate, endDate) => {
+    let url = `/teacher-payments/stats/${teacherId}`;
+    if (startDate && endDate) {
+      url += `?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`;
+    }
+    const result = await request(url);
     return result.data;
   },
   getDetails: async (id) => {
