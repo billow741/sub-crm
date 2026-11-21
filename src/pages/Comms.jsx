@@ -11,7 +11,8 @@ import {
   Clock,
   BookOpen,
   Calendar,
-  GraduationCap
+  GraduationCap,
+  Search
 } from 'lucide-react';
 import { commsOps, teacherOps } from '../store/api';
 import { Card, CardContent } from '../components/ui/Card';
@@ -43,8 +44,11 @@ function formatTime(dateStr) {
 
 export default function Comms() {
   const [queue, setQueue] = useState([]);
+  const [conversations, setConversations] = useState([]);
   const [teachers, setTeachers] = useState([]);
-  const [loadingQueue, setLoadingQueue] = useState(true);
+  const [loadingData, setLoadingData] = useState(true);
+  const [sidebarTab, setSidebarTab] = useState('queue'); // 'queue' | 'all'
+  const [searchKeyword, setSearchKeyword] = useState('');
   const [selectedConversationId, setSelectedConversationId] = useState(null);
 
   // 会话 thread 状态
@@ -54,7 +58,9 @@ export default function Comms() {
   // 操作表单局部状态 (针对各个 pending 消息或 replied 消息)
   // [messageId]: { actionType: 'forward' | 'direct', teacherId: '', contentEn: '', contentZh: '' }
   const [actionForms, setActionForms] = useState({});
-  // 内部备注输入框状态
+  // 底部回复与内部备注状态
+  const [bottomActionTab, setBottomActionTab] = useState('reply'); // 'reply' | 'note'
+  const [directReplyText, setDirectReplyText] = useState('');
   const [internalNoteText, setInternalNoteText] = useState('');
 
   // 正在提交的状态: { [key]: boolean }
@@ -76,37 +82,57 @@ export default function Comms() {
     loadTeachers();
   }, []);
 
-  // 加载待办队列
-  const fetchQueue = useCallback(async (keepSelected = true) => {
-    setLoadingQueue(true);
+  // 加载待办队列与全部会话列表
+  const fetchAllData = useCallback(async (keepSelected = true) => {
+    setLoadingData(true);
     setErrorMessage('');
     try {
-      const data = await commsOps.getQueue();
-      const list = Array.isArray(data) ? data : [];
-      setQueue(list);
+      const [queueData, convsData] = await Promise.all([
+        commsOps.getQueue(),
+        commsOps.getConversations()
+      ]);
+      const queueList = Array.isArray(queueData) ? queueData : [];
+      const convsList = Array.isArray(convsData) ? convsData : [];
+      setQueue(queueList);
+      setConversations(convsList);
 
-      // 如果未选择会话或之前选中的会话不存在，自动选中第一组
+      // 若待办为空且全部会话有数据，自动切到全部会话
+      setSidebarTab((prevTab) => {
+        if (prevTab === 'queue' && queueList.length === 0 && convsList.length > 0) {
+          return 'all';
+        }
+        return prevTab;
+      });
+
+      // 维持选中的会话；若未选择或不存在，优先选待办第一个，否则选全部第一个
       setSelectedConversationId((prevId) => {
-        if (keepSelected && prevId && list.some((item) => item.conversation_id === prevId)) {
-          return prevId;
+        if (keepSelected && prevId) {
+          const existsInQueue = queueList.some((item) => item.conversation_id === prevId);
+          const existsInAll = convsList.some((item) => item.conversation_id === prevId);
+          if (existsInQueue || existsInAll) {
+            return prevId;
+          }
         }
-        if (list.length > 0) {
-          return list[0].conversation_id;
+        if (queueList.length > 0) {
+          return queueList[0].conversation_id;
         }
-        return prevId;
+        if (convsList.length > 0) {
+          return convsList[0].conversation_id;
+        }
+        return null;
       });
     } catch (err) {
-      console.error('获取家校待办队列失败:', err);
-      setErrorMessage(err.message || '获取家校待办队列失败');
+      console.error('获取家校沟通数据失败:', err);
+      setErrorMessage(err.message || '获取家校沟通数据失败');
     } finally {
-      setLoadingQueue(false);
+      setLoadingData(false);
     }
   }, []);
 
   // 首次打开页面加载
   useEffect(() => {
-    fetchQueue(false);
-  }, [fetchQueue]);
+    fetchAllData(false);
+  }, [fetchAllData]);
 
   // 加载选中的会话详情 thread
   const fetchThread = useCallback(async (convId) => {
@@ -223,7 +249,7 @@ export default function Comms() {
         return next;
       });
       // 刷新队列与当前 thread
-      await fetchQueue(true);
+      await fetchAllData(true);
       await fetchThread(selectedConversationId);
     } catch (err) {
       console.error('转交外教失败:', err);
@@ -258,7 +284,7 @@ export default function Comms() {
         delete next[message.id];
         return next;
       });
-      await fetchQueue(true);
+      await fetchAllData(true);
       await fetchThread(selectedConversationId);
     } catch (err) {
       console.error('直接回复失败:', err);
@@ -292,7 +318,7 @@ export default function Comms() {
         delete next[message.id];
         return next;
       });
-      await fetchQueue(true);
+      await fetchAllData(true);
       await fetchThread(selectedConversationId);
     } catch (err) {
       console.error('放行失败:', err);
@@ -302,7 +328,33 @@ export default function Comms() {
     }
   };
 
-  // 4. 保存内部备注
+  // 4. 底部以顾问身份直接向家长发送回复
+  const handleBottomDirectReply = async () => {
+    const text = directReplyText.trim();
+    if (!text || !selectedConversationId) return;
+
+    setSubmitting((prev) => ({ ...prev, bottomDirectReply: true }));
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      await commsOps.directReply({
+        conversation_id: selectedConversationId,
+        content_zh: text,
+      });
+      setDirectReplyText('');
+      setSuccessMessage('回复已成功发送给家长');
+      await fetchAllData(true);
+      await fetchThread(selectedConversationId);
+    } catch (err) {
+      console.error('发送回复失败:', err);
+      setErrorMessage(err.message || '发送回复失败');
+    } finally {
+      setSubmitting((prev) => ({ ...prev, bottomDirectReply: false }));
+    }
+  };
+
+  // 5. 保存内部备注
   const handleAddInternalNote = async () => {
     const text = internalNoteText.trim();
     if (!text || !selectedConversationId) return;
@@ -318,6 +370,7 @@ export default function Comms() {
       });
       setInternalNoteText('');
       setSuccessMessage('内部备注已保存（仅管理端可见）');
+      await fetchAllData(true);
       await fetchThread(selectedConversationId);
     } catch (err) {
       console.error('保存内部备注失败:', err);
@@ -327,9 +380,35 @@ export default function Comms() {
     }
   };
 
-  // 当前激活学员信息（优先取 thread 返回的 student，兜底取 queue item）
+  // 过滤后的待办队列
+  const filteredGroupedQueue = useMemo(() => {
+    if (!searchKeyword.trim()) return groupedQueue;
+    const kw = searchKeyword.trim().toLowerCase();
+    return groupedQueue.filter(
+      (g) =>
+        (g.student_name && g.student_name.toLowerCase().includes(kw)) ||
+        (g.student_english_name && g.student_english_name.toLowerCase().includes(kw)) ||
+        (g.current_teacher_name && g.current_teacher_name.toLowerCase().includes(kw))
+    );
+  }, [groupedQueue, searchKeyword]);
+
+  // 过滤后的全量会话列表
+  const filteredConversations = useMemo(() => {
+    if (!searchKeyword.trim()) return conversations;
+    const kw = searchKeyword.trim().toLowerCase();
+    return conversations.filter(
+      (c) =>
+        (c.student_name && c.student_name.toLowerCase().includes(kw)) ||
+        (c.student_english_name && c.student_english_name.toLowerCase().includes(kw)) ||
+        (c.current_teacher_name && c.current_teacher_name.toLowerCase().includes(kw)) ||
+        (c.last_message_preview && c.last_message_preview.toLowerCase().includes(kw))
+    );
+  }, [conversations, searchKeyword]);
+
+  // 当前激活学员信息（优先取 thread 返回的 student，兜底取 queue item 或 conversations item）
   const activeStudent = conversationData?.student || (
-    groupedQueue.find((g) => g.conversation_id === selectedConversationId)
+    groupedQueue.find((g) => g.conversation_id === selectedConversationId) ||
+    conversations.find((c) => c.conversation_id === selectedConversationId)
   );
 
   return (
@@ -338,48 +417,37 @@ export default function Comms() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <span>💬 家校沟通分流面板</span>
+            <span>💬 家校沟通中枢</span>
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Roger 专属手动分流工作台：家长留言转交外教（手写双语）、外教回复审核放行、教务中文直回与内部沟通留痕
+            家长留言手动分流与双向沟通中心：转交外教（双语手写）、外教回复审核放行、学管中文直回与完整历史会话查阅
           </p>
         </div>
+
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchQueue(true)}
-            disabled={loadingQueue}
+            onClick={() => fetchAllData(true)}
+            disabled={loadingData}
             className="flex items-center gap-1.5"
-            title="刷新待办队列"
+            title="刷新待办与全部会话"
           >
-            <RefreshCw size={15} className={loadingQueue ? 'animate-spin' : ''} />
-            <span>刷新队列</span>
+            <RefreshCw size={15} className={loadingData ? 'animate-spin' : ''} />
+            <span>刷新数据</span>
           </Button>
         </div>
       </div>
 
-      {/* 待办指标总览卡片 */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-l-4 border-l-primary-500">
-          <CardContent className="p-4">
-            <div className="text-sm font-medium text-gray-500">待处理总数</div>
-            <div className="mt-1 flex items-baseline justify-between">
-              <div className="text-2xl font-bold text-gray-900">{queue.length}</div>
-              <Badge variant="outline" className="text-xs">
-                {groupedQueue.length} 个学员会话
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
+      {/* 待办与全量指标总览卡片 */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card className="border-l-4 border-l-amber-500">
           <CardContent className="p-4">
-            <div className="text-sm font-medium text-gray-500">家长新留言 (待分流)</div>
+            <div className="text-xs sm:text-sm font-medium text-gray-500">家长新留言 (待办)</div>
             <div className="mt-1 flex items-baseline justify-between">
-              <div className="text-2xl font-bold text-amber-600">{totalPendingMessages}</div>
-              <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
-                待转交 / 直回
+              <div className="text-xl sm:text-2xl font-bold text-amber-600">{totalPendingMessages}</div>
+              <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[11px]">
+                待转交/直回
               </Badge>
             </div>
           </CardContent>
@@ -387,11 +455,35 @@ export default function Comms() {
 
         <Card className="border-l-4 border-l-indigo-500">
           <CardContent className="p-4">
-            <div className="text-sm font-medium text-gray-500">外教回复 (待放行)</div>
+            <div className="text-xs sm:text-sm font-medium text-gray-500">外教回复 (待放行)</div>
             <div className="mt-1 flex items-baseline justify-between">
-              <div className="text-2xl font-bold text-indigo-600">{totalRepliedWaitingApproval}</div>
-              <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-xs">
-                手写中文放行
+              <div className="text-xl sm:text-2xl font-bold text-indigo-600">{totalRepliedWaitingApproval}</div>
+              <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[11px]">
+                中文审核
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-primary-500">
+          <CardContent className="p-4">
+            <div className="text-xs sm:text-sm font-medium text-gray-500">待办学员组</div>
+            <div className="mt-1 flex items-baseline justify-between">
+              <div className="text-xl sm:text-2xl font-bold text-primary-600">{groupedQueue.length}</div>
+              <Badge variant="outline" className="text-[11px]">
+                需处理会话
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-emerald-500">
+          <CardContent className="p-4">
+            <div className="text-xs sm:text-sm font-medium text-gray-500">沟通会话总数</div>
+            <div className="mt-1 flex items-baseline justify-between">
+              <div className="text-xl sm:text-2xl font-bold text-emerald-600">{conversations.length}</div>
+              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px]">
+                全量档案
               </Badge>
             </div>
           </CardContent>
@@ -431,102 +523,226 @@ export default function Comms() {
 
       {/* 主工作区：左侧待办分组列表 + 右侧会话详情与操作 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* 左侧列表：按学员分组的待办队列 */}
+        {/* 左侧列表：Tab 切换（待办队列 vs 全部会话） */}
         <div className="lg:col-span-4 space-y-3">
-          <div className="flex items-center justify-between pb-1">
-            <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-              <Clock size={16} className="text-primary-600" />
-              <span>待办队列（最旧优先）</span>
-            </h2>
-            <span className="text-xs text-gray-400">{groupedQueue.length} 组待处理</span>
+          {/* Tab 切换按钮 */}
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setSidebarTab('queue')}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                sidebarTab === 'queue'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <Clock size={13} className={sidebarTab === 'queue' ? 'text-primary-600' : ''} />
+              <span>待办队列</span>
+              {queue.length > 0 && (
+                <span className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                  {queue.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarTab('all')}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                sidebarTab === 'all'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <MessageSquare size={13} className={sidebarTab === 'all' ? 'text-primary-600' : ''} />
+              <span>全部会话</span>
+              <span className="bg-gray-200 text-gray-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                {conversations.length}
+              </span>
+            </button>
           </div>
 
-          {loadingQueue && queue.length === 0 ? (
+          {/* 搜索框 */}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="搜索学员姓名、英文名或消息内容..."
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              className="w-full pl-8 pr-7 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+            />
+            {searchKeyword && (
+              <button
+                type="button"
+                onClick={() => setSearchKeyword('')}
+                className="absolute right-2.5 top-2 text-xs text-gray-400 hover:text-gray-600"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          {/* 列表渲染 */}
+          {loadingData && queue.length === 0 && conversations.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center text-gray-400">
                 <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-primary-500" />
-                <p className="text-sm">正在加载待办队列...</p>
+                <p className="text-sm">正在加载会话数据...</p>
               </CardContent>
             </Card>
-          ) : groupedQueue.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center text-gray-500">
-                <CheckCircle2 size={36} className="mx-auto mb-2 text-emerald-500" />
-                <p className="text-sm font-medium text-gray-800">暂无待办事项</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  当前所有家长留言均已转交或回复，所有外教回复均已放行。
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {groupedQueue.map((group) => {
-                const isSelected = group.conversation_id === selectedConversationId;
-                return (
-                  <button
-                    key={group.conversation_id}
-                    type="button"
-                    onClick={() => setSelectedConversationId(group.conversation_id)}
-                    className={`w-full text-left transition-all rounded-xl p-4 border block ${
-                      isSelected
-                        ? 'bg-primary-50/60 border-primary-500 shadow-sm ring-1 ring-primary-500'
-                        : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                          <User size={15} className="text-gray-400" />
-                          <span>{group.student_name}</span>
-                          {group.student_english_name && (
-                            <span className="text-gray-500 font-normal">
-                              ({group.student_english_name})
-                            </span>
+          ) : sidebarTab === 'queue' ? (
+            // ── 待办队列视图 ──
+            filteredGroupedQueue.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center text-gray-500 space-y-3">
+                  <CheckCircle2 size={36} className="mx-auto text-emerald-500" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">
+                      {searchKeyword ? '未找到匹配的待办会话' : '暂无待办事项'}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {searchKeyword ? '请尝试更换搜索关键词' : '当前所有家长留言均已处理，外教回复均已放行。'}
+                    </p>
+                  </div>
+                  {conversations.length > 0 && !searchKeyword && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSidebarTab('all')}
+                      className="text-xs mx-auto"
+                    >
+                      查看全部历史会话 ({conversations.length})
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {filteredGroupedQueue.map((group) => {
+                  const isSelected = group.conversation_id === selectedConversationId;
+                  return (
+                    <button
+                      key={group.conversation_id}
+                      type="button"
+                      onClick={() => setSelectedConversationId(group.conversation_id)}
+                      className={`w-full text-left transition-all rounded-xl p-3.5 border block ${
+                        isSelected
+                          ? 'bg-primary-50/60 border-primary-500 shadow-sm ring-1 ring-primary-500'
+                          : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-bold text-gray-900 flex items-center gap-1.5 truncate">
+                            <User size={14} className="text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{group.student_name}</span>
+                            {group.student_english_name && (
+                              <span className="text-gray-500 font-normal truncate">
+                                ({group.student_english_name})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-gray-500 mt-1 space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span>余课: <strong className="text-gray-700">{group.remaining_hours ?? 0}</strong></span>
+                              <span>•</span>
+                              <span>老师: <strong className="text-gray-700">{group.current_teacher_name || '未分配'}</strong></span>
+                            </div>
+                            <div>最近上课: <span className="text-gray-600">{group.last_class_date || '无上课记录'}</span></div>
+                          </div>
+                        </div>
+
+                        {/* 待办标签 */}
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          {group.pending_count > 0 && (
+                            <Badge variant="warning" className="text-[10px] px-1.5 py-0">
+                              留言 ×{group.pending_count}
+                            </Badge>
+                          )}
+                          {group.replied_by_teacher_count > 0 && (
+                            <Badge variant="primary" className="text-[10px] px-1.5 py-0">
+                              待放行 ×{group.replied_by_teacher_count}
+                            </Badge>
                           )}
                         </div>
-                        <div className="text-xs text-gray-500 mt-1 space-y-0.5">
-                          <div className="flex items-center gap-2">
-                            <span>
-                              剩余课时:{' '}
-                              <strong className="text-gray-700">
-                                {group.remaining_hours ?? 0}
-                              </strong>
-                            </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            // ── 全部会话视图 ──
+            filteredConversations.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center text-gray-400">
+                  <MessageSquare size={32} className="mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">
+                    {searchKeyword ? '未找到匹配的学员会话' : '暂无任何沟通记录'}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {filteredConversations.map((conv) => {
+                  const isSelected = conv.conversation_id === selectedConversationId;
+                  const totalAction = (conv.pending_count || 0) + (conv.replied_by_teacher_count || 0);
+
+                  return (
+                    <button
+                      key={conv.conversation_id}
+                      type="button"
+                      onClick={() => setSelectedConversationId(conv.conversation_id)}
+                      className={`w-full text-left transition-all rounded-xl p-3.5 border block ${
+                        isSelected
+                          ? 'bg-primary-50/60 border-primary-500 shadow-sm ring-1 ring-primary-500'
+                          : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-bold text-gray-900 flex items-center gap-1.5 truncate">
+                            <User size={14} className="text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{conv.student_name}</span>
+                            {conv.student_english_name && (
+                              <span className="text-gray-500 font-normal truncate">
+                                ({conv.student_english_name})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-gray-500 mt-1 flex items-center gap-2">
+                            <span>老师: <strong className="text-gray-700">{conv.current_teacher_name || '未分配'}</strong></span>
                             <span>•</span>
-                            <span>
-                              老师:{' '}
-                              <strong className="text-gray-700">
-                                {group.current_teacher_name || '未分配'}
-                              </strong>
-                            </span>
+                            <span>余课: <strong className="text-gray-700">{conv.remaining_hours ?? 0}</strong></span>
                           </div>
-                          <div>
-                            最近上课:{' '}
-                            <span className="text-gray-600">
-                              {group.last_class_date || '无上课记录'}
-                            </span>
-                          </div>
+                          {conv.last_message_preview && (
+                            <div className="text-xs text-gray-600 mt-1.5 truncate bg-gray-50 px-2 py-1 rounded">
+                              <span className="text-gray-400 mr-1 font-medium">
+                                {conv.last_message_sender === 'parent' ? '家长:' : conv.last_message_sender === 'teacher' ? '老师:' : '顾问:'}
+                              </span>
+                              <span>{conv.last_message_preview}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0 text-right">
+                          <span className="text-[10px] text-gray-400">
+                            {formatTime(conv.last_message_at)}
+                          </span>
+                          {totalAction > 0 ? (
+                            <Badge variant="warning" className="text-[10px] px-1.5 py-0">
+                              待办 ×{totalAction}
+                            </Badge>
+                          ) : (
+                            <span className="text-[10px] text-gray-400">已处理</span>
+                          )}
                         </div>
                       </div>
-
-                      {/* 待办标签 */}
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        {group.pending_count > 0 && (
-                          <Badge variant="warning" className="text-xs">
-                            留言 ×{group.pending_count}
-                          </Badge>
-                        )}
-                        {group.replied_by_teacher_count > 0 && (
-                          <Badge variant="primary" className="text-xs">
-                            待放行 ×{group.replied_by_teacher_count}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )
           )}
         </div>
 
@@ -975,31 +1191,81 @@ export default function Comms() {
                 )}
               </div>
 
-              {/* 底部新增内部备注区域 */}
-              <div className="p-4 bg-gray-50 border-t border-gray-200 space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
-                  <Lock size={13} className="text-gray-500" />
-                  <span>添加内部备注 (仅管理端可见，家长和外教均不可见)</span>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <textarea
-                    rows={2}
-                    placeholder="输入内部备注内容（如续费跟进意向、排课沟通备忘录等）..."
-                    value={internalNoteText}
-                    onChange={(e) => setInternalNoteText(e.target.value)}
-                    className="flex-1 text-xs border border-gray-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={submitting.internalNote || !internalNoteText.trim()}
-                    onClick={handleAddInternalNote}
-                    className="sm:self-end flex items-center gap-1.5 text-xs"
+              {/* 底部互动操作区（支持直接回复家长 或 记录内部备注） */}
+              <div className="p-4 bg-gray-50 border-t border-gray-200 space-y-3">
+                <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setBottomActionTab('reply')}
+                    className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                      bottomActionTab === 'reply'
+                        ? 'bg-primary-600 text-white shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/60'
+                    }`}
+                  >
+                    <Send size={12} />
+                    <span>回复家长 (课程顾问身份)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBottomActionTab('note')}
+                    className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                      bottomActionTab === 'note'
+                        ? 'bg-gray-800 text-white shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/60'
+                    }`}
                   >
                     <Lock size={12} />
-                    <span>{submitting.internalNote ? '保存中...' : '保存内部备注'}</span>
-                  </Button>
+                    <span>添加内部备注 (仅后台可见)</span>
+                  </button>
                 </div>
+
+                {bottomActionTab === 'reply' ? (
+                  <div className="space-y-2">
+                    <textarea
+                      rows={2}
+                      placeholder={`以课程顾问身份向【${activeStudent?.student_name || '家长'}】发送回复（家长端将实时收到并展示，支持中文或双语）...`}
+                      value={directReplyText}
+                      onChange={(e) => setDirectReplyText(e.target.value)}
+                      className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                    />
+                    <div className="flex justify-between items-center text-[11px] text-gray-500">
+                      <span>💡 发送后将直接推送到家长端并消除此学员的历史待办</span>
+                      <Button
+                        size="sm"
+                        disabled={submitting.bottomDirectReply || !directReplyText.trim()}
+                        onClick={handleBottomDirectReply}
+                        className="flex items-center gap-1.5 text-xs bg-primary-600 hover:bg-primary-700 text-white"
+                      >
+                        <Send size={12} />
+                        <span>{submitting.bottomDirectReply ? '发送中...' : '发送回复给家长'}</span>
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <textarea
+                      rows={2}
+                      placeholder="输入内部备注（如续费意向、外教沟通要点、排课备忘录等，家长和外教均不可见）..."
+                      value={internalNoteText}
+                      onChange={(e) => setInternalNoteText(e.target.value)}
+                      className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-gray-700 focus:outline-none"
+                    />
+                    <div className="flex justify-between items-center text-[11px] text-gray-500">
+                      <span>🔒 仅管理后台内部可见，不发送给家长或老师</span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={submitting.internalNote || !internalNoteText.trim()}
+                        onClick={handleAddInternalNote}
+                        className="flex items-center gap-1.5 text-xs bg-gray-800 text-white hover:bg-gray-900"
+                      >
+                        <Lock size={12} />
+                        <span>{submitting.internalNote ? '保存中...' : '保存内部备注'}</span>
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </Card>
           )}

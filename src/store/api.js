@@ -728,6 +728,11 @@ export const commsOps = {
     const result = await request('/communication/admin/queue');
     return result.data?.data || result.data || [];
   },
+  getConversations: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const result = await request(`/communication/admin/conversations${query ? `?${query}` : ''}`);
+    return result.data?.data || result.data || [];
+  },
   getConversation: async (params = {}) => {
     const query = new URLSearchParams(params).toString();
     const result = await request(`/communication/admin/conversation${query ? `?${query}` : ''}`);

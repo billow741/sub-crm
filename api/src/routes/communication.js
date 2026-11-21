@@ -120,26 +120,20 @@ function verifyAdmin(c) {
 
 /**
  * Verify parent credentials
- * Supports access_token (direct DB lookup) or token (?token= XOR encoded, matched against studentId)
- * When both are provided, access_token takes precedence.
+ * Supports token (?token= XOR encoded, matched against studentId) or legacy access_token
  */
 async function verifyParent(DB, studentId, accessToken, token) {
   if (!studentId) return null;
-  if (accessToken) {
-    return await DB.prepare(
-      'SELECT id, name, parent_name, total_hours, used_hours, access_token FROM students WHERE id = ? AND access_token = ? AND access_token IS NOT NULL'
-    ).bind(studentId, accessToken).first();
-  }
-  if (token) {
-    const decodedStudentId = decodeParentToken(token);
+  const tokenToUse = token || accessToken;
+  if (tokenToUse) {
+    const decodedStudentId = decodeParentToken(tokenToUse);
     if (!decodedStudentId || decodedStudentId !== studentId) {
       return null;
     }
-    return await DB.prepare(
-      'SELECT id, name, parent_name, total_hours, used_hours FROM students WHERE id = ?'
-    ).bind(studentId).first();
   }
-  return null;
+  return await DB.prepare(
+    'SELECT id, name, parent_name, total_hours, used_hours FROM students WHERE id = ?'
+  ).bind(studentId).first();
 }
 
 /**
@@ -457,6 +451,103 @@ communication.get('/admin/queue', async (c) => {
   }
 
   return c.json(success(items));
+});
+
+/**
+ * GET /api/v1/communication/admin/conversations
+ * 全部家校会话列表（按最新消息时间倒序）
+ * 用于管理员随时查阅历史沟通记录与学员聊天详情
+ */
+communication.get('/admin/conversations', async (c) => {
+  if (!verifyAdmin(c)) {
+    return c.json(error('UNAUTHORIZED', '管理员认证失败，缺少有效凭据'), 401);
+  }
+
+  const DB = c.env.DB;
+  const search = c.req.query('search') || '';
+
+  let query = `
+    SELECT c.*,
+           s.name as student_name,
+           s.english_name as student_english_name,
+           s.total_hours,
+           s.used_hours,
+           (s.total_hours - s.used_hours) as remaining_hours,
+           s.last_class_at
+    FROM parent_conversations c
+    JOIN students s ON c.student_id = s.id
+  `;
+  const params = [];
+
+  if (search.trim()) {
+    query += ` WHERE s.name LIKE ? OR s.english_name LIKE ?`;
+    params.push(`%${search.trim()}%`, `%${search.trim()}%`);
+  }
+
+  query += ` ORDER BY c.last_message_at DESC, c.id DESC`;
+
+  const convsResult = await DB.prepare(query).bind(...params).all();
+  const conversations = [];
+
+  for (const conv of (convsResult.results || [])) {
+    // 动态推导当前老师（最近课程）
+    const derivedTeacherId = await getCurrentTeacherId(DB, conv.student_id);
+    let derivedTeacherName = null;
+    if (derivedTeacherId) {
+      const teacherRow = await DB.prepare('SELECT name FROM teachers WHERE id = ?').bind(derivedTeacherId).first();
+      derivedTeacherName = teacherRow ? teacherRow.name : null;
+    }
+
+    // 最近上课日期：优先从 classes 取实际最近完成或安排的课程日期
+    let recentClassDate = conv.last_class_at;
+    const lastClassRow = await DB.prepare(
+      'SELECT date FROM classes WHERE student_id = ? ORDER BY date DESC, id DESC LIMIT 1'
+    ).bind(conv.student_id).first();
+    if (lastClassRow && lastClassRow.date) {
+      recentClassDate = lastClassRow.date;
+    }
+
+    // 统计待办数 (pending, replied_by_teacher)
+    const counts = await DB.prepare(
+      `SELECT
+         COUNT(CASE WHEN relay_status = 'pending' THEN 1 END) as pending_count,
+         COUNT(CASE WHEN relay_status = 'replied_by_teacher' THEN 1 END) as replied_by_teacher_count,
+         COUNT(*) as total_messages
+       FROM parent_conversation_messages
+       WHERE conversation_id = ? AND visibility = 'visible'`
+    ).bind(conv.id).first();
+
+    // 最新一条消息摘要
+    const lastMsg = await DB.prepare(
+      `SELECT sender_role, sender_name, content_zh, content_en, created_at, relay_status
+       FROM parent_conversation_messages
+       WHERE conversation_id = ? AND visibility = 'visible'
+       ORDER BY created_at DESC, id DESC LIMIT 1`
+    ).bind(conv.id).first();
+
+    conversations.push({
+      conversation_id: conv.id,
+      student_id: conv.student_id,
+      student_name: conv.student_name,
+      student_english_name: conv.student_english_name,
+      total_hours: conv.total_hours,
+      used_hours: conv.used_hours,
+      remaining_hours: conv.remaining_hours,
+      current_teacher_id: derivedTeacherId,
+      current_teacher_name: derivedTeacherName,
+      last_class_date: recentClassDate,
+      last_message_at: conv.last_message_at || conv.created_at,
+      last_message_preview: lastMsg ? (lastMsg.content_zh || lastMsg.content_en || '') : '',
+      last_message_sender: lastMsg ? lastMsg.sender_role : null,
+      last_message_sender_name: lastMsg ? lastMsg.sender_name : null,
+      pending_count: counts?.pending_count || 0,
+      replied_by_teacher_count: counts?.replied_by_teacher_count || 0,
+      total_messages: counts?.total_messages || 0,
+      created_at: conv.created_at
+    });
+  }
+
+  return c.json(success(conversations));
 });
 
 /**
