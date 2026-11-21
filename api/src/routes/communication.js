@@ -246,10 +246,9 @@ communication.post('/message', validate(parentMessageSchema), async (c) => {
   ).bind(student.id).first();
 
   if (!conversation) {
-    const derivedTeacherId = await getCurrentTeacherId(DB, student.id);
     const insertConv = await DB.prepare(
-      "INSERT INTO parent_conversations (student_id, teacher_id, last_message_at, created_at) VALUES (?, ?, datetime('now'), datetime('now'))"
-    ).bind(student.id, derivedTeacherId).run();
+      "INSERT INTO parent_conversations (student_id, teacher_id, last_message_at, created_at) VALUES (?, NULL, datetime('now'), datetime('now'))"
+    ).bind(student.id).run();
 
     conversation = await DB.prepare('SELECT * FROM parent_conversations WHERE id = ?').bind(insertConv.meta.last_row_id).first();
   } else {
@@ -316,20 +315,38 @@ communication.get('/teacher/inbox', async (c) => {
 
   const conversations = [];
   for (const conv of (convsResult.results || [])) {
+    // 仅查询教师可见的消息：
+    // 1. 学管已转交外教的家长留言（必须有英文翻译 content_en，且状态为 forwarded_to_teacher 或 published）
+    // 2. 教师本人的英文回复（状态为 replied_by_teacher 或 published）
     const messages = await DB.prepare(
       `SELECT id, conversation_id, sender_role, sender_name, content_zh, content_en,
               routing_type, relay_status, visibility, forwarded_at, replied_at, published_at, created_at
        FROM parent_conversation_messages
        WHERE conversation_id = ?
          AND visibility = 'visible'
-         AND relay_status IN ('forwarded_to_teacher', 'replied_by_teacher', 'published')
+         AND (
+           (routing_type = 'to_teacher' AND relay_status IN ('forwarded_to_teacher', 'published') AND content_en IS NOT NULL AND TRIM(content_en) != '')
+           OR
+           (sender_role = 'teacher' AND relay_status IN ('replied_by_teacher', 'published'))
+         )
        ORDER BY created_at ASC, id ASC`
     ).bind(conv.id).all();
 
+    const teacherMsgs = messages.results || [];
+    // 核心安全守则：若学管未曾转交任何教学留言给该外教，教师端绝对不呈现该学员会话卡片！
+    if (teacherMsgs.length === 0) {
+      continue;
+    }
+
+    // 教师卡片展示的时间以教师可见消息的最晚时间为准（避免学管/家长私聊刷新了会话时间戳）
+    const latestMsg = teacherMsgs[teacherMsgs.length - 1];
+    const effectiveLastMessageAt = latestMsg.replied_at || latestMsg.forwarded_at || latestMsg.created_at || conv.last_message_at;
+
     conversations.push({
       ...conv,
-      messages: messages.results || [],
-      pending_reply_count: (messages.results || []).filter(m => m.relay_status === 'forwarded_to_teacher').length
+      last_message_at: effectiveLastMessageAt,
+      messages: teacherMsgs,
+      pending_reply_count: teacherMsgs.filter(m => m.relay_status === 'forwarded_to_teacher').length
     });
   }
 
